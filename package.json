@@ -1,0 +1,17 @@
+{
+  "name": "fresh-sarura-monorepo",
+  "version": "1.0.0",
+  "description": "Monorepo for Fresh Sarura project",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "dev:frontend": "npm run dev --prefix \"Fresh Sarura_UI_v.1\"",
+    "dev:backend": "npm run dev --prefix backend",
+    "install:frontend": "npm install --prefix \"Fresh Sarura_UI_v.1\"",
+    "install:backend": "npm install --prefix backend",
+    "install-all": "npm run install:frontend && npm run install:backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "nodemon": "^3.1.14"
+  }
+}

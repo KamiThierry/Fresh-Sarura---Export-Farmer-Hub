@@ -1,0 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  .shadow-soft {
+    box-shadow:
+      8px 8px 16px rgba(163, 177, 198, 0.15),
+      -8px -8px 16px rgba(255, 255, 255, 0.8);
+  }
+
+  .shadow-soft-hover {
+    box-shadow:
+      12px 12px 24px rgba(163, 177, 198, 0.2),
+      -12px -12px 24px rgba(255, 255, 255, 0.9);
+  }
+
+  .shadow-soft-inset {
+    box-shadow:
+      inset 4px 4px 8px rgba(163, 177, 198, 0.2),
+      inset -4px -4px 8px rgba(255, 255, 255, 0.7);
+  }
+
+  .shadow-floating {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  .border-theme {
+    @apply border border-gray-200 dark:border-white/10;
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
