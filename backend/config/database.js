@@ -16,8 +16,15 @@ export const connectDB = async () => {
     logger.info('MongoDB connected successfully');
     return mongoose.connection;
   } catch (error) {
-    logger.error('MongoDB connection error:', error.message);
-    // Don't exit in development, allow graceful continuation
+    logger.error('❌ MongoDB Connection Failed!');
+    logger.error(`Error Name: ${error.name}`);
+    logger.error(`Error Message: ${error.message}`);
+    
+    // Check for common Atlas issues
+    if (error.message.includes('MongooseServerSelectionError')) {
+      logger.warn('Hint: This often means your IP address is not whitelisted in MongoDB Atlas or the database is down.');
+    }
+    
     if (config.isProduction) {
       process.exit(1);
     }

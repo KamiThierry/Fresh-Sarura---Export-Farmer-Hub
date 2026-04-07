@@ -1,6 +1,9 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 const isDevelopment = nodeEnv === 'development';
