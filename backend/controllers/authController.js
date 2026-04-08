@@ -119,7 +119,14 @@ export const register = async (req, res) => {
             },
         });
     } catch (error) {
-        logger.error('Register error:', error.message);
+        logger.error('Register error:', error);
+        
+        // Handle Mongoose validation errors
+        if (error.name === 'ValidationError') {
+            const message = Object.values(error.errors).map(val => val.message);
+            return res.status(400).json({ message: message.join(', ') });
+        }
+        
         res.status(500).json({ message: 'Server error during registration' });
     }
 };
