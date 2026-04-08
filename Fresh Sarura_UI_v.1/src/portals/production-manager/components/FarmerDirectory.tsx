@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Search, Filter, User, MapPin, Leaf } from 'lucide-react';
-import { Farmer } from '../types';
+import { Farmer } from '@/types';
 
 interface FarmerDirectoryProps {
   farmers: Farmer[];
@@ -10,14 +10,14 @@ interface FarmerDirectoryProps {
 
 const FarmerDirectory = ({ farmers, isLoading, onViewProfile }: FarmerDirectoryProps) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Inactive'>('all');
 
   const filteredFarmers = farmers.filter((farmer) => {
     const matchesSearch =
       farmer.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       farmer.district.toLowerCase().includes(searchQuery.toLowerCase()) ||
       farmer.produce_types.some((p) => p.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (farmer.cooperative_name?.toLowerCase() || '').includes(searchQuery.toLowerCase());
+      (farmer.farm_name?.toLowerCase() || '').includes(searchQuery.toLowerCase());
 
     const matchesStatus = statusFilter === 'all' || farmer.status === statusFilter;
 
@@ -48,12 +48,12 @@ const FarmerDirectory = ({ farmers, isLoading, onViewProfile }: FarmerDirectoryP
         <div className="relative">
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
+            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'Active' | 'Inactive')}
             className="pl-10 pr-4 py-2.5 bg-[#F9FCFA] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4CAF50] text-sm appearance-none cursor-pointer"
           >
             <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
           </select>
           <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280] pointer-events-none" size={18} />
         </div>
@@ -70,7 +70,7 @@ const FarmerDirectory = ({ farmers, isLoading, onViewProfile }: FarmerDirectoryP
         ) : (
           filteredFarmers.map((farmer) => (
             <div
-              key={farmer.id}
+              key={farmer._id}
               className="flex items-center gap-4 p-3 bg-[#F9FCFA] rounded-lg hover:bg-[#E9F7EF] transition-all border border-gray-100 hover:border-[#4CAF50] cursor-pointer"
               onClick={() => onViewProfile(farmer)}
             >
@@ -88,7 +88,7 @@ const FarmerDirectory = ({ farmers, isLoading, onViewProfile }: FarmerDirectoryP
                 <div className="flex items-center gap-2 mb-0.5">
                   <h4 className="text-sm font-semibold text-[#222222] truncate">{farmer.full_name}</h4>
                   <span
-                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${farmer.status === 'active' ? 'bg-[#4CAF50]' : 'bg-gray-400'
+                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${farmer.status === 'Active' ? 'bg-[#4CAF50]' : 'bg-gray-400'
                       }`}
                   ></span>
                 </div>

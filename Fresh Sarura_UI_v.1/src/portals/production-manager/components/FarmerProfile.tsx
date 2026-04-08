@@ -1,28 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Pencil, ShieldOff, Phone, Mail, MapPin, Leaf, Ruler, Star, BadgeCheck, Sprout, PackageCheck, Plus } from 'lucide-react';
+import { Farmer } from '@/types';
 import AddCertificateModal from './AddCertificateModal';
-
-interface Farmer {
-  id: number;
-  name: string;
-  location: string;
-  crop: string;
-  size: string;
-  status: 'Active' | 'Inactive' | 'Auditing';
-  grade: string;
-  nationalId: string;
-  phone: string;
-  email: string;
-  address: string;
-}
 
 interface FarmerProfileProps {
   farmer: Farmer;
   onBack: () => void;
 }
 
-const CROP_CYCLES: Record<number, { block: string; crop: string; planted: string; estYield: string; daysLeft: number }[]> = {
+const CROP_CYCLES: Record<string, { block: string; crop: string; planted: string; estYield: string; daysLeft: number }[]> = {
   1: [{ block: 'Block A', crop: 'French Beans', planted: '15 Jan 2026', estYield: '500 kg', daysLeft: 22 }],
   2: [
     { block: 'Block A', crop: 'Avocados (Hass)', planted: '01 Nov 2025', estYield: '12,000 kg', daysLeft: 60 },
@@ -37,7 +24,7 @@ const CROP_CYCLES: Record<number, { block: string; crop: string; planted: string
   ],
 };
 
-const HARVESTS: Record<number, { date: string; qty: string; crop: string; grade: string }[]> = {
+const HARVESTS: Record<string, { date: string; qty: string; crop: string; grade: string }[]> = {
   1: [
     { date: '28 Feb 2026', qty: '460 kg', crop: 'French Beans', grade: 'A' },
     { date: '15 Jan 2026', qty: '510 kg', crop: 'French Beans', grade: 'A' },
@@ -70,7 +57,7 @@ const HARVESTS: Record<number, { date: string; qty: string; crop: string; grade:
   ],
 };
 
-const CERTS: Record<number, string[]> = {
+const CERTS: Record<string, string[]> = {
   1: ['GlobalG.A.P.', 'Organic RW'],
   2: ['GlobalG.A.P.', 'Fair Trade', 'Rainforest Alliance'],
   3: ['Organic RW'],
@@ -98,14 +85,14 @@ const InfoRow = ({ icon, label, value }: { icon: React.ReactNode; label: string;
 const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
   const navigate = useNavigate();
   const [isAddCertOpen, setIsAddCertOpen] = useState(false);
-  const cycles = CROP_CYCLES[farmer.id] ?? [];
-  const harvests = HARVESTS[farmer.id] ?? [];
-  const certs = CERTS[farmer.id] ?? [];
+  const cycles = CROP_CYCLES[farmer._id] ?? [];
+  const harvests = HARVESTS[farmer._id] ?? [];
+  const certs = CERTS[farmer._id] ?? [];
 
   const handleCertClick = (certLabel: string) => {
     const params = new URLSearchParams({
-      farmerId: String(farmer.id),
-      farmerName: farmer.name,
+      farmerId: String(farmer._id),
+      farmerName: farmer.full_name,
       docType: 'Certification',
       certLabel,
     });
@@ -129,18 +116,18 @@ const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
             <span className="text-2xl font-black text-green-600 dark:text-green-400">
-              {farmer.name.charAt(0)}
+              {farmer.full_name.charAt(0)}
             </span>
           </div>
           <div>
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{farmer.name}</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{farmer.full_name}</h1>
               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_STYLE[farmer.status]}`}>
                 {farmer.status}
               </span>
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1">
-              <MapPin size={12} /> {farmer.location}
+              <MapPin size={12} /> {farmer.district}, {farmer.sector}
             </p>
           </div>
         </div>
@@ -161,7 +148,7 @@ const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5 space-y-4">
           <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Identity &amp; Contact</h3>
           <InfoRow icon={<BadgeCheck size={15} className="text-blue-500" />} label="National ID"
-            value={<span className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">{farmer.nationalId}</span>} />
+            value={<span className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">{farmer.national_id}</span>} />
           <InfoRow icon={<Phone size={15} className="text-green-500" />} label="Phone" value={farmer.phone} />
           <InfoRow icon={<Mail size={15} className="text-purple-500" />} label="Email" value={<span className="text-blue-600 dark:text-blue-400">{farmer.email}</span>} />
         </div>
@@ -170,9 +157,14 @@ const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5 space-y-4">
           <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Farm Specifications</h3>
           <InfoRow icon={<MapPin size={15} className="text-orange-500" />} label="Physical Address"
-            value={<span className="text-xs leading-relaxed">{farmer.address}</span>} />
-          <InfoRow icon={<Leaf size={15} className="text-green-500" />} label="Main Crop" value={farmer.crop} />
-          <InfoRow icon={<Ruler size={15} className="text-gray-500" />} label="Land Size" value={farmer.size} />
+            value={
+              <div className="flex flex-col">
+                <span className="text-xs leading-relaxed">{farmer.district}, {farmer.sector}</span>
+                <span className="text-[10px] text-gray-500">Cell: {farmer.cell}, Village: {farmer.village}</span>
+              </div>
+            } />
+          <InfoRow icon={<Leaf size={15} className="text-green-500" />} label="Main Crop" value={farmer.produce_types.join(', ')} />
+          <InfoRow icon={<Ruler size={15} className="text-gray-500" />} label="Land Size" value={`${farmer.farm_size_hectares} Ha`} />
         </div>
 
         {/* Performance */}
@@ -300,7 +292,7 @@ const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
       <AddCertificateModal
         isOpen={isAddCertOpen}
         onClose={() => setIsAddCertOpen(false)}
-        defaultFarmer={farmer.name}
+        defaultFarmer={farmer.full_name}
         onSubmit={(data) => {
           console.log('New certificate recorded:', data);
           setIsAddCertOpen(false);

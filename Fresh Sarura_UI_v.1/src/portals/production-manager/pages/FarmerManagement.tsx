@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Search, Filter, Plus, Download,
   Users, UserCheck, Map, FileWarning, MapPin, ChevronDown, FileSpreadsheet, FileText,
@@ -8,6 +8,9 @@ import FarmerRegistrationModal from '../components/FarmerRegistrationModal';
 import FarmNetworkMap from '../components/FarmNetworkMap';
 import FarmerProfile from '../components/FarmerProfile';
 import Pagination from '../../shared/component/Pagination';
+import { Farmer } from '@/types';
+
+import { api } from '@/lib/api';
 
 const FarmerManagement = () => {
   // State
@@ -15,31 +18,41 @@ const FarmerManagement = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isExportOpen, setIsExportOpen] = useState(false);
-  const [selectedFarmer, setSelectedFarmer] = useState<any>(null);
+  const [selectedFarmer, setSelectedFarmer] = useState<Farmer | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 3;
 
-  // Mock Data for Directory
-  const farmers = [
-    { id: 1, name: 'Jean Claude', location: 'Nyagatare, Rwimiyaga', crop: 'French Beans', size: '2.5 Ha', status: 'Active', grade: '98% A', nationalId: '1 1990 8 0123456 7 89', phone: '+250 788 123 456', email: 'j.claude@email.com', address: 'Nyagatare District, Rwimiyaga Sector, Akamana Cell, Rugari Village' },
-    { id: 2, name: 'Kirehe Co-op', location: 'Kirehe, Gahara', crop: 'Avocados (Hass)', size: '45.0 Ha', status: 'Active', grade: '95% A', nationalId: '1 1985 7 0234567 8 90', phone: '+250 722 234 567', email: 'kirehe.coop@email.com', address: 'Kirehe District, Gahara Sector, Nyakiriba Cell, Gihinga Village' },
-    { id: 3, name: 'Marie Claire', location: 'Musanze, Kinigi', crop: 'Passion Fruit', size: '1.2 Ha', status: 'Inactive', grade: '-', nationalId: '2 1995 8 0345678 9 01', phone: '+250 733 345 678', email: 'm.claire@email.com', address: 'Musanze District, Kinigi Sector, Buhanga Cell, Bivumu Village' },
-    { id: 4, name: 'Bugesera Outgrowers', location: 'Bugesera, Mayange', crop: 'Chili Peppers', size: '15.0 Ha', status: 'Active', grade: '92% A', nationalId: '1 1978 7 0456789 0 12', phone: '+250 788 456 789', email: 'bugesera.out@email.com', address: 'Bugesera District, Mayange Sector, Kabuye Cell, Nyamata Village' },
-    { id: 5, name: 'Robert / Almond', location: 'Rwamagana, Muhazi', crop: 'Mangoes', size: '3.0 Ha', status: 'Auditing', grade: '88% A', nationalId: '1 1982 8 0567890 1 23', phone: '+250 799 567 890', email: 'r.almond@email.com', address: 'Rwamagana District, Muhazi Sector, Rukoma Cell, Gahini Village' },
-    { id: 6, name: 'Rusizi Organic', location: 'Rusizi, Kamembe', crop: 'Mixed Veg', size: '8.5 Ha', status: 'Active', grade: '99% A', nationalId: '1 1990 7 0678901 2 34', phone: '+250 722 678 901', email: 'rusizi.organic@email.com', address: 'Rusizi District, Kamembe Sector, Gitica Cell, Butare Village' },
-  ];
+  const [farmers, setFarmers] = useState<Farmer[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchFarmers = async () => {
+    try {
+      const data = await api.get('/farmers');
+      setFarmers(data.farmers);
+    } catch (error) {
+      console.error('Failed to fetch farmers:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFarmers();
+  }, []);
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-500">Loading farmers...</div>;
 
   // Filter Logic
   const filteredFarmers = farmers.filter(farmer =>
     (statusFilter === 'all' || farmer.status.toLowerCase() === statusFilter.toLowerCase()) &&
-    (farmer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      farmer.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      farmer.crop.toLowerCase().includes(searchQuery.toLowerCase()))
+    ((farmer.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
+      (farmer.district?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
+      (farmer.sector?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
+      (farmer.produce_types?.some((p: string) => p.toLowerCase().includes(searchQuery.toLowerCase())) || false))
   );
 
   // Stats — derived from filteredFarmers so they react to the filter & search
   const totalHa = filteredFarmers
-    .reduce((sum, f) => sum + parseFloat(f.size.replace(' Ha', '')), 0)
+    .reduce((sum, f) => sum + (f.farm_size_hectares || 0), 0)
     .toFixed(1);
   const stats = [
     { label: 'Total Farmers', value: String(filteredFarmers.length), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
@@ -140,7 +153,7 @@ const FarmerManagement = () => {
           </div>
 
           {/* ── Geospatial Farm Map ── */}
-          <FarmNetworkMap />
+          <FarmNetworkMap farmers={farmers} />
 
           {/* Main Content: Filters & Table */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
@@ -177,7 +190,7 @@ const FarmerManagement = () => {
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-gray-900/50 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                    <th className="px-5 py-4 whitespace-nowrap">Farmer / Co-op</th>
+                    <th className="px-5 py-4 whitespace-nowrap">Farmer / Farm Name</th>
                     <th className="px-5 py-4 whitespace-nowrap">National ID</th>
                     <th className="px-5 py-4 whitespace-nowrap">Phone Number</th>
                     <th className="px-5 py-4 whitespace-nowrap">Email</th>
@@ -189,25 +202,25 @@ const FarmerManagement = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {filteredFarmers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((farmer) => (
+                   {filteredFarmers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((farmer) => (
                     <tr
-                      key={farmer.id}
+                      key={farmer._id}
                       className="hover:bg-green-50 dark:hover:bg-green-900/10 transition-colors cursor-pointer"
                       onClick={() => setSelectedFarmer(farmer)}
                     >
                       {/* Farmer / Co-op */}
                       <td className="px-5 py-4 whitespace-nowrap">
                         <div className="flex flex-col">
-                          <span className="text-sm font-bold text-gray-900 dark:text-white">{farmer.name}</span>
+                          <span className="text-sm font-bold text-gray-900 dark:text-white">{farmer.full_name}</span>
                           <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
                             <MapPin size={10} />
-                            {farmer.location}
+                            {farmer.farm_name || 'Individual'}
                           </div>
                         </div>
                       </td>
                       {/* National ID */}
                       <td className="px-5 py-4 whitespace-nowrap">
-                        <span className="text-xs font-mono text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700/60 px-2 py-0.5 rounded">{farmer.nationalId}</span>
+                        <span className="text-xs font-mono text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700/60 px-2 py-0.5 rounded">{farmer.national_id}</span>
                       </td>
                       {/* Phone */}
                       <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
@@ -219,15 +232,22 @@ const FarmerManagement = () => {
                       </td>
                       {/* Physical Address */}
                       <td className="px-5 py-4">
-                        <span className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{farmer.address}</span>
+                        <div className="flex flex-col">
+                          <span className="text-xs text-gray-700 dark:text-gray-200 font-medium">
+                            {farmer.district}, {farmer.sector}
+                          </span>
+                          <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                            Cell: {farmer.cell}, Village: {farmer.village}
+                          </span>
+                        </div>
                       </td>
                       {/* Main Crop */}
                       <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
-                        {farmer.crop}
+                        {farmer.produce_types?.join(', ') || 'N/A'}
                       </td>
                       {/* Land Size */}
                       <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
-                        {farmer.size}
+                        {farmer.farm_size_hectares} Ha
                       </td>
                       {/* Status */}
                       <td className="px-5 py-4 whitespace-nowrap">
@@ -270,7 +290,7 @@ const FarmerManagement = () => {
             isOpen={isRegistrationOpen}
             onClose={() => setIsRegistrationOpen(false)}
             onFarmerAdded={() => {
-              console.log('Farmer added');
+              fetchFarmers(); // ← refresh list from MongoDB
               setIsRegistrationOpen(false);
             }}
           />

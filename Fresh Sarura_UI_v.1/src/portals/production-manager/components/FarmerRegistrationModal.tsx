@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Upload, User } from 'lucide-react';
+import { api } from '@/lib/api';
 
 interface FarmerRegistrationModalProps {
     isOpen: boolean;
@@ -13,9 +14,12 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
 
     const [formData, setFormData] = useState({
         full_name: '',
-        cooperative_name: '',
+        farm_name: '',
+        national_id: '',
         district: '',
         sector: '',
+        cell: '',
+        village: '',
         produce_types: [] as string[],
         farm_size_hectares: '',
         production_capacity_tons: '',
@@ -48,15 +52,21 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
     const djangoHandleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
-        // Simulate API Call
-        setTimeout(() => {
-            setIsSubmitting(false);
+        try {
+            const dataToSubmit = {
+                ...formData,
+                farm_size_hectares: parseFloat(formData.farm_size_hectares),
+                production_capacity_tons: parseFloat(formData.production_capacity_tons)
+            };
+            await api.post('/farmers', dataToSubmit);
             onFarmerAdded();
             onClose();
-            alert("Farmer Registered Successfully (Mock)");
-        }, 1000);
-    }
-
+        } catch (error: any) {
+            alert(error.message || 'Failed to register farmer');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
             {/* Backdrop */}
@@ -104,17 +114,33 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                             </div>
                         </div>
 
-                        {/* Cooperative Name */}
+                        {/* Farm Name */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                Cooperative Name
+                                Farm Name (Optional)
                             </label>
                             <input
                                 type="text"
-                                value={formData.cooperative_name}
-                                onChange={(e) => setFormData({ ...formData, cooperative_name: e.target.value })}
+                                value={formData.farm_name}
+                                onChange={(e) => setFormData({ ...formData, farm_name: e.target.value })}
                                 className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                                placeholder="Enter cooperative name (optional)"
+                                placeholder="Enter farm name (if applicable)"
+                            />
+                        </div>
+
+                        {/* National ID */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                National ID (16 Digits) *
+                            </label>
+                            <input
+                                type="text"
+                                required
+                                maxLength={16}
+                                value={formData.national_id}
+                                onChange={(e) => setFormData({ ...formData, national_id: e.target.value })}
+                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                                placeholder="e.g. 1 1990 8 0123456 7 89"
                             />
                         </div>
 
@@ -130,7 +156,7 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                                     onChange={(e) => setFormData({ ...formData, district: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                                 >
-                                    <option value="">Select</option>
+                                    <option value="">Select District</option>
                                     {districts.map((d) => (
                                         <option key={d} value={d}>{d}</option>
                                     ))}
@@ -146,11 +172,41 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                                     onChange={(e) => setFormData({ ...formData, sector: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                                 >
-                                    <option value="">Select</option>
+                                    <option value="">Select Sector</option>
                                     {sectors.map((s) => (
                                         <option key={s} value={s}>{s}</option>
                                     ))}
                                 </select>
+                            </div>
+                        </div>
+
+                        {/* Cell & Village */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    Cell *
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={formData.cell}
+                                    onChange={(e) => setFormData({ ...formData, cell: e.target.value })}
+                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                                    placeholder="Enter cell"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    Village *
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={formData.village}
+                                    onChange={(e) => setFormData({ ...formData, village: e.target.value })}
+                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                                    placeholder="Enter village"
+                                />
                             </div>
                         </div>
 
@@ -209,19 +265,34 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                         </div>
 
 
-                        {/* Phone */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                Phone Number *
-                            </label>
-                            <input
-                                type="tel"
-                                required
-                                value={formData.phone}
-                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                                placeholder="+250 xxx xxx xxx"
-                            />
+                        {/* Phone & Email */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    Phone Number *
+                                </label>
+                                <input
+                                    type="tel"
+                                    required
+                                    value={formData.phone}
+                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                                    placeholder="+250 xxx xxx xxx"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    Email Address *
+                                </label>
+                                <input
+                                    type="email"
+                                    required
+                                    value={formData.email}
+                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                                    placeholder="email@example.com"
+                                />
+                            </div>
                         </div>
 
                         {/* ID Upload */}

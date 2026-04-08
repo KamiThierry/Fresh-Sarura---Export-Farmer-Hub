@@ -1,6 +1,7 @@
 import express from 'express';
 import healthRoutes from './health.js';
 import authRoutes from './auth.js';
+import farmerRoutes from './farmers.js';
 
 const router = express.Router();
 
@@ -22,5 +23,7 @@ router.use(`${apiVersion}/auth`, authRoutes);
  * router.use(`${apiVersion}/users`, userRoutes);
  * router.use(`${apiVersion}/products`, productRoutes);
  */
+
+router.use(`${apiVersion}/farmers`, farmerRoutes);
 
 export default router;

@@ -14,7 +14,7 @@ interface FarmerRegistrationFormProps {
 const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) => {
   const [formData, setFormData] = useState({
     full_name: '',
-    cooperative_name: '',
+    farm_name: '',
     district: '',
     sector: '',
     produce_types: [] as string[],
@@ -47,7 +47,7 @@ const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) 
       const { error } = await supabase.from('farmers').insert([
         {
           full_name: formData.full_name,
-          cooperative_name: formData.cooperative_name || null,
+          farm_name: formData.farm_name || null,
           district: formData.district,
           sector: formData.sector,
           produce_types: formData.produce_types,
@@ -74,7 +74,7 @@ const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) 
   const handleReset = () => {
     setFormData({
       full_name: '',
-      cooperative_name: '',
+      farm_name: '',
       district: '',
       sector: '',
       produce_types: [],
@@ -122,17 +122,17 @@ const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) 
           />
         </div>
 
-        {/* Cooperative Name */}
+        {/* Farm Name */}
         <div>
           <label className="block text-sm font-medium text-[#37474F] mb-1.5" style={{ fontFamily: 'Inter, sans-serif' }}>
-            Cooperative Name
+            Farm Name
           </label>
           <input
             type="text"
-            value={formData.cooperative_name}
-            onChange={(e) => setFormData({ ...formData, cooperative_name: e.target.value })}
+            value={formData.farm_name}
+            onChange={(e) => setFormData({ ...formData, farm_name: e.target.value })}
             className="w-full px-4 py-2.5 bg-[#F9FCFA] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4CAF50] text-sm"
-            placeholder="Enter cooperative name (optional)"
+            placeholder="Enter farm name (optional)"
           />
         </div>
 
