@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 interface FarmerRegistrationModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onFarmerAdded: () => void;
+    onFarmerAdded: (name: string) => void;
 }
 
 const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegistrationModalProps) => {
@@ -59,7 +59,7 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                 production_capacity_tons: parseFloat(formData.production_capacity_tons)
             };
             await api.post('/farmers', dataToSubmit);
-            onFarmerAdded();
+            onFarmerAdded(formData.full_name);
             onClose();
         } catch (error: any) {
             alert(error.message || 'Failed to register farmer');

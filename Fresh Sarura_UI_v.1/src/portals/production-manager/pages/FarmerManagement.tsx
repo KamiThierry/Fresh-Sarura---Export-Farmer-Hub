@@ -8,6 +8,7 @@ import FarmerRegistrationModal from '../components/FarmerRegistrationModal';
 import FarmNetworkMap from '../components/FarmNetworkMap';
 import FarmerProfile from '../components/FarmerProfile';
 import Pagination from '../../shared/component/Pagination';
+import Toast from '../../shared/component/Toast';
 import { Farmer } from '@/types';
 
 import { api } from '@/lib/api';
@@ -21,6 +22,7 @@ const FarmerManagement = () => {
   const [selectedFarmer, setSelectedFarmer] = useState<Farmer | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 3;
+  const [successToast, setSuccessToast] = useState<{ name: string } | null>(null);
 
   const [farmers, setFarmers] = useState<Farmer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -289,11 +291,20 @@ const FarmerManagement = () => {
           <FarmerRegistrationModal
             isOpen={isRegistrationOpen}
             onClose={() => setIsRegistrationOpen(false)}
-            onFarmerAdded={() => {
-              fetchFarmers(); // ← refresh list from MongoDB
+            onFarmerAdded={(name) => {
+              fetchFarmers();
               setIsRegistrationOpen(false);
+              setSuccessToast({ name });
             }}
           />
+
+          {successToast && (
+            <Toast
+              message="Farmer Registered Successfully"
+              subtitle={`${successToast.name} has been added to the network`}
+              onClose={() => setSuccessToast(null)}
+            />
+          )}
         </>
       ) : (
         /* ── Detail view ── */
