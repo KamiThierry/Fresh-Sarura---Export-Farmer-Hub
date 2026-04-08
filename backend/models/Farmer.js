@@ -12,10 +12,12 @@ const farmerSchema = new mongoose.Schema({
     },
     email: {
         type: String,
-        required: [true, 'Email is required'],
-        unique: true,
         trim: true,
         lowercase: true,
+    },
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
     },
     national_id: {
         type: String,

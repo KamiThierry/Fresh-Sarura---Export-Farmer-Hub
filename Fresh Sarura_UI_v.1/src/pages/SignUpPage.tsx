@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import Toast from "@/portals/shared/component/Toast";
 import packagingImg from "@/assets/packaging.webp";
 
 const SignUpPage = () => {
@@ -12,6 +13,7 @@ const SignUpPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [showToast, setShowToast] = useState(false);
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -93,6 +95,7 @@ const SignUpPage = () => {
           phone: formData.phone,
           role: formData.role,
         });
+        setShowToast(true);
         setIsSuccess(true);
       } catch (error: any) {
         setErrors({ fullName: error.message });
@@ -106,6 +109,7 @@ const SignUpPage = () => {
     setIsGoogleSubmitting(true);
     setTimeout(() => {
       setIsGoogleSubmitting(false);
+      setShowToast(true);
       setIsSuccess(true);
     }, 1500);
   };
@@ -136,6 +140,14 @@ const SignUpPage = () => {
             </button>
           </div>
         </div>
+
+        {showToast && (
+          <Toast
+            message="Account Created Successfully"
+            subtitle="Your registration is now pending admin approval"
+            onClose={() => setShowToast(false)}
+          />
+        )}
       </div>
     );
   }
