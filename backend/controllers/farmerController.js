@@ -108,13 +108,95 @@ export const registerFarmer = async (req, res) => {
     }
 };
 
+// @route PATCH /api/v1/farmers/:id
+export const updateFarmer = async (req, res) => {
+    try {
+        // Strip immutable fields from the request body
+        const { national_id, userId, registeredBy, _id, ...updateFields } = req.body;
+
+        const farmer = await Farmer.findByIdAndUpdate(
+            req.params.id,
+            { $set: updateFields },
+            { new: true, runValidators: true }
+        );
+
+        if (!farmer) return res.status(404).json({ message: 'Farmer not found' });
+
+        // Keep the linked User name and phone in sync
+        if (farmer.userId && (updateFields.full_name || updateFields.phone)) {
+            const userUpdate = {};
+            if (updateFields.full_name) userUpdate.name  = updateFields.full_name;
+            if (updateFields.phone)     userUpdate.phone = updateFields.phone;
+            await User.findByIdAndUpdate(farmer.userId, { $set: userUpdate });
+        }
+
+        logger.info(`Farmer updated: ${farmer.full_name} by ${req.user.email}`);
+        res.status(200).json({ message: 'Farmer updated successfully', farmer });
+    } catch (error) {
+        logger.error('Update farmer error:', error.message);
+        res.status(500).json({ message: error.message || 'Server error updating farmer' });
+    }
+};
+
 // @route DELETE /api/v1/farmers/:id
 export const deleteFarmer = async (req, res) => {
     try {
         const farmer = await Farmer.findByIdAndDelete(req.params.id);
         if (!farmer) return res.status(404).json({ message: 'Farmer not found' });
-        res.status(200).json({ message: 'Farmer deleted successfully' });
+
+        // Cascade: also delete the linked User account (if any)
+        if (farmer.userId) {
+            await User.findByIdAndDelete(farmer.userId);
+            logger.info(`Cascade-deleted user account for farmer: ${farmer.full_name}`);
+        }
+
+        logger.info(`Farmer permanently deleted: ${farmer.full_name} by ${req.user.email}`);
+        res.status(200).json({ message: 'Farmer and linked account deleted successfully' });
     } catch (error) {
         res.status(500).json({ message: 'Server error deleting farmer' });
+    }
+};
+
+// @route PATCH /api/v1/farmers/:id/suspend
+export const suspendFarmer = async (req, res) => {
+    try {
+        const farmer = await Farmer.findByIdAndUpdate(
+            req.params.id,
+            { $set: { status: 'Inactive' } },
+            { new: true }
+        );
+        if (!farmer) return res.status(404).json({ message: 'Farmer not found' });
+
+        // Also deactivate linked user account
+        if (farmer.userId) {
+            await User.findByIdAndUpdate(farmer.userId, { $set: { isActive: false } });
+        }
+
+        logger.info(`Farmer suspended: ${farmer.full_name} by ${req.user.email}`);
+        res.status(200).json({ message: 'Farmer account suspended', farmer });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error suspending farmer' });
+    }
+};
+
+// @route PATCH /api/v1/farmers/:id/reactivate
+export const reactivateFarmer = async (req, res) => {
+    try {
+        const farmer = await Farmer.findByIdAndUpdate(
+            req.params.id,
+            { $set: { status: 'Active' } },
+            { new: true }
+        );
+        if (!farmer) return res.status(404).json({ message: 'Farmer not found' });
+
+        // Re-enable linked user account
+        if (farmer.userId) {
+            await User.findByIdAndUpdate(farmer.userId, { $set: { isActive: true } });
+        }
+
+        logger.info(`Farmer reactivated: ${farmer.full_name} by ${req.user.email}`);
+        res.status(200).json({ message: 'Farmer account reactivated', farmer });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error reactivating farmer' });
     }
 };

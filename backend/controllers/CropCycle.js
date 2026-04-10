@@ -1,4 +1,7 @@
 import CropCycle from '../models/CropCycle.js';
+import BudgetRequest from '../models/BudgetRequest.js';
+import YieldForecast from '../models/YieldForecast.js';
+import FieldReport from '../models/FieldReport.js';
 
 // GET /api/v1/crop-cycles  (supports ?farmer_id=<id> filter)
 export const getCropCycles = async (req, res) => {
@@ -93,6 +96,122 @@ export const deleteCropCycle = async (req, res) => {
         const cycle = await CropCycle.findByIdAndDelete(req.params.id);
         if (!cycle) return res.status(404).json({ status: 'error', message: 'Crop cycle not found.' });
         res.status(200).json({ status: 'success', message: 'Crop cycle deleted.' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// GET /api/v1/crop-cycles/:id/full  — returns cycle + all related sub-documents
+export const getCropCycleFull = async (req, res) => {
+    try {
+        const cycle = await CropCycle.findById(req.params.id);
+        if (!cycle) return res.status(404).json({ status: 'error', message: 'Cycle not found.' });
+
+        const [budgetRequests, forecasts, fieldReports] = await Promise.all([
+            BudgetRequest.find({ cycleId: req.params.id }).sort({ createdAt: -1 }),
+            YieldForecast.find({ cycleId: req.params.id }).sort({ createdAt: -1 }),
+            FieldReport.find({ cycleId: req.params.id }).sort({ createdAt: -1 }),
+        ]);
+
+        res.status(200).json({
+            status: 'success',
+            data: { cycle, budgetRequests, forecasts, fieldReports },
+        });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// PATCH /api/v1/crop-cycles/:id/close
+export const closeCropCycle = async (req, res) => {
+    try {
+        const { finalYield } = req.body;
+        const cycle = await CropCycle.findByIdAndUpdate(
+            req.params.id,
+            { status: 'completed', final_yield: finalYield },
+            { new: true }
+        );
+        if (!cycle) return res.status(404).json({ status: 'error', message: 'Cycle not found.' });
+        res.status(200).json({ status: 'success', message: 'Cycle closed.', data: cycle });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// PATCH /api/v1/budget-requests/:id/approve
+export const approveBudgetRequest = async (req, res) => {
+    try {
+        const request = await BudgetRequest.findByIdAndUpdate(
+            req.params.id,
+            { approvalStatus: 'Approved', pmNote: req.body.pmNote || '' },
+            { new: true }
+        );
+        if (!request) return res.status(404).json({ status: 'error', message: 'Request not found.' });
+        res.status(200).json({ status: 'success', data: request });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// PATCH /api/v1/budget-requests/:id/reject
+export const rejectBudgetRequest = async (req, res) => {
+    try {
+        const request = await BudgetRequest.findByIdAndUpdate(
+            req.params.id,
+            { approvalStatus: 'Rejected', pmNote: req.body.pmNote || '' },
+            { new: true }
+        );
+        if (!request) return res.status(404).json({ status: 'error', message: 'Request not found.' });
+        res.status(200).json({ status: 'success', data: request });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// PATCH /api/v1/yield-forecasts/:id/verify
+export const verifyForecast = async (req, res) => {
+    try {
+        const forecast = await YieldForecast.findByIdAndUpdate(
+            req.params.id,
+            { status: 'Verified', pmReply: req.body.pmReply || '' },
+            { new: true }
+        );
+        if (!forecast) return res.status(404).json({ status: 'error', message: 'Forecast not found.' });
+        res.status(200).json({ status: 'success', data: forecast });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// PATCH /api/v1/field-reports/:id/flag
+export const flagFieldReport = async (req, res) => {
+    try {
+        const report = await FieldReport.findByIdAndUpdate(
+            req.params.id,
+            { status: 'Flagged', pmFlag: req.body.reason },
+            { new: true }
+        );
+        if (!report) return res.status(404).json({ status: 'error', message: 'Report not found.' });
+        res.status(200).json({ status: 'success', data: report });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// PATCH /api/v1/crop-cycles/:id/adjust-budget
+export const adjustBudget = async (req, res) => {
+    try {
+        const { categoryName, newAllocated } = req.body;
+        const cycle = await CropCycle.findById(req.params.id);
+        if (!cycle) return res.status(404).json({ status: 'error', message: 'Cycle not found.' });
+
+        const existing = cycle.budget_categories || [];
+        const updated = existing.map(cat =>
+            cat.name === categoryName ? { ...cat.toObject(), allocated: newAllocated } : cat
+        );
+        cycle.budget_categories = updated;
+        await cycle.save();
+        res.status(200).json({ status: 'success', data: cycle });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }

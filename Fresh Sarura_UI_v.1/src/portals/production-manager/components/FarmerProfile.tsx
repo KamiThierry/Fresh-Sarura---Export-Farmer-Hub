@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Pencil, ShieldOff, Phone, Mail, MapPin, Leaf, Ruler, Star, BadgeCheck, Sprout, PackageCheck, Plus, Loader2 } from 'lucide-react';
 import { Farmer } from '@/types';
 import AddCertificateModal from './AddCertificateModal';
+import EditFarmerModal from './EditFarmerModal';
+import DeleteFarmerModal from './DeleteFarmerModal';
 import { api } from '@/lib/api';
 
 interface FarmerProfileProps {
@@ -83,13 +85,20 @@ const InfoRow = ({ icon, label, value }: { icon: React.ReactNode; label: string;
   </div>
 );
 
-const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
+const FarmerProfile = ({ farmer: initialFarmer, onBack }: FarmerProfileProps) => {
   const navigate = useNavigate();
+  // Local copy so edits update the UI immediately without a full page refetch
+  const [farmer, setFarmer] = useState<Farmer>(initialFarmer);
   const [isAddCertOpen, setIsAddCertOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [cycles, setCycles] = useState<any[]>([]);
   const [cyclesLoading, setCyclesLoading] = useState(true);
   const harvests = HARVESTS[farmer._id] ?? [];
   const certs = CERTS[farmer._id] ?? [];
+
+  // Sync if parent swaps to a different farmer
+  useEffect(() => { setFarmer(initialFarmer); }, [initialFarmer._id]);
 
   // Fetch real crop cycles assigned to this farmer
   useEffect(() => {
@@ -143,11 +152,17 @@ const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
           </div>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+          <button
+            onClick={() => setIsEditOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
             <Pencil size={15} /> Edit Profile
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 border border-red-200 dark:border-red-800 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-            <ShieldOff size={15} /> Suspend Account
+          <button
+            onClick={() => setIsDeleteOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-red-200 dark:border-red-800 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          >
+            <ShieldOff size={15} /> Account Actions
           </button>
         </div>
       </div>
@@ -320,6 +335,36 @@ const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
         onSubmit={(data) => {
           console.log('New certificate recorded:', data);
           setIsAddCertOpen(false);
+        }}
+      />
+
+      {/* Edit Farmer Modal */}
+      <EditFarmerModal
+        isOpen={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        farmer={farmer}
+        onSaved={(updated) => {
+          setFarmer(updated as Farmer);
+          setIsEditOpen(false);
+        }}
+      />
+
+      {/* Delete / Suspend Modal */}
+      <DeleteFarmerModal
+        isOpen={isDeleteOpen}
+        onClose={() => setIsDeleteOpen(false)}
+        farmer={farmer}
+        onSuspended={(updated) => {
+          setFarmer(updated as Farmer);
+          setIsDeleteOpen(false);
+        }}
+        onReactivated={(updated) => {
+          setFarmer(updated as Farmer);
+          setIsDeleteOpen(false);
+        }}
+        onDeleted={() => {
+          setIsDeleteOpen(false);
+          onBack();
         }}
       />
 
