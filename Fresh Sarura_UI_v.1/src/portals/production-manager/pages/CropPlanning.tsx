@@ -239,7 +239,7 @@ const CropPlanning = () => {
                                             endDate: cycle.expected_harvest_date ? new Date(cycle.expected_harvest_date).toLocaleDateString() : '—',
                                             budget: cycle.total_budget,
                                             spent: cycle.spent ?? 0,
-                                            yieldGoal: cycle.yield_goal ?? '—',
+                                            yieldGoal: cycle.yield_goal_kg != null ? `${cycle.yield_goal_kg.toLocaleString()} kg` : '—',
                                         })}
                                         className="w-full py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300 group-hover:bg-gray-50 dark:group-hover:bg-gray-700/50 transition-colors"
                                     >

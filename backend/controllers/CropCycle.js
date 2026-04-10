@@ -1,9 +1,11 @@
 import CropCycle from '../models/CropCycle.js';
 
-// GET /api/v1/crop-cycles
+// GET /api/v1/crop-cycles  (supports ?farmer_id=<id> filter)
 export const getCropCycles = async (req, res) => {
     try {
-        const cycles = await CropCycle.find().sort({ createdAt: -1 });
+        const filter = {};
+        if (req.query.farmer_id) filter.farmer_id = req.query.farmer_id;
+        const cycles = await CropCycle.find(filter).sort({ createdAt: -1 });
         res.status(200).json({ status: 'success', results: cycles.length, data: cycles });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
@@ -29,6 +31,7 @@ export const createCropCycle = async (req, res) => {
             budget_fertilizers,
             budget_chemicals,
             budget_labor,
+            yield_goal_kg,
         } = req.body;
 
         // Validate required fields (mirrors model's required: true)
@@ -60,6 +63,7 @@ export const createCropCycle = async (req, res) => {
             budget_fertilizers: parseFloat(budget_fertilizers) || 0,
             budget_chemicals: parseFloat(budget_chemicals) || 0,
             budget_labor: parseFloat(budget_labor) || 0,
+            yield_goal_kg: yield_goal_kg ? parseFloat(yield_goal_kg) : undefined,
             registeredBy: req.user._id,
         });
 

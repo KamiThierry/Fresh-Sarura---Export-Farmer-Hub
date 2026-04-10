@@ -22,6 +22,7 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
         block_name: '',
         block_size_hectares: '',
         field_size_hectares: '',
+        yield_goal_kg: '',
         total_budget: 0,
         budget_seeds: 0,
         budget_fertilizers: 0,
@@ -233,6 +234,26 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                                     step="0.1"
                                     className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-green-500"
                                 />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Yield Goal (kg)
+                                    <span className="ml-1 text-xs text-gray-400 font-normal">(optional)</span>
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">kg</span>
+                                    <input
+                                        type="number"
+                                        name="yield_goal_kg"
+                                        value={formData.yield_goal_kg}
+                                        onChange={handleInputChange}
+                                        placeholder="e.g. 5000"
+                                        min="0"
+                                        step="1"
+                                        className="w-full pl-12 p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-green-500"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </section>

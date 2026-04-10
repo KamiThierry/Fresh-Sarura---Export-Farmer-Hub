@@ -16,6 +16,7 @@ const cropCycleSchema = new mongoose.Schema({
     budget_fertilizers: { type: Number, required: true },
     budget_chemicals: { type: Number, required: true },
     budget_labor: { type: Number, required: true },
+    yield_goal_kg: { type: Number },
     status: { type: String, enum: ['active', 'harvesting', 'completed', 'cancelled'], default: 'active' },
     final_yield: { type: String },
     registeredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

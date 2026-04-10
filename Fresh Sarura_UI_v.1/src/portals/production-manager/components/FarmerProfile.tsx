@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Pencil, ShieldOff, Phone, Mail, MapPin, Leaf, Ruler, Star, BadgeCheck, Sprout, PackageCheck, Plus } from 'lucide-react';
+import { ArrowLeft, Pencil, ShieldOff, Phone, Mail, MapPin, Leaf, Ruler, Star, BadgeCheck, Sprout, PackageCheck, Plus, Loader2 } from 'lucide-react';
 import { Farmer } from '@/types';
 import AddCertificateModal from './AddCertificateModal';
+import { api } from '@/lib/api';
 
 interface FarmerProfileProps {
   farmer: Farmer;
@@ -85,9 +86,19 @@ const InfoRow = ({ icon, label, value }: { icon: React.ReactNode; label: string;
 const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
   const navigate = useNavigate();
   const [isAddCertOpen, setIsAddCertOpen] = useState(false);
-  const cycles = CROP_CYCLES[farmer._id] ?? [];
+  const [cycles, setCycles] = useState<any[]>([]);
+  const [cyclesLoading, setCyclesLoading] = useState(true);
   const harvests = HARVESTS[farmer._id] ?? [];
   const certs = CERTS[farmer._id] ?? [];
+
+  // Fetch real crop cycles assigned to this farmer
+  useEffect(() => {
+    setCyclesLoading(true);
+    api.get(`/crop-cycles?farmer_id=${farmer._id}`)
+      .then((res) => setCycles(res.data ?? []))
+      .catch((err) => console.error('Failed to load crop cycles:', err))
+      .finally(() => setCyclesLoading(false));
+  }, [farmer._id]);
 
   const handleCertClick = (certLabel: string) => {
     const params = new URLSearchParams({
@@ -215,30 +226,43 @@ const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
             <Sprout size={15} className="text-green-500" />
             <h3 className="text-sm font-bold text-gray-900 dark:text-white">Active Crop Cycles</h3>
             <span className="ml-auto text-xs font-semibold px-2 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-full">
-              {cycles.length} active
+              {cyclesLoading ? '…' : `${cycles.length} active`}
             </span>
           </div>
-          {cycles.length > 0 ? (
+          {cyclesLoading ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-gray-400">
+              <Loader2 size={18} className="animate-spin" />
+              <span className="text-sm">Loading cycles…</span>
+            </div>
+          ) : cycles.length > 0 ? (
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 dark:bg-gray-900/40 text-[11px] uppercase tracking-wider text-gray-400">
                   <th className="px-5 py-2.5 text-left">Block</th>
                   <th className="px-5 py-2.5 text-left">Crop</th>
                   <th className="px-5 py-2.5 text-left">Planted</th>
-                  <th className="px-5 py-2.5 text-left">Est. Yield</th>
-                  <th className="px-5 py-2.5 text-left">Days Left</th>
+                  <th className="px-5 py-2.5 text-left">Yield Goal</th>
+                  <th className="px-5 py-2.5 text-left">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {cycles.map((c, i) => (
-                  <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                    <td className="px-5 py-3 font-medium text-gray-700 dark:text-gray-300">{c.block}</td>
-                    <td className="px-5 py-3 text-gray-600 dark:text-gray-400">{c.crop}</td>
-                    <td className="px-5 py-3 text-gray-500 text-xs">{c.planted}</td>
-                    <td className="px-5 py-3 font-semibold text-gray-800 dark:text-gray-200">{c.estYield}</td>
+                {cycles.map((c) => (
+                  <tr key={c._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                    <td className="px-5 py-3 font-medium text-gray-700 dark:text-gray-300">{c.block_name}</td>
+                    <td className="px-5 py-3 text-gray-600 dark:text-gray-400">{c.crop_name}</td>
+                    <td className="px-5 py-3 text-gray-500 text-xs">
+                      {c.planting_date ? new Date(c.planting_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                    </td>
+                    <td className="px-5 py-3 font-semibold text-gray-800 dark:text-gray-200">
+                      {c.yield_goal_kg != null ? `${c.yield_goal_kg.toLocaleString()} kg` : '—'}
+                    </td>
                     <td className="px-5 py-3">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${c.daysLeft <= 20 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'}`}>
-                        {c.daysLeft}d
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        c.status === 'harvesting' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 animate-pulse' :
+                        c.status === 'completed'  ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' :
+                        'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                      }`}>
+                        {c.status === 'active' ? '● Active' : c.status === 'harvesting' ? '◉ Harvesting' : c.status === 'completed' ? '✓ Done' : c.status}
                       </span>
                     </td>
                   </tr>
