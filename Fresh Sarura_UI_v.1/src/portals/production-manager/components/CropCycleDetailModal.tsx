@@ -13,6 +13,7 @@ import BudgetLedgerModal from './BudgetLedgerModal';
 import type { BudgetRequest } from '../../shared/types/activity';
 import { useEffect } from 'react';
 import { getForecasts, saveForecasts, YieldForecast } from '../../shared/data/mockForecasts';
+import { api } from '@/lib/api';
 
 interface CropCycleDetailModalProps {
     isOpen: boolean;
@@ -41,6 +42,7 @@ const MOCK_BUDGET_REQUESTS: BudgetRequest[] = [
     },
 ];
 
+
 const CropCycleDetailModal = ({ isOpen, onClose, cycle, onCloseCycle }: CropCycleDetailModalProps) => {
     const [activeTab, setActiveTab] = useState<'overview' | 'financials' | 'requests' | 'forecasts'>('overview');
     const [isLedgerOpen, setIsLedgerOpen] = useState(false);
@@ -49,7 +51,7 @@ const CropCycleDetailModal = ({ isOpen, onClose, cycle, onCloseCycle }: CropCycl
     const [budgetRequests, setBudgetRequests] = useState<BudgetRequest[]>(MOCK_BUDGET_REQUESTS);
     const [forecasts, setForecasts] = useState<YieldForecast[]>([]);
     const [replyText, setReplyText] = useState<{ [id: number]: string }>({});
-    
+
     // New States for Financials Loop
     const [cycleStatus, setCycleStatus] = useState(cycle?.status || 'Active');
     const [isAdjustBudgetOpen, setIsAdjustBudgetOpen] = useState(false);
@@ -79,19 +81,39 @@ const CropCycleDetailModal = ({ isOpen, onClose, cycle, onCloseCycle }: CropCycl
             { id: 'TX-002', date: 'Feb 08', desc: 'Field Report: Weeding Labor — Block B1', amount: 45000, category: 'Labor', block: 'Block B1', approvedAmount: 45000, notes: 'Finished weeding ahead of schedule.', hasProof: false },
         ]
     });
-    
+
     // Derived values for Global Summary Banner
     const totalAllocatedBudget = ledgerDataState.categories.reduce((acc, cat) => acc + cat.allocated, 0);
     const totalProductionCost = ledgerDataState.categories.reduce((acc, cat) => acc + cat.spent, 0);
     const globalVariance = totalAllocatedBudget - totalProductionCost;
 
+    const [cycles, setCycles] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+    const fetchCycles = async () => {
+        setLoading(true);
+        try {
+            const res = await api.get('/crop-cycles');
+            setCycles(res.data);
+        } catch (err) {
+            console.error('Failed to fetch crop cycles:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchCycles();
+    }, []);
+
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'Active':     return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
-            case 'Planned':    return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
-            case 'Completed':  return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
+            case 'Active': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+            case 'Planned': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+            case 'Completed': return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
             case 'Harvesting': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
-            default:           return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
+            default: return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
         }
     };
 
@@ -248,11 +270,10 @@ const CropCycleDetailModal = ({ isOpen, onClose, cycle, onCloseCycle }: CropCycl
                                 )}
                                 <div className="relative pt-6 pb-2">
                                     <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                                        <div className={`h-full rounded-full relative transition-all duration-700 ${
-                                            cycleStatus === 'Completed' ? 'w-full bg-gray-400' :
+                                        <div className={`h-full rounded-full relative transition-all duration-700 ${cycleStatus === 'Completed' ? 'w-full bg-gray-400' :
                                             cycleStatus === 'Harvesting' ? 'w-full bg-amber-500' :
-                                            'w-[65%] bg-green-500'
-                                        }`}>
+                                                'w-[65%] bg-green-500'
+                                            }`}>
                                             {cycleStatus === 'Active' && (
                                                 <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white border-2 border-green-500 rounded-full shadow-md"></div>
                                             )}
@@ -264,19 +285,17 @@ const CropCycleDetailModal = ({ isOpen, onClose, cycle, onCloseCycle }: CropCycl
                                             {cycle.startDate}
                                         </div>
                                         <div className="text-center">
-                                            <span className={`block font-bold ${
-                                                cycleStatus === 'Harvesting' ? 'text-amber-600 dark:text-amber-400' :
+                                            <span className={`block font-bold ${cycleStatus === 'Harvesting' ? 'text-amber-600 dark:text-amber-400' :
                                                 cycleStatus === 'Completed' ? 'text-gray-500' :
-                                                'text-gray-900 dark:text-white'
-                                            }`}>Current Stage</span>
+                                                    'text-gray-900 dark:text-white'
+                                                }`}>Current Stage</span>
                                             {cycleStatus === 'Harvesting' ? 'Harvesting' : cycleStatus === 'Completed' ? 'Closed' : 'Vegetative Growth'}
                                         </div>
                                         <div className="text-center">
-                                            <span className={`block ${
-                                                cycleStatus === 'Harvesting' ? 'text-amber-500 font-bold' :
+                                            <span className={`block ${cycleStatus === 'Harvesting' ? 'text-amber-500 font-bold' :
                                                 cycleStatus === 'Completed' ? 'text-gray-500 font-bold' :
-                                                'text-gray-400'
-                                            }`}>Harvest</span>
+                                                    'text-gray-400'
+                                                }`}>Harvest</span>
                                             {cycle.endDate}
                                         </div>
                                     </div>
@@ -291,16 +310,16 @@ const CropCycleDetailModal = ({ isOpen, onClose, cycle, onCloseCycle }: CropCycl
                                 </div>
                                 <div className="space-y-3">
                                     {ledgerDataState.recentTransactions.slice(0, 3).map((tx) => (
-                                        <div 
-                                            key={tx.id} 
+                                        <div
+                                            key={tx.id}
                                             onClick={() => setSelectedFieldReport(tx)}
                                             className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition cursor-pointer group"
                                         >
                                             {tx.hasProof ? (
-                                                <img 
-                                                    src="https://images.unsplash.com/photo-1625246333195-58197bd47d26?auto=format&fit=crop&q=80&w=80&h=80" 
-                                                    alt="Thumbnail" 
-                                                    className="w-12 h-12 rounded-lg object-cover shadow-sm shrink-0 group-hover:scale-105 transition-transform border border-gray-200 dark:border-gray-700" 
+                                                <img
+                                                    src="https://images.unsplash.com/photo-1625246333195-58197bd47d26?auto=format&fit=crop&q=80&w=80&h=80"
+                                                    alt="Thumbnail"
+                                                    className="w-12 h-12 rounded-lg object-cover shadow-sm shrink-0 group-hover:scale-105 transition-transform border border-gray-200 dark:border-gray-700"
                                                 />
                                             ) : (
                                                 <div className="w-12 h-12 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform border border-emerald-100 dark:border-emerald-900/30">
@@ -403,8 +422,8 @@ const CropCycleDetailModal = ({ isOpen, onClose, cycle, onCloseCycle }: CropCycl
                                 </div>
                                 <div className="space-y-3">
                                     {ledgerDataState.recentTransactions.map((tx) => (
-                                        <div 
-                                            key={tx.id} 
+                                        <div
+                                            key={tx.id}
                                             onClick={() => setSelectedFieldReport(tx)}
                                             className="flex justify-between items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition-colors border border-dashed border-gray-100 dark:border-gray-700 cursor-pointer group"
                                         >
@@ -463,22 +482,20 @@ const CropCycleDetailModal = ({ isOpen, onClose, cycle, onCloseCycle }: CropCycl
                                         return (
                                             <div
                                                 key={req.id}
-                                                className={`bg-white dark:bg-gray-800 rounded-xl border shadow-sm overflow-hidden transition-all ${
-                                                    isApproved ? 'border-green-300 dark:border-green-700' :
+                                                className={`bg-white dark:bg-gray-800 rounded-xl border shadow-sm overflow-hidden transition-all ${isApproved ? 'border-green-300 dark:border-green-700' :
                                                     isRejected ? 'border-red-200 dark:border-red-800 opacity-70' :
-                                                    'border-gray-200 dark:border-gray-700'
-                                                }`}
+                                                        'border-gray-200 dark:border-gray-700'
+                                                    }`}
                                             >
                                                 {/* Request card header */}
                                                 <div className="flex items-start justify-between px-5 py-4 bg-gray-50/60 dark:bg-gray-900/30 border-b border-gray-100 dark:border-gray-700">
                                                     <div>
                                                         <div className="flex items-center gap-2 mb-0.5">
                                                             <span className="text-sm font-bold text-gray-900 dark:text-white">{req.submittedBy}</span>
-                                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                                                isApproved ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${isApproved ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
                                                                 isRejected ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                                                                'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                                                            }`}>
+                                                                    'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                                                }`}>
                                                                 {req.approvalStatus}
                                                             </span>
                                                         </div>
@@ -576,7 +593,7 @@ const CropCycleDetailModal = ({ isOpen, onClose, cycle, onCloseCycle }: CropCycl
                                     <h3 className="font-bold text-gray-900 dark:text-white">Yield Forecasts</h3>
                                 </div>
                             </div>
-                            
+
                             {forecasts.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-16 text-center">
                                     <p className="font-semibold text-gray-700 dark:text-gray-300">No Forecasts Submitted</p>
@@ -613,12 +630,12 @@ const CropCycleDetailModal = ({ isOpen, onClose, cycle, onCloseCycle }: CropCycl
                                                     {f.notes || "No notes provided."}
                                                 </p>
                                             </div>
-                                            
+
                                             {f.status === 'Pending' && cycleStatus !== 'Completed' && (
                                                 <div className="pt-4 border-t border-gray-100 dark:border-gray-700 space-y-3">
                                                     <div>
                                                         <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Reply Note (Optional)</label>
-                                                        <input 
+                                                        <input
                                                             type="text"
                                                             placeholder="e.g. Acknowledged. Logistics informed."
                                                             value={replyText[f.id] || ''}
@@ -627,7 +644,7 @@ const CropCycleDetailModal = ({ isOpen, onClose, cycle, onCloseCycle }: CropCycl
                                                         />
                                                     </div>
                                                     <div className="flex justify-end">
-                                                        <button 
+                                                        <button
                                                             onClick={() => {
                                                                 const updated = forecasts.map(pf => pf.id === f.id ? { ...pf, status: 'Verified' as const, pmReply: replyText[f.id] } : pf);
                                                                 setForecasts(updated);
@@ -730,7 +747,7 @@ const CropCycleDetailModal = ({ isOpen, onClose, cycle, onCloseCycle }: CropCycl
                 onFlag={(reason) => {
                     setLedgerDataState(prev => ({
                         ...prev,
-                        recentTransactions: prev.recentTransactions.map(tx => 
+                        recentTransactions: prev.recentTransactions.map(tx =>
                             tx.id === selectedFieldReport?.id ? { ...tx, status: 'Flagged', pmNote: reason } : tx
                         )
                     }));
@@ -955,7 +972,7 @@ function FieldReportDetailsModal({ isOpen, onClose, report, onFlag, isReadOnly }
                         <X size={20} />
                     </button>
                 </div>
-                
+
                 <div className="p-6 space-y-6 flex-1 overflow-y-auto max-h-[70vh]">
                     {/* Financial Comparison */}
                     <div className="grid grid-cols-2 gap-4">
@@ -1006,53 +1023,53 @@ function FieldReportDetailsModal({ isOpen, onClose, report, onFlag, isReadOnly }
 
                     {/* Action Bar */}
                     {!isReadOnly && (
-                    <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
-                        {report.status === 'Flagged' ? (
-                            <div className="p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-xl text-amber-800 dark:text-amber-300 text-sm font-semibold flex items-center justify-center gap-2">
-                                <AlertCircle size={16} /> This report has been flagged for review.
-                            </div>
-                        ) : !isFlagging ? (
-                            <button
-                                onClick={() => setIsFlagging(true)}
-                                className="w-full py-3 rounded-xl border-2 border-amber-500 text-amber-600 dark:text-amber-500 font-bold text-sm hover:bg-amber-50 dark:hover:bg-amber-900/10 transition-colors"
-                            >
-                                Flag for Review
-                            </button>
-                        ) : (
-                            <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2">
-                                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                                    Reason for Flagging <span className="text-gray-400 font-normal">(This will be sent to the Farm Manager)</span>
-                                </label>
-                                <textarea
-                                    value={flagReason}
-                                    onChange={(e) => setFlagReason(e.target.value)}
-                                    placeholder="Explain what is missing, unclear, or incorrect..."
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 text-gray-900 dark:text-white resize-none h-24"
-                                />
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => setIsFlagging(false)}
-                                        className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 font-semibold text-gray-600 dark:text-gray-300 text-sm hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            if (onFlag && flagReason.trim()) {
-                                                onFlag(flagReason);
-                                                setIsFlagging(false);
-                                                setFlagReason('');
-                                            }
-                                        }}
-                                        disabled={!flagReason.trim()}
-                                        className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        Submit Flag
-                                    </button>
+                        <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
+                            {report.status === 'Flagged' ? (
+                                <div className="p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-xl text-amber-800 dark:text-amber-300 text-sm font-semibold flex items-center justify-center gap-2">
+                                    <AlertCircle size={16} /> This report has been flagged for review.
                                 </div>
-                            </div>
-                        )}
-                    </div>
+                            ) : !isFlagging ? (
+                                <button
+                                    onClick={() => setIsFlagging(true)}
+                                    className="w-full py-3 rounded-xl border-2 border-amber-500 text-amber-600 dark:text-amber-500 font-bold text-sm hover:bg-amber-50 dark:hover:bg-amber-900/10 transition-colors"
+                                >
+                                    Flag for Review
+                                </button>
+                            ) : (
+                                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2">
+                                    <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                        Reason for Flagging <span className="text-gray-400 font-normal">(This will be sent to the Farm Manager)</span>
+                                    </label>
+                                    <textarea
+                                        value={flagReason}
+                                        onChange={(e) => setFlagReason(e.target.value)}
+                                        placeholder="Explain what is missing, unclear, or incorrect..."
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 text-gray-900 dark:text-white resize-none h-24"
+                                    />
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => setIsFlagging(false)}
+                                            className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 font-semibold text-gray-600 dark:text-gray-300 text-sm hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                if (onFlag && flagReason.trim()) {
+                                                    onFlag(flagReason);
+                                                    setIsFlagging(false);
+                                                    setFlagReason('');
+                                                }
+                                            }}
+                                            disabled={!flagReason.trim()}
+                                            className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Submit Flag
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>

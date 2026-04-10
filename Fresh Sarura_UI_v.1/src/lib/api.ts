@@ -24,6 +24,16 @@ export const api = {
         if (!response.ok) throw new Error(result.message || 'Something went wrong');
         return result;
     },
+    patch: async (endpoint: string, data: object) => {
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            method: 'PATCH',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || 'Something went wrong');
+        return result;
+    },
     delete: async (endpoint: string) => {
         const response = await fetch(`${API_BASE_URL}${endpoint}`, {
             method: 'DELETE',

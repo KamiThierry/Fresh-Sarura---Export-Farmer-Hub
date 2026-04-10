@@ -2,6 +2,7 @@ import express from 'express';
 import healthRoutes from './health.js';
 import authRoutes from './auth.js';
 import farmerRoutes from './farmers.js';
+import cropCycleRoutes from './CropCycle.js';
 
 const router = express.Router();
 
@@ -25,5 +26,6 @@ router.use(`${apiVersion}/auth`, authRoutes);
  */
 
 router.use(`${apiVersion}/farmers`, farmerRoutes);
+router.use(`${apiVersion}/crop-cycles`, cropCycleRoutes);
 
 export default router;
