@@ -15,7 +15,10 @@ const apiVersion = '/api/v1';
  */
 router.use(`${apiVersion}/health`, healthRoutes);
 
-router.use(`${apiVersion}/farm-manager`, farmManagerRoutes);
+/**
+ * Auth Routes
+ */
+router.use(`${apiVersion}/auth`, authRoutes);
 
 /**
  * Auth Routes
