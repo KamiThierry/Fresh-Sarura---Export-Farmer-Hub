@@ -3,6 +3,7 @@ import healthRoutes from './health.js';
 import authRoutes from './auth.js';
 import farmerRoutes from './farmers.js';
 import cropCycleRoutes from './CropCycle.js';
+import farmManagerRoutes from './farmManager.js';
 
 const router = express.Router();
 
@@ -13,6 +14,8 @@ const apiVersion = '/api/v1';
  * Health Check Routes
  */
 router.use(`${apiVersion}/health`, healthRoutes);
+
+router.use(`${apiVersion}/farm-manager`, farmManagerRoutes);
 
 /**
  * Auth Routes

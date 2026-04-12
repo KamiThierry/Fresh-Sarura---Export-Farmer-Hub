@@ -1,62 +1,42 @@
-import { useState, useEffect } from 'react';
-import { getForecasts, saveForecasts, YieldForecast } from '../../shared/data/mockForecasts';
+import { useState } from 'react';
+import { useFarmManager } from '../../../lib/useFarmManager';
 import {
     Calendar, Scale, Target,
     Leaf, CheckCircle2, History, AlertCircle
 } from 'lucide-react';
 
 const YieldForecasting = () => {
-    // Mock Data for Active Cycles
-    const ACTIVE_CYCLES = [
-        { id: 1, name: "Avocado - Season A" },
-        { id: 2, name: "Chili - Plot B" },
-        { id: 3, name: "Beans - Sector 4" }
-    ];
-
-    const [history, setHistory] = useState<YieldForecast[]>([]);
-
-    useEffect(() => {
-        setHistory(getForecasts());
-        const handleStorage = () => setHistory(getForecasts());
-        window.addEventListener('forecastsChanged', handleStorage);
-        return () => window.removeEventListener('forecastsChanged', handleStorage);
-    }, []);
+    const { cycles, forecasts, loading, submitYieldForecast, fetchForecasts } = useFarmManager();
+    const activeCycles = cycles.filter((c: any) => c.status !== 'Completed');
 
     // Form State
-    const [selectedCycle, setSelectedCycle] = useState(ACTIVE_CYCLES[0].id);
+    const [selectedCycle, setSelectedCycle] = useState(activeCycles[0]?._id || '');
     const [harvestDate, setHarvestDate] = useState('');
     const [quantity, setQuantity] = useState('');
     const [confidence, setConfidence] = useState('Medium');
     const [notes, setNotes] = useState('');
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const cropName = ACTIVE_CYCLES.find(c => c.id === Number(selectedCycle))?.name || 'Unknown';
-
-        const newForecast: YieldForecast = {
-            id: Date.now(),
-            cycleId: Number(selectedCycle),
-            submitted: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            harvestDate: new Date(harvestDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            crop: cropName.split(' - ')[0],
-            prediction: Number(quantity),
-            status: 'Pending',
-            confidence,
-            notes,
-            accuracy: null,
-            variance: null
-        };
-
-        const updated = [newForecast, ...history];
-        setHistory(updated);
-        saveForecasts(updated);
-
-        // Reset Form
-        setHarvestDate('');
-        setQuantity('');
-        setConfidence('Medium');
-        setNotes('');
-        alert('Forecast submitted successfully!');
+        try {
+            await submitYieldForecast({
+                cycleId: String(selectedCycle),
+                harvestDate,
+                predictionKg: Number(quantity),
+                confidence,
+                notes
+            });
+            // Show success, reset form
+            setHarvestDate('');
+            setQuantity('');
+            setConfidence('Medium');
+            setNotes('');
+            alert('Forecast submitted successfully!');
+            fetchForecasts();
+        } catch (err) {
+            console.error('Forecast submission failed:', err);
+            alert('Failed to submit forecast: ' + err);
+        }
     };
 
     return (
@@ -132,8 +112,8 @@ const YieldForecasting = () => {
                                         onChange={(e) => setSelectedCycle(Number(e.target.value))}
                                         className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
                                     >
-                                        {ACTIVE_CYCLES.map(cycle => (
-                                            <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
+                                        {activeCycles.map((cycle: any) => (
+                                            <option key={cycle._id} value={cycle._id}>{cycle.crop_name} — {cycle.season}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -231,44 +211,51 @@ const YieldForecasting = () => {
                     </div>
 
                     <div className="space-y-4">
-                        {history.map((record) => (
-                            <div key={record.id} className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
-                                <div className="flex justify-between items-start mb-3">
-                                    <div>
-                                        <h4 className="font-bold text-gray-900 dark:text-white">{record.crop}</h4>
-                                        <p className="text-xs text-gray-500">Submitted: {record.submitted}</p>
-                                    </div>
-                                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border ${record.status === 'Verified'
-                                        ? 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900/30'
-                                        : 'bg-yellow-50 text-yellow-600 border-yellow-100 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-900/30'
-                                        }`}>
-                                        {record.status}
-                                    </span>
-                                </div>
+                        {loading && forecasts.length === 0 ? (
+                            <p className="text-sm text-gray-500 py-4 text-center">Loading forecasts...</p>
+                        ) : forecasts.map((record: any) => {
+                            const cycle = cycles.find((c: any) => c._id === record.cycleId);
+                            const cropName = cycle ? cycle.crop_name : 'Unknown Crop';
 
-                                <div className="grid grid-cols-2 gap-4 text-sm mb-3">
-                                    <div>
-                                        <p className="text-xs text-gray-400">Harvest Date</p>
-                                        <p className="font-medium text-gray-700 dark:text-gray-200">{record.harvestDate}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-xs text-gray-400">Prediction</p>
-                                        <p className="font-medium text-gray-700 dark:text-gray-200">{record.prediction.toLocaleString()} kg</p>
-                                    </div>
-                                </div>
-
-                                {record.status === 'Verified' && (
-                                    <div className={`mt-3 pt-3 border-t border-gray-100 dark:border-gray-600/50 flex items-center justify-between text-xs font-bold ${(record.accuracy || 0) >= 90 ? 'text-emerald-600' : 'text-orange-500'
-                                        }`}>
-                                        <span className="flex items-center gap-1.5">
-                                            {(record.accuracy || 0) >= 90 ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-                                            {record.variance}
+                            return (
+                                <div key={record._id} className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div>
+                                            <h4 className="font-bold text-gray-900 dark:text-white">{cropName}</h4>
+                                            <p className="text-xs text-gray-500">Submitted: {new Date(record.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+                                        </div>
+                                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border ${record.status === 'Verified'
+                                            ? 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900/30'
+                                            : 'bg-yellow-50 text-yellow-600 border-yellow-100 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-900/30'
+                                            }`}>
+                                            {record.status}
                                         </span>
-                                        <span>{record.accuracy}% Accuracy</span>
                                     </div>
-                                )}
-                            </div>
-                        ))}
+
+                                    <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                                        <div>
+                                            <p className="text-xs text-gray-400">Harvest Date</p>
+                                            <p className="font-medium text-gray-700 dark:text-gray-200">{new Date(record.harvestDate).toLocaleDateString()}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs text-gray-400">Prediction</p>
+                                            <p className="font-medium text-gray-700 dark:text-gray-200">{record.predictionKg?.toLocaleString() || 0} kg</p>
+                                        </div>
+                                    </div>
+
+                                    {record.status === 'Verified' && (
+                                        <div className={`mt-3 pt-3 border-t border-gray-100 dark:border-gray-600/50 flex items-center justify-between text-xs font-bold ${(record.accuracy || 0) >= 90 ? 'text-emerald-600' : 'text-orange-500'
+                                            }`}>
+                                            <span className="flex items-center gap-1.5">
+                                                {(record.accuracy || 0) >= 90 ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                                                {record.notes || record.pmReply}
+                                            </span>
+                                            <span>{record.accuracy}% Accuracy</span>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
