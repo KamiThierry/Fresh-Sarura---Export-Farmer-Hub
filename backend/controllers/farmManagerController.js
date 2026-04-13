@@ -31,17 +31,8 @@ export const getDashboard = async (req, res) => {
     try {
         const farmer = await getMyFarmer(req.user._id);
 
-        // Cycles linked to this farmer's district/cooperative (PM creates cycles for farms)
-        // Link: CropCycle.farm_name matches farmer cooperative or district, OR
-        // we use a farmerId field. For now we match by the farmer's registered district.
-        // Best approach: PM will tag cycles with farmerId when assigning — for now return
-        // all cycles from same farm_name as cooperative_name or district
-        const cycles = await CropCycle.find({
-            $or: [
-                { farm_name: { $regex: farmer.district, $options: 'i' } },
-                { farm_name: { $regex: farmer.cooperative_name || '__NONE__', $options: 'i' } },
-            ]
-        }).sort({ createdAt: -1 });
+        // Cycles linked to this farmer directly via the farmer_id field
+        const cycles = await CropCycle.find({ farmer_id: farmer._id }).sort({ createdAt: -1 });
 
         const [pendingRequests, pendingForecasts] = await Promise.all([
             BudgetRequest.countDocuments({
@@ -81,12 +72,8 @@ export const getMyCycles = async (req, res) => {
     try {
         const farmer = await getMyFarmer(req.user._id);
 
-        const cycles = await CropCycle.find({
-            $or: [
-                { farm_name: { $regex: farmer.district, $options: 'i' } },
-                { farm_name: { $regex: farmer.cooperative_name || '__NONE__', $options: 'i' } },
-            ]
-        }).sort({ createdAt: -1 });
+        // Fetch using exact farmer_id assignment
+        const cycles = await CropCycle.find({ farmer_id: farmer._id }).sort({ createdAt: -1 });
 
         // For each cycle, also pull the FM's budget requests
         const cyclesWithRequests = await Promise.all(

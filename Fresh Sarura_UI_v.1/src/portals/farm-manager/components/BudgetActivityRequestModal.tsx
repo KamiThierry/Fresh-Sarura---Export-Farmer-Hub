@@ -16,6 +16,7 @@ interface BudgetActivityRequestModalProps {
 const emptyLine = (): ActivityLineItem => ({
     id: Date.now() + Math.random(),
     activityName: '',
+    category: '',
     estimatedCostRwf: 0,
 });
 
@@ -76,7 +77,7 @@ const BudgetActivityRequestModal = ({
     };
 
     const isValid = globalStartDate && globalEndDate && lineItems.every(
-        l => l.activityName.trim() && l.estimatedCostRwf > 0
+        l => l.activityName.trim() && l.category && l.category.trim() && l.estimatedCostRwf > 0
     );
 
     return createPortal(
@@ -192,21 +193,43 @@ const BudgetActivityRequestModal = ({
                                             />
                                         </div>
 
-                                        {/* Estimated Cost */}
-                                        <div>
-                                            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                                Estimated Cost (Rwf)
-                                            </label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="500"
-                                                value={line.estimatedCostRwf || ''}
-                                                onChange={e => updateLine(line.id, 'estimatedCostRwf', parseInt(e.target.value) || 0)}
-                                                placeholder="0"
-                                                required
-                                                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all"
-                                            />
+                                        {/* Row 2: Category & Estimated Cost */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {/* Category */}
+                                            <div>
+                                                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                                    Category
+                                                </label>
+                                                <select
+                                                    value={line.category || ''}
+                                                    onChange={e => updateLine(line.id, 'category', e.target.value)}
+                                                    required
+                                                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all"
+                                                >
+                                                    <option value="">Select Category...</option>
+                                                    <option value="Seeds & Seedlings">Seeds & Seedlings</option>
+                                                    <option value="Fertilizers">Fertilizers</option>
+                                                    <option value="Chemicals">Chemicals</option>
+                                                    <option value="Labor">Labor</option>
+                                                </select>
+                                            </div>
+
+                                            {/* Estimated Cost */}
+                                            <div>
+                                                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                                    Estimated Cost (Rwf)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="500"
+                                                    value={line.estimatedCostRwf || ''}
+                                                    onChange={e => updateLine(line.id, 'estimatedCostRwf', parseInt(e.target.value) || 0)}
+                                                    placeholder="0"
+                                                    required
+                                                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

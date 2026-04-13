@@ -10,13 +10,25 @@ const CropPlanning = () => {
     const [selectedCycle, setSelectedCycle] = useState<any>(null);
     const [cycles, setCycles] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [pendingRequests, setPendingRequests] = useState<any[]>([]);
     const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
+    const [initialTab, setInitialTab] = useState<'overview' | 'financials' | 'requests' | 'forecasts'>('overview');
+
+    const fetchPendingRequests = async () => {
+        try {
+            const res = await api.get('/crop-cycles/budget-requests/pending');
+            setPendingRequests(res.data ?? []);
+        } catch (err) {
+            console.error('Failed to fetch pending requests:', err);
+        }
+    };
 
     const fetchCycles = async () => {
         setLoading(true);
         try {
             const res = await api.get('/crop-cycles');
-            setCycles(res.data.data ?? res.data);
+            console.log("CropPlanning fetch res:", res);
+            setCycles(res.data?.data ?? res?.data ?? []);
         } catch (err) {
             console.error('Failed to fetch crop cycles:', err);
         } finally {
@@ -26,18 +38,30 @@ const CropPlanning = () => {
 
     useEffect(() => {
         fetchCycles();
+        fetchPendingRequests();
     }, []);
 
-    // Mock Data for "Priority Zone" Alert
-    const budgetAlert = {
-        exists: true,
-        farm: 'Kayonza Farm',
-        amount: 500000,
-        category: 'Labor',
-        limit: 50000,
-        allocated: 1000000,
-        spent: 950000,
-        requester: 'Jean Claude (Site Manager)'
+    const handleApproveRequest = async (requestId: string) => {
+        try {
+            await api.patch(`/crop-cycles/budget-requests/${requestId}/approve`, { pmNote: 'Approved via dashboard' });
+            setToast({ message: 'Request Approved', subtitle: 'The budget allocation has been updated.' });
+            fetchPendingRequests();
+            fetchCycles();
+        } catch (err) {
+            console.error('Failed to approve request:', err);
+            setToast({ message: 'Error', subtitle: 'Failed to approve request.' });
+        }
+    };
+
+    const handleRejectRequest = async (requestId: string) => {
+        try {
+            await api.patch(`/crop-cycles/budget-requests/${requestId}/reject`, { pmNote: 'Rejected via dashboard' });
+            setToast({ message: 'Request Rejected' });
+            fetchPendingRequests();
+        } catch (err) {
+            console.error('Failed to reject request:', err);
+            setToast({ message: 'Error', subtitle: 'Failed to reject request.' });
+        }
     };
 
     const calculateProgress = (spent: number, total: number) => {
@@ -60,6 +84,26 @@ const CropPlanning = () => {
         }
     };
 
+    const handleOpenRequestDetail = (request: any) => {
+        // Need to find the full cycle object or construct it from the request data
+        const cycle = cycles.find(c => c._id === request.cycleId);
+        if (!cycle) return;
+
+        setInitialTab('requests');
+        setSelectedCycle({
+            ...cycle,
+            id: cycle._id,
+            cycleId: cycle.cycleId ?? cycle._id,
+            crop: cycle.crop_name,
+            landSize: `${cycle.block_size_hectares ?? '—'} Ha`,
+            startDate: cycle.start_date ? new Date(cycle.start_date).toLocaleDateString() : '—',
+            endDate: cycle.expected_harvest_date ? new Date(cycle.expected_harvest_date).toLocaleDateString() : '—',
+            budget: cycle.total_budget,
+            spent: cycle.spent ?? 0,
+            yieldGoal: cycle.yield_goal_kg != null ? `${cycle.yield_goal_kg.toLocaleString()} kg` : '—',
+        });
+    };
+
     return (
         <div className="space-y-8 pb-20">
 
@@ -79,66 +123,101 @@ const CropPlanning = () => {
             </div>
 
             {/* Section 1: The "Priority Action" Zone - Budget Alerts */}
-            {budgetAlert.exists && (
+            {pendingRequests.length > 0 && (
                 <div className="animate-fade-in-up">
                     <div className="flex items-center gap-2 mb-3">
                         <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
                         <h3 className="text-sm font-bold uppercase tracking-wider text-red-500">Action Required: Budget Approvals</h3>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border-l-4 border-red-500 shadow-sm relative overflow-hidden">
-                        {/* Background Pattern */}
-                        <div className="absolute top-0 right-0 p-4 opacity-5">
-                            <AlertTriangle size={120} />
-                        </div>
+                    <div className="space-y-4">
+                        {pendingRequests.map((request) => {
+                            const primaryCategory = request.lineItems?.[0]?.category || 'General';
+                            
+                            // Find the specific category bucket from the cycle details
+                            const cycleCat = request.cycle_budget_categories?.find((c: any) => c.name === primaryCategory) || { allocated: 0, spent: 0 };
+                            
+                            const amount = request.totalRequestedRwf;
+                            const limit = Math.max(0, cycleCat.allocated - cycleCat.spent);
+                            const spent = cycleCat.spent;
+                            const isOverdraft = amount > limit;
 
-                        <div className="relative z-10">
-                            <div className="flex flex-col md:flex-row justify-between md:items-start gap-4">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                                            {budgetAlert.farm}
-                                        </span>
-                                        <span className="text-xs text-gray-400">• Just Now</span>
+                            return (
+                                <div 
+                                    key={request._id} 
+                                    className={`bg-white dark:bg-gray-800 rounded-2xl p-6 border-l-4 ${isOverdraft ? 'border-red-500' : 'border-amber-400'} shadow-sm relative overflow-hidden cursor-pointer hover:shadow-md transition-shadow group/card`}
+                                    onClick={(e) => {
+                                        // Prevents clicking the whole card if button is clicked
+                                        if ((e.target as HTMLElement).closest('button')) return;
+                                        handleOpenRequestDetail(request);
+                                    }}
+                                >
+                                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover/card:opacity-10 transition-opacity">
+                                        <AlertTriangle size={120} />
                                     </div>
-                                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                                        ⚠️ Budget Overdraft Request from {budgetAlert.requester}
-                                    </h2>
-                                    <p className="text-gray-600 dark:text-gray-300 mt-2 text-sm leading-relaxed max-w-2xl">
-                                        Requesting <strong className="text-gray-900 dark:text-white">{budgetAlert.amount.toLocaleString()} Rwf</strong> for <span className="underline decoration-red-300 decoration-2 underline-offset-2">{budgetAlert.category}</span>.
-                                        This exceeds the remaining category limit of <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">{budgetAlert.limit.toLocaleString()} Rwf</span>.
-                                    </p>
 
-                                    {/* Context Stats */}
-                                    <div className="flex items-center gap-6 mt-4 text-xs font-mono text-gray-500">
-                                        <div>
-                                            <span className="block text-[10px] uppercase text-gray-400 mb-0.5">Allocated</span>
-                                            <span className="font-bold">{budgetAlert.allocated.toLocaleString()}</span>
-                                        </div>
-                                        <div className="w-px h-6 bg-gray-200 dark:bg-gray-700"></div>
-                                        <div>
-                                            <span className="block text-[10px] uppercase text-gray-400 mb-0.5">Spent So Far</span>
-                                            <span className="font-bold">{budgetAlert.spent.toLocaleString()}</span>
-                                        </div>
-                                        <div className="w-px h-6 bg-gray-200 dark:bg-gray-700"></div>
-                                        <div>
-                                            <span className="block text-[10px] uppercase text-gray-400 mb-0.5">New Projected</span>
-                                            <span className="font-bold text-red-500">{(budgetAlert.spent + budgetAlert.amount).toLocaleString()}</span>
+                                    <div className="relative z-10">
+                                        <div className="flex flex-col md:flex-row justify-between md:items-start gap-4">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                                                        {request.farm_name}
+                                                    </span>
+                                                    <span className="text-xs text-gray-400">• {new Date(request.createdAt).toLocaleDateString()}</span>
+                                                </div>
+                                                <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                                                    {isOverdraft ? '⚠️ Budget Overdraft Request' : '⏳ Pending Budget Request'} from {request.submittedByName}
+                                                </h2>
+                                                <p className="text-gray-600 dark:text-gray-300 mt-2 text-sm leading-relaxed max-w-2xl">
+                                                    Requesting <strong className="text-gray-900 dark:text-white">{amount.toLocaleString()} Rwf</strong> for <span className={`${isOverdraft ? 'underline decoration-red-300 decoration-2 underline-offset-2' : 'font-semibold'}`}>{primaryCategory}</span>.
+                                                    {isOverdraft ? (
+                                                        <span> This exceeds the remaining category limit of <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">{limit.toLocaleString()} Rwf</span>.</span>
+                                                    ) : (
+                                                        <span> Remaining limit is <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">{limit.toLocaleString()} Rwf</span>.</span>
+                                                    )}
+                                                </p>
+
+                                                {/* Context Stats */}
+                                                <div className="flex items-center gap-6 mt-4 text-xs font-mono text-gray-500">
+                                                    <div>
+                                                        <span className="block text-[10px] uppercase text-gray-400 mb-0.5">Allocated</span>
+                                                        <span className="font-bold">{cycleCat.allocated.toLocaleString()}</span>
+                                                    </div>
+                                                    <div className="w-px h-6 bg-gray-200 dark:bg-gray-700"></div>
+                                                    <div>
+                                                        <span className="block text-[10px] uppercase text-gray-400 mb-0.5">Spent So Far</span>
+                                                        <span className="font-bold">{spent.toLocaleString()}</span>
+                                                    </div>
+                                                    <div className="w-px h-6 bg-gray-200 dark:bg-gray-700"></div>
+                                                    <div>
+                                                        <span className="block text-[10px] uppercase text-gray-400 mb-0.5">New Projected</span>
+                                                        <span className={`font-bold ${isOverdraft ? 'text-red-500' : 'text-amber-500'}`}>
+                                                            {(spent + amount).toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Actions */}
+                                            <div className="flex gap-3 mt-2 md:mt-0 flex-shrink-0">
+                                                <button
+                                                    onClick={() => handleRejectRequest(request._id)}
+                                                    className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 font-medium text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                                >
+                                                    Reject Request
+                                                </button>
+                                                <button
+                                                    onClick={() => handleApproveRequest(request._id)}
+                                                    className={`px-4 py-2 rounded-lg text-white font-medium text-sm transition-colors shadow-lg ${isOverdraft ? 'bg-red-600 hover:bg-red-700 shadow-red-900/20' : 'bg-green-600 hover:bg-green-700 shadow-green-900/20'}`}
+                                                >
+                                                    {isOverdraft ? 'Approve Override' : 'Approve Budget'}
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-
-                                {/* Actions */}
-                                <div className="flex gap-3 mt-2 md:mt-0">
-                                    <button className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 font-medium text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                        Reject Request
-                                    </button>
-                                    <button className="px-4 py-2 rounded-lg bg-red-600 text-white font-medium text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20">
-                                        Approve Override
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                            );
+                        })}
                     </div>
                 </div>
             )}
@@ -229,18 +308,21 @@ const CropPlanning = () => {
 
                                     {/* Footer Action */}
                                     <button
-                                        onClick={() => setSelectedCycle({
-                                            ...cycle,
-                                            id: cycle._id,
-                                            cycleId: cycle.cycleId ?? cycle._id,
-                                            crop: cycle.crop_name,
-                                            landSize: `${cycle.block_size_hectares ?? '—'} Ha`,
-                                            startDate: cycle.start_date ? new Date(cycle.start_date).toLocaleDateString() : '—',
-                                            endDate: cycle.expected_harvest_date ? new Date(cycle.expected_harvest_date).toLocaleDateString() : '—',
-                                            budget: cycle.total_budget,
-                                            spent: cycle.spent ?? 0,
-                                            yieldGoal: cycle.yield_goal_kg != null ? `${cycle.yield_goal_kg.toLocaleString()} kg` : '—',
-                                        })}
+                                        onClick={() => {
+                                            setInitialTab('overview');
+                                            setSelectedCycle({
+                                                ...cycle,
+                                                id: cycle._id,
+                                                cycleId: cycle.cycleId ?? cycle._id,
+                                                crop: cycle.crop_name,
+                                                landSize: `${cycle.block_size_hectares ?? '—'} Ha`,
+                                                startDate: cycle.start_date ? new Date(cycle.start_date).toLocaleDateString() : '—',
+                                                endDate: cycle.expected_harvest_date ? new Date(cycle.expected_harvest_date).toLocaleDateString() : '—',
+                                                budget: cycle.total_budget,
+                                                spent: cycle.spent ?? 0,
+                                                yieldGoal: cycle.yield_goal_kg != null ? `${cycle.yield_goal_kg.toLocaleString()} kg` : '—',
+                                            });
+                                        }}
                                         className="w-full py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300 group-hover:bg-gray-50 dark:group-hover:bg-gray-700/50 transition-colors"
                                     >
                                         Manage Cycle <ChevronRight size={16} />
@@ -284,6 +366,7 @@ const CropPlanning = () => {
                     isOpen={!!selectedCycle}
                     onClose={() => setSelectedCycle(null)}
                     cycle={selectedCycle}
+                    initialTab={initialTab}
                     onCloseCycle={(finalYield) => handleCloseCycle(selectedCycle._id, finalYield)}
                 />
             )}

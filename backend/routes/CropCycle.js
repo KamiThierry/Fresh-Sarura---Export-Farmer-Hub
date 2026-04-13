@@ -12,6 +12,7 @@ import {
     rejectBudgetRequest,
     verifyForecast,
     flagFieldReport,
+    getPendingBudgetRequests,
 } from '../controllers/CropCycle.js';
 
 const router = express.Router();
@@ -29,6 +30,7 @@ router.patch('/:id/close', closeCropCycle);
 router.patch('/:id/adjust-budget', adjustBudget);
 
 // Budget requests
+router.get('/budget-requests/pending', getPendingBudgetRequests);
 router.patch('/budget-requests/:id/approve', approveBudgetRequest);
 router.patch('/budget-requests/:id/reject', rejectBudgetRequest);
 

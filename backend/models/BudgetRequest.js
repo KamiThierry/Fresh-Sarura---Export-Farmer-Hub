@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 const lineItemSchema = new mongoose.Schema({
   activityName: { type: String, required: true },
+  category: { type: String, required: true, enum: ['Seeds & Seedlings', 'Fertilizers', 'Chemicals', 'Labor'] },
   estimatedCostRwf: { type: Number, required: true },
 });
 

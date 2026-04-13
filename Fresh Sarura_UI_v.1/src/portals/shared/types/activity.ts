@@ -3,6 +3,7 @@
 export interface ActivityLineItem {
     id: number;
     activityName: string;
+    category?: string;
     estimatedCostRwf: number;
 }
 

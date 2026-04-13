@@ -30,7 +30,8 @@ const FarmerManagement = () => {
   const fetchFarmers = async () => {
     try {
       const data = await api.get('/farmers');
-      setFarmers(data.farmers);
+      console.log('FarmerManagement fetch data:', data);
+      setFarmers(data?.farmers ?? []);
     } catch (error) {
       console.error('Failed to fetch farmers:', error);
     } finally {

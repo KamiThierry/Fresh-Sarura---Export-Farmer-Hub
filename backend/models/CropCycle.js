@@ -25,6 +25,7 @@ const cropCycleSchema = new mongoose.Schema({
             spent: { type: Number, default: 0 },
         }
     ],
+    spent: { type: Number, default: 0 },
     status: { type: String, enum: ['active', 'harvesting', 'completed', 'cancelled'], default: 'active' },
     final_yield: { type: String },
     registeredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -34,8 +35,9 @@ const cropCycleSchema = new mongoose.Schema({
 cropCycleSchema.pre('save', async function (next) {
     // Auto-generate a human-readable cycleId on first save
     if (!this.cycleId) {
-        const count = await mongoose.model('CropCycle').countDocuments();
-        this.cycleId = `CC-${String(count + 1).padStart(3, '0')}`;
+        // Use a unique random hex string to avoid E11000 duplicate key errors if documents were deleted
+        const uniqueSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+        this.cycleId = `CC-${uniqueSuffix}`;
     }
 
     // Build budget_categories from the flat budget_* fields when first created

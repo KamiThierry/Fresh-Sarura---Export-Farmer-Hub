@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  X, Wallet, ClipboardList, FileText, CheckCircle2,
-  AlertCircle, TrendingUp, FileBarChart, ShieldCheck,
+  X, ClipboardList, FileText, CheckCircle2,
+  AlertCircle, TrendingUp,
   Target, Coins, Activity, Sprout, ThumbsUp, ThumbsDown,
-  ListChecks, Lock, Plus, Image, Loader2
+  ListChecks, Lock, Plus, Loader2
 } from 'lucide-react';
 import EvidenceViewModal from './EvidenceViewModal';
 import BudgetLedgerModal from './BudgetLedgerModal';
@@ -16,13 +16,14 @@ interface CropCycleDetailModalProps {
   cycle: any;
   onCloseCycle?: (finalYield: string) => void;
   onCycleUpdated?: () => void;
+  initialTab?: 'overview' | 'financials' | 'requests' | 'forecasts';
 }
 
 const CropCycleDetailModal = ({
-  isOpen, onClose, cycle, onCloseCycle, onCycleUpdated
+  isOpen, onClose, cycle, onCloseCycle, onCycleUpdated, initialTab
 }: CropCycleDetailModalProps) => {
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'financials' | 'requests' | 'forecasts'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'financials' | 'requests' | 'forecasts'>(initialTab || 'overview');
 
   // ─── Real data state ───────────────────────────────────────────────
   const [fullData, setFullData] = useState<any>(null);
@@ -58,7 +59,7 @@ const CropCycleDetailModal = ({
   useEffect(() => {
     if (isOpen && cycle?._id) {
       fetchFull();
-      setActiveTab('overview');
+      setActiveTab(initialTab || 'overview');
     }
   }, [isOpen, cycle?._id]);
 

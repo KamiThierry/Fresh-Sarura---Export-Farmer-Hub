@@ -18,6 +18,7 @@ export const getCropCycles = async (req, res) => {
 // POST /api/v1/crop-cycles
 export const createCropCycle = async (req, res) => {
     try {
+        console.log("POST /api/v1/crop-cycles payload:", req.body);
         const {
             farmer_id,
             farm_name,
@@ -37,16 +38,12 @@ export const createCropCycle = async (req, res) => {
             yield_goal_kg,
         } = req.body;
 
-        // Validate required fields (mirrors model's required: true)
-        if (
-            !farmer_id || !crop_name || !season ||
-            !planting_date || !start_date || !expected_harvest_date ||
-            !block_name || !block_size_hectares || !field_size_hectares ||
-            !total_budget
-        ) {
+        // Validate required fields
+        if (!farmer_id || !crop_name || !season || !planting_date || !start_date || !expected_harvest_date || !block_name || block_size_hectares === undefined || field_size_hectares === undefined || total_budget === undefined) {
+            console.log("Validation failed on backend. Missing fields.");
             return res.status(400).json({
                 status: 'error',
-                message: 'All required fields must be provided: farmer_id, crop_name, season, planting_date, start_date, expected_harvest_date, block_name, block_size_hectares, field_size_hectares, total_budget.',
+                message: 'farmer_id, crop_name, season, planting_date, start_date, expected_harvest_date, block_name, block_size_hectares, field_size_hectares, and total_budget are required.',
             });
         }
 
@@ -55,10 +52,10 @@ export const createCropCycle = async (req, res) => {
             farm_name: farm_name || '',
             crop_name,
             season,
-            planting_date: new Date(planting_date),
             start_date: new Date(start_date),
+            planting_date: new Date(planting_date),
             expected_harvest_date: new Date(expected_harvest_date),
-            block_name,
+            block_name: block_name || '',
             block_size_hectares: parseFloat(block_size_hectares) || 0,
             field_size_hectares: parseFloat(field_size_hectares) || 0,
             total_budget: parseFloat(total_budget) || 0,
@@ -72,6 +69,7 @@ export const createCropCycle = async (req, res) => {
 
         res.status(201).json({ status: 'success', message: 'Crop cycle created!', data: cycle });
     } catch (err) {
+        console.error("Error creating crop cycle:", err);
         res.status(500).json({ status: 'error', message: err.message });
     }
 };
@@ -138,6 +136,29 @@ export const closeCropCycle = async (req, res) => {
     }
 };
 
+// GET /api/v1/crop-cycles/budget-requests/pending
+export const getPendingBudgetRequests = async (req, res) => {
+    try {
+        const requests = await BudgetRequest.find({ approvalStatus: 'Pending' }).sort({ createdAt: -1 });
+
+        const populatedRequests = await Promise.all(requests.map(async (r) => {
+            const reqObj = r.toObject();
+            const cycle = await CropCycle.findById(r.cycleId);
+            
+            reqObj.farm_name = cycle?.farm_name || cycle?.block_name || 'Farm';
+            reqObj.cycle_budget_categories = cycle?.budget_categories || [];
+            reqObj.cycle_total_budget = cycle?.total_budget || 0;
+            reqObj.cycle_spent = cycle?.spent || 0;
+            
+            return reqObj;
+        }));
+
+        res.status(200).json({ status: 'success', data: populatedRequests });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
 // PATCH /api/v1/budget-requests/:id/approve
 export const approveBudgetRequest = async (req, res) => {
     try {
@@ -147,6 +168,28 @@ export const approveBudgetRequest = async (req, res) => {
             { new: true }
         );
         if (!request) return res.status(404).json({ status: 'error', message: 'Request not found.' });
+
+        // Update the crop cycle buckets automatically
+        const cycle = await CropCycle.findById(request.cycleId);
+        if (cycle && cycle.budget_categories) {
+            let totalAdded = 0;
+            // Iterate and update the categories
+            const updatedCategories = cycle.budget_categories.map(cat => {
+                const matchingItems = request.lineItems.filter(item => item.category === cat.name);
+                const sumForCat = matchingItems.reduce((acc, item) => acc + (item.estimatedCostRwf || 0), 0);
+                
+                totalAdded += sumForCat;
+                return {
+                    ...cat.toObject(),
+                    spent: (cat.spent || 0) + sumForCat
+                };
+            });
+
+            cycle.budget_categories = updatedCategories;
+            cycle.spent = (cycle.spent || 0) + totalAdded;
+            await cycle.save();
+        }
+
         res.status(200).json({ status: 'success', data: request });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
@@ -215,4 +258,4 @@ export const adjustBudget = async (req, res) => {
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
-};
+}

@@ -38,7 +38,7 @@ const CropPlanning = () => {
 
     // Submits a real field report to MongoDB
     const handleTaskComplete = async (
-        taskId: any,
+        _taskId: any,
         notes: string,
         hasProof: boolean,
         actualCostRwf: number | null
@@ -64,12 +64,18 @@ const CropPlanning = () => {
     // Budget request → POST to MongoDB
     const handleBudgetRequestSubmit = async (request: BudgetRequest) => {
         try {
+            const cleanLineItems = request.lineItems.map(item => ({
+                activityName: item.activityName,
+                category: item.category,
+                estimatedCostRwf: item.estimatedCostRwf
+            }));
+
             await submitBudgetRequest({
                 cycleId: String(request.cycleId),
                 cycleName: request.cycleName,
                 startDate: request.startDate,
                 endDate: request.endDate,
-                lineItems: request.lineItems,
+                lineItems: cleanLineItems,
             });
         } catch (err) {
             console.error('Failed to submit budget request:', err);
