@@ -12,6 +12,7 @@ import Toast from '../../shared/component/Toast';
 import { Farmer } from '@/types';
 
 import { api } from '@/lib/api';
+import { usePMContext } from '@/context/PMContext';
 
 const FarmerManagement = () => {
   // State
@@ -24,24 +25,11 @@ const FarmerManagement = () => {
   const itemsPerPage = 3;
   const [successToast, setSuccessToast] = useState<{ name: string } | null>(null);
 
-  const [farmers, setFarmers] = useState<Farmer[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchFarmers = async () => {
-    try {
-      const data = await api.get('/farmers');
-      console.log('FarmerManagement fetch data:', data);
-      setFarmers(data?.farmers ?? []);
-    } catch (error) {
-      console.error('Failed to fetch farmers:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchFarmers();
-  }, []);
+  const { 
+    farmers, 
+    loading, 
+    refreshFarmers 
+  } = usePMContext();
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-500">Loading farmers...</div>;
 
   // Filter Logic
@@ -293,7 +281,7 @@ const FarmerManagement = () => {
             isOpen={isRegistrationOpen}
             onClose={() => setIsRegistrationOpen(false)}
             onFarmerAdded={(name) => {
-              fetchFarmers();
+              refreshFarmers();
               setIsRegistrationOpen(false);
               setSuccessToast({ name });
             }}

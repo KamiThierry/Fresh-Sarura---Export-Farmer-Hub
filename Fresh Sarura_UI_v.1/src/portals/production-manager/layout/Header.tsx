@@ -17,6 +17,20 @@ const Header = () => {
     const dropdownRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
 
+    // Get real user data
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : { name: 'User', role: 'Staff' };
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
+    };
+
+    const formatRole = (role: string) => {
+        return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    };
+
     // Filter logic
     const filteredResults = searchIndex.filter(item =>
         item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -117,12 +131,16 @@ const Header = () => {
                 {/* User Avatar & Profile */}
                 <div className="flex items-center gap-3 pl-2 border-l border-gray-200 dark:border-gray-700">
                     <div className="text-right hidden md:block">
-                        <p className="text-sm font-semibold text-[#222222] dark:text-white">Operations Manager</p>
-                        <p className="text-xs text-[#6B7280] dark:text-gray-400">Unified Ops</p>
+                        <p className="text-sm font-semibold text-[#222222] dark:text-white">{user.name}</p>
+                        <p className="text-xs text-[#6B7280] dark:text-gray-400">{formatRole(user.role)}</p>
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-semibold shadow-md">
-                        OM
-                    </div>
+                    <button 
+                        onClick={handleLogout}
+                        className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-semibold shadow-md hover:saturate-150 transition-all active:scale-95"
+                        title="Click to logout"
+                    >
+                        {user.name.charAt(0).toUpperCase()}
+                    </button>
                 </div>
             </div>
         </header>

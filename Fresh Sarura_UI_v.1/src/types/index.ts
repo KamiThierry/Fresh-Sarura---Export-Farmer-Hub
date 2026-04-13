@@ -22,3 +22,47 @@ export interface Farmer {
     latitude?: number;
     longitude?: number;
 }
+
+export interface CropCycle {
+    _id: string;
+    farmer_id: string;
+    farm_name: string;
+    crop_name: string;
+    season: string;
+    start_date: string;
+    planting_date: string;
+    expected_harvest_date: string;
+    block_name: string;
+    block_size_hectares: number;
+    field_size_hectares: number;
+    total_budget: number;
+    spent: number;
+    status: 'active' | 'harvesting' | 'completed';
+    yield_goal_kg?: number;
+    final_yield?: string;
+    budget_seeds?: number;
+    budget_fertilizers?: number;
+    budget_chemicals?: number;
+    budget_labor?: number;
+}
+
+export interface BudgetRequest {
+    _id: string;
+    cycleId: string;
+    cycleName: string;
+    farm_name?: string;
+    submittedByName: string;
+    totalRequestedRwf: number;
+    approvalStatus: 'Pending' | 'Approved' | 'Rejected';
+    createdAt: string;
+    lineItems: Array<{
+        category: string;
+        activityName: string;
+        estimatedCostRwf: number;
+    }>;
+    cycle_budget_categories?: Array<{
+        name: string;
+        allocated: number;
+        spent: number;
+    }>;
+}

@@ -4,49 +4,28 @@ import { Sprout, Plus, AlertTriangle, ChevronRight, BarChart2 } from 'lucide-rea
 import CreateCropCycleModal from '../components/CreateCropCycleModal';
 import CropCycleDetailModal from '../components/CropCycleDetailModal';
 import Toast from '../../shared/component/Toast';
+import { usePMContext } from '@/context/PMContext';
 
 const CropPlanning = () => {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [selectedCycle, setSelectedCycle] = useState<any>(null);
-    const [cycles, setCycles] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [pendingRequests, setPendingRequests] = useState<any[]>([]);
     const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
     const [initialTab, setInitialTab] = useState<'overview' | 'financials' | 'requests' | 'forecasts'>('overview');
 
-    const fetchPendingRequests = async () => {
-        try {
-            const res = await api.get('/crop-cycles/budget-requests/pending');
-            setPendingRequests(res.data ?? []);
-        } catch (err) {
-            console.error('Failed to fetch pending requests:', err);
-        }
-    };
-
-    const fetchCycles = async () => {
-        setLoading(true);
-        try {
-            const res = await api.get('/crop-cycles');
-            console.log("CropPlanning fetch res:", res);
-            setCycles(res.data?.data ?? res?.data ?? []);
-        } catch (err) {
-            console.error('Failed to fetch crop cycles:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchCycles();
-        fetchPendingRequests();
-    }, []);
+    const { 
+        cycles, 
+        pendingRequests, 
+        loading, 
+        refreshCycles, 
+        refreshPendingRequests 
+    } = usePMContext();
 
     const handleApproveRequest = async (requestId: string) => {
         try {
             await api.patch(`/crop-cycles/budget-requests/${requestId}/approve`, { pmNote: 'Approved via dashboard' });
             setToast({ message: 'Request Approved', subtitle: 'The budget allocation has been updated.' });
-            fetchPendingRequests();
-            fetchCycles();
+            refreshPendingRequests();
+            refreshCycles();
         } catch (err) {
             console.error('Failed to approve request:', err);
             setToast({ message: 'Error', subtitle: 'Failed to approve request.' });
@@ -57,7 +36,7 @@ const CropPlanning = () => {
         try {
             await api.patch(`/crop-cycles/budget-requests/${requestId}/reject`, { pmNote: 'Rejected via dashboard' });
             setToast({ message: 'Request Rejected' });
-            fetchPendingRequests();
+            refreshPendingRequests();
         } catch (err) {
             console.error('Failed to reject request:', err);
             setToast({ message: 'Error', subtitle: 'Failed to reject request.' });
@@ -75,7 +54,7 @@ const CropPlanning = () => {
                 status: 'completed',
                 final_yield: finalYield,
             });
-            fetchCycles();
+            refreshCycles();
             setSelectedCycle(null);
             setToast({ message: 'Crop Cycle Closed', subtitle: `Final yield recorded: ${finalYield}` });
         } catch (err) {
@@ -351,7 +330,7 @@ const CropPlanning = () => {
                     try {
                         await api.post('/crop-cycles', formData);
                         setIsCreateModalOpen(false);
-                        fetchCycles();
+                        refreshCycles();
                         setToast({ message: 'Crop Cycle Created!', subtitle: `${formData.crop_name} cycle is now active.` });
                     } catch (err) {
                         console.error('Failed to create cycle:', err);

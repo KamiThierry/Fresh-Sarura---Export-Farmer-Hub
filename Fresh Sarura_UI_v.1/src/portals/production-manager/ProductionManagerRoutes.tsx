@@ -15,6 +15,7 @@ import SettingsPage from './pages/Settings';
 import ClientRequests from './pages/ClientRequests';
 
 import QCInspectionModal from './components/QCInspectionModal';
+import { PMProvider } from '@/context/PMContext';
 
 const ProductionManagerRoutes = () => {
     const [isIntakeOpen, setIsIntakeOpen] = useState(false);
@@ -63,7 +64,7 @@ const ProductionManagerRoutes = () => {
 
 
     return (
-        <>
+        <PMProvider>
             <Routes>
                 <Route element={<Layout />}>
                     {/* Home/Dashboard Route */}
@@ -117,7 +118,7 @@ const ProductionManagerRoutes = () => {
                 onClose={() => setIsPackingListOpen(false)}
                 onSubmit={handlePackingListSubmit}
             />
-        </>
+        </PMProvider>
     );
 };
 

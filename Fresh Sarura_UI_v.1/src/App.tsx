@@ -9,6 +9,7 @@ import AdminRoutes from './portals/admin/AdminRoutes';
 import DriverTaskView from './portals/driver/pages/DriverTaskView';
 import QCOfficerRoutes from './portals/qc-officer/QCOfficerRoutes';
 import LandingPage from './pages/Index';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // Import other portals as you build them:
 // import AdminRoutes from './portals/admin/AdminRoutes';
@@ -23,19 +24,39 @@ function App() {
         <Route path="/signup" element={<SignUpPage />} />
 
         {/* Production Manager Portal */}
-        <Route path="/pm/*" element={<ProductionManagerRoutes />} />
+        <Route path="/pm/*" element={
+          <ProtectedRoute allowedRoles={['production_manager', 'admin']}>
+            <ProductionManagerRoutes />
+          </ProtectedRoute>
+        } />
 
         {/* Farm Manager Portal */}
-        <Route path="/farm-manager/*" element={<FarmManagerRoutes />} />
+        <Route path="/farm-manager/*" element={
+          <ProtectedRoute allowedRoles={['farm_manager', 'admin']}>
+            <FarmManagerRoutes />
+          </ProtectedRoute>
+        } />
 
         {/* Admin Portal */}
-        <Route path="/admin/*" element={<AdminRoutes />} />
+        <Route path="/admin/*" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AdminRoutes />
+          </ProtectedRoute>
+        } />
 
         {/* Logistics Officer Portal */}
-        <Route path="/logistics/*" element={<LogisticsRoutes />} />
+        <Route path="/logistics/*" element={
+          <ProtectedRoute allowedRoles={['logistic_officer', 'admin']}>
+            <LogisticsRoutes />
+          </ProtectedRoute>
+        } />
 
         {/* QC Officer Portal */}
-        <Route path="/qc/*" element={<QCOfficerRoutes />} />
+        <Route path="/qc/*" element={
+          <ProtectedRoute allowedRoles={['quality_officer', 'admin']}>
+            <QCOfficerRoutes />
+          </ProtectedRoute>
+        } />
 
         {/* Driver Lite Interface */}
         <Route path="/driver/task/:taskId" element={<DriverTaskView />} />
