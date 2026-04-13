@@ -160,14 +160,17 @@ export const getMyBudgetRequests = async (req, res) => {
 // POST /api/v1/farm-manager/field-reports
 // FM logs actual expense/activity completion after work is done
 export const submitFieldReport = async (req, res) => {
+    console.log('--- BACKEND: submitFieldReport START ---');
+    console.log('User:', req.user?.email, 'Role:', req.user?.role);
+    console.log('Body:', JSON.stringify(req.body, null, 2));
     try {
         const {
             cycleId, budgetRequestId, description,
             category, block, approvedAmountRwf,
-            actualCostRwf, notes, hasProof
+            actualCostRwf, notes, hasProof, proofUrl
         } = req.body;
 
-        if (!cycleId || !description || !actualCostRwf) {
+        if (!cycleId || !description || actualCostRwf === undefined) {
             return res.status(400).json({ status: 'error', message: 'cycleId, description, and actualCostRwf are required.' });
         }
 
@@ -182,14 +185,21 @@ export const submitFieldReport = async (req, res) => {
             approvedAmountRwf: approvedAmountRwf || 0,
             actualCostRwf,
             notes,
-            hasProof: hasProof || false,
+            hasProof: hasProof || !!proofUrl,
+            proofUrl: proofUrl || null,
             status: 'Submitted',
         });
 
-        // Update the cycle's spent total
-        await CropCycle.findByIdAndUpdate(cycleId, {
-            $inc: { spent: actualCostRwf }
-        });
+        // Update the cycle's spent total and the specific category spent
+        await CropCycle.findOneAndUpdate(
+            { _id: cycleId, "budget_categories.name": category },
+            { 
+                $inc: { 
+                    spent: actualCostRwf,
+                    "budget_categories.$.spent": actualCostRwf 
+                } 
+            }
+        );
 
         res.status(201).json({
             status: 'success',

@@ -181,12 +181,12 @@ export const approveBudgetRequest = async (req, res) => {
                 totalAdded += sumForCat;
                 return {
                     ...cat.toObject(),
-                    spent: (cat.spent || 0) + sumForCat
+                    approved: (cat.approved || 0) + sumForCat
                 };
             });
 
             cycle.budget_categories = updatedCategories;
-            cycle.spent = (cycle.spent || 0) + totalAdded;
+            cycle.approved = (cycle.approved || 0) + totalAdded;
             await cycle.save();
         }
 

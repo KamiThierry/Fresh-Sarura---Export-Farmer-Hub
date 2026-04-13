@@ -32,8 +32,15 @@ const CropPlanning = () => {
         setIsRequestModalOpen(true);
     };
 
-    const handleTaskClick = (task: any) => {
-        if (!task.completed) setSelectedTask(task);
+    const handleTaskClick = (task: any, cycle: any) => {
+        console.log('CropPlanning: Task clicked', { task, cycle });
+        if (!task.completed) {
+            console.log('CropPlanning: Setting selectedTask and selectedCycle', { task, cycle });
+            setSelectedTask(task);
+            setSelectedCycle(cycle);
+        } else {
+            console.log('CropPlanning: Task already completed, ignoring click');
+        }
     };
 
     // Submits a real field report to MongoDB
@@ -41,22 +48,33 @@ const CropPlanning = () => {
         _taskId: any,
         notes: string,
         hasProof: boolean,
-        actualCostRwf: number | null
+        actualCostRwf: number | null,
+        proofUrl: string | null,
+        category: string | undefined,
+        block: string | undefined
     ) => {
-        if (!selectedTask || !selectedCycle) return;
+        console.log('CropPlanning: handleTaskComplete called with:', { notes, hasProof, actualCostRwf, proofUrl, category, block });
+        if (!selectedTask || !selectedCycle) {
+            console.warn('CropPlanning: ABORT - missing selectedTask or selectedCycle', { selectedTask, selectedCycle });
+            return;
+        }
         try {
+            console.log('CropPlanning: Calling useFarmManager.submitFieldReport...');
             await submitFieldReport({
                 cycleId: selectedCycle._id,
                 description: selectedTask.title || 'Field Activity',
-                block: selectedTask.block,
+                block: block || selectedTask.block,
+                category: category || selectedTask.category,
                 approvedAmountRwf: selectedTask.approvedBudgetRwf,
                 actualCostRwf: actualCostRwf || 0,
                 notes,
                 hasProof,
+                proofUrl: proofUrl || undefined
             });
+            console.log('CropPlanning: Field report success, fetching cycles...');
             fetchCycles();
         } catch (err) {
-            console.error('Failed to submit field report:', err);
+            console.error('CropPlanning: Failed to submit field report:', err);
         }
         setSelectedTask(null);
     };
@@ -89,18 +107,29 @@ const CropPlanning = () => {
         const approvedTasks: Task[] = (cycle.myRequests ?? [])
             .filter((r: any) => r.approvalStatus === 'Approved')
             .flatMap((r: any) =>
-                (r.lineItems ?? []).map((item: any, i: number) => ({
-                    id: `${r._id}-${i}`,
-                    title: item.activityName,
-                    date: r.endDate
-                        ? new Date(r.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
-                        : '—',
-                    completed: false,
-                    proofRequired: true,
-                    block: '',
-                    approvedBudgetRwf: item.estimatedCostRwf,
-                    approvalStatus: 'Approved' as const,
-                }))
+                (r.lineItems ?? []).map((item: any, i: number) => {
+                    const activityName = item.activityName;
+                    
+                    // Check if there is already a FIELD REPORT for this activity
+                    const existingReport = (cycle.myFieldReports ?? []).find(
+                        (report: any) => report.description === activityName
+                    );
+
+                    return {
+                        id: `${r._id}-${i}`,
+                        title: activityName,
+                        category: item.category,
+                        date: r.endDate
+                            ? new Date(r.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+                            : '—',
+                        completed: !!existingReport,
+                        proofRequired: true,
+                        block: existingReport?.block || cycle.block_name || '',
+                        approvedBudgetRwf: item.estimatedCostRwf,
+                        actualCostRwf: existingReport?.actualCostRwf,
+                        approvalStatus: 'Approved' as const,
+                    };
+                })
             );
 
         const pendingForThisCycle: BudgetRequest[] = budgetRequests
@@ -174,7 +203,7 @@ const CropPlanning = () => {
                             extraTasks={[]}
                             pendingRequests={cycle._pendingRequests}
                             onRequestInput={() => handleRequestClick(cycles.find(c => c._id === cycle._id))}
-                            onTaskClick={handleTaskClick}
+                            onTaskClick={(task) => handleTaskClick(task, cycle)}
                             onViewLog={() => setLogCycle(cycle)}
                         />
                     ))}
@@ -379,6 +408,7 @@ const CycleCard = ({
                                     <div
                                         key={task.id}
                                         onClick={() => {
+                                            console.log('CycleCard: Task DIV clicked', task);
                                             if (cycle.status !== 'Completed') onTaskClick(task);
                                         }}
                                         className={`flex items-center gap-3 py-2 px-2 rounded-lg transition-all border border-transparent ${task.completed || cycle.status === 'Completed'

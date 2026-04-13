@@ -22,9 +22,11 @@ const cropCycleSchema = new mongoose.Schema({
         {
             name: { type: String },
             allocated: { type: Number, default: 0 },
+            approved: { type: Number, default: 0 },
             spent: { type: Number, default: 0 },
         }
     ],
+    approved: { type: Number, default: 0 }, // Total across all categories
     spent: { type: Number, default: 0 },
     status: { type: String, enum: ['active', 'harvesting', 'completed', 'cancelled'], default: 'active' },
     final_yield: { type: String },

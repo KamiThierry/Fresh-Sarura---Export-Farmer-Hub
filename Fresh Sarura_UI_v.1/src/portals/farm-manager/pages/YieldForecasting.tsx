@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useFarmManager } from '../../../lib/useFarmManager';
 import {
     Calendar, Scale, Target,
@@ -10,11 +10,18 @@ const YieldForecasting = () => {
     const activeCycles = cycles.filter((c: any) => c.status !== 'Completed');
 
     // Form State
-    const [selectedCycle, setSelectedCycle] = useState(activeCycles[0]?._id || '');
+    const [selectedCycle, setSelectedCycle] = useState('');
     const [harvestDate, setHarvestDate] = useState('');
     const [quantity, setQuantity] = useState('');
     const [confidence, setConfidence] = useState('Medium');
     const [notes, setNotes] = useState('');
+
+    // Sync default cycle selection when data loads
+    useEffect(() => {
+        if (activeCycles.length > 0 && !selectedCycle) {
+            setSelectedCycle(activeCycles[0]._id);
+        }
+    }, [activeCycles, selectedCycle]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -109,7 +116,7 @@ const YieldForecasting = () => {
                                     </label>
                                     <select
                                         value={selectedCycle}
-                                        onChange={(e) => setSelectedCycle(Number(e.target.value))}
+                                        onChange={(e) => setSelectedCycle(e.target.value)}
                                         className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
                                     >
                                         {activeCycles.map((cycle: any) => (

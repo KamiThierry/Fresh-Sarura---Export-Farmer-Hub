@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
     X, Camera, UploadCloud, AlertCircle,
@@ -10,18 +10,30 @@ import type { Task } from '../../shared/types/activity';
 interface TaskExecutionModalProps {
     task: Task;
     onClose: () => void;
-    onComplete: (taskId: number, notes: string, hasProof: boolean, actualCostRwf: number | null) => void;
+    onComplete: (taskId: string | number, notes: string, hasProof: boolean, actualCostRwf: number | null, proofUrl: string | null, category: string | undefined, block: string | undefined) => void;
 }
 
 const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalProps) => {
     const [notes, setNotes] = useState('');
     const [proofImage, setProofImage] = useState<string | null>(null);
     const [actualCost, setActualCost] = useState<string>('');
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const canComplete = !task.proofRequired || (task.proofRequired && proofImage);
 
-    const handleUpload = () => {
-        setProofImage('https://images.unsplash.com/photo-1625246333195-58197bd47d26?auto=format&fit=crop&q=80&w=300&h=200');
+    const handleUploadClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setProofImage(reader.result as string);
+        };
+        reader.readAsDataURL(file);
     };
 
     const handleRemoveProof = () => {
@@ -100,6 +112,18 @@ const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalPro
                             </div>
                         </div>
 
+                        {/* Category & Block Auto-populated */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-100 dark:border-gray-600 rounded-xl">
+                                <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Category</p>
+                                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{task.category || 'General'}</p>
+                            </div>
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-100 dark:border-gray-600 rounded-xl">
+                                <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Block</p>
+                                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{task.block || '—'}</p>
+                            </div>
+                        </div>
+
                         {task.proofRequired && (
                             <div className="flex items-start gap-2.5 p-3 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/30 text-blue-700 dark:text-blue-300 rounded-xl text-xs font-medium">
                                 <AlertCircle size={15} className="shrink-0 mt-0.5" />
@@ -135,15 +159,24 @@ const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalPro
                         </p>
 
                         {!proofImage ? (
-                            <button
-                                onClick={handleUpload}
-                                className="w-full h-32 border-2 border-dashed border-gray-200 dark:border-gray-600 rounded-xl flex flex-col items-center justify-center gap-2 text-gray-400 hover:text-emerald-600 hover:border-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all bg-gray-50/60 dark:bg-gray-700/30"
-                            >
-                                <div className="w-10 h-10 rounded-full bg-white dark:bg-gray-700 shadow-sm border border-gray-100 dark:border-gray-600 flex items-center justify-center">
-                                    <UploadCloud size={18} />
-                                </div>
-                                <span className="text-sm font-semibold">Tap to Take Photo / Upload</span>
-                            </button>
+                            <>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleFileChange}
+                                    accept="image/*"
+                                    className="hidden"
+                                />
+                                <button
+                                    onClick={handleUploadClick}
+                                    className="w-full h-32 border-2 border-dashed border-gray-200 dark:border-gray-600 rounded-xl flex flex-col items-center justify-center gap-2 text-gray-400 hover:text-emerald-600 hover:border-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all bg-gray-50/60 dark:bg-gray-700/30"
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-white dark:bg-gray-700 shadow-sm border border-gray-100 dark:border-gray-600 flex items-center justify-center">
+                                        <UploadCloud size={18} />
+                                    </div>
+                                    <span className="text-sm font-semibold">Tap to Take Photo / Upload</span>
+                                </button>
+                            </>
                         ) : (
                             <div className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 group">
                                 <img src={proofImage} alt="Proof of Work" className="w-full h-44 object-cover" />
@@ -186,7 +219,10 @@ const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalPro
                         </p>
                     )}
                     <button
-                        onClick={() => onComplete(task.id, notes, !!proofImage, actualCost ? parseFloat(actualCost) : null)}
+                        onClick={() => {
+                            console.log('TaskExecutionModal: Submit clicked', { taskId: task.id, notes, proofImage });
+                            onComplete(task.id, notes, !!proofImage, actualCost ? parseFloat(actualCost) : null, proofImage, task.category, task.block);
+                        }}
                         disabled={!canComplete}
                         className={`w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${canComplete
                                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/25 active:scale-[0.98]'

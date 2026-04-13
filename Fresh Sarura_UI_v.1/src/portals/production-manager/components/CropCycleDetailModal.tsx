@@ -78,12 +78,13 @@ const CropCycleDetailModal = ({
       ];
     }
   }
-  const fieldReports = fullData?.fieldReports || [];
   const budgetRequests = fullData?.budgetRequests || [];
   const forecasts = fullData?.forecasts || [];
+  const fieldReports = fullData?.fieldReports || [];
 
   const totalAllocated = budgetCategories.reduce((a: number, c: any) => a + (c.allocated || 0), 0);
-  const totalSpent = budgetCategories.reduce((a: number, c: any) => a + (c.spent || 0), 0);
+  const totalApproved  = budgetCategories.reduce((a: number, c: any) => a + (c.approved || 0), 0);
+  const totalSpent     = budgetCategories.reduce((a: number, c: any) => a + (c.spent || 0), 0);
   const globalVariance = totalAllocated - totalSpent;
 
   // ─── Actions ──────────────────────────────────────────────────────
@@ -377,7 +378,11 @@ const CropCycleDetailModal = ({
                         <p className="text-2xl font-bold text-white">{fmt(totalAllocated)} Rwf</p>
                       </div>
                       <div>
-                        <p className="text-gray-400 text-xs mb-1">Total Cost</p>
+                        <p className="text-gray-400 text-xs mb-1">Total Approved</p>
+                        <p className="text-2xl font-bold text-white">{fmt(totalApproved)} Rwf</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-xs mb-1">Actual Cost</p>
                         <p className="text-2xl font-bold text-white">{fmt(totalSpent)} Rwf</p>
                       </div>
                       <div className="border-l border-gray-600 pl-6">
@@ -408,9 +413,12 @@ const CropCycleDetailModal = ({
                       <div key={idx} className="p-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
                         <div className="flex justify-between items-start mb-2">
                           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{cat.name}</span>
-                          <span className={`text-xs font-bold ${variance < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            {variance > 0 ? '+' : ''}{fmt(variance)} Rwf
-                          </span>
+                          <div className="text-right">
+                            <span className={`text-xs font-bold block ${variance < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {variance > 0 ? '+' : ''}{fmt(variance)} diff
+                            </span>
+                            <span className="text-[10px] text-gray-400 uppercase font-bold">Approved: {fmt(cat.approved || 0)}</span>
+                          </div>
                         </div>
                         <div className="mt-auto">
                           <div className="flex justify-between text-xs text-gray-500 mb-1">
@@ -943,6 +951,28 @@ const FieldReportDetailsModal = ({
               <p className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-600/50">
                 {report.notes}
               </p>
+            </div>
+          )}
+
+          {/* Evidence Image Display */}
+          {report.proofUrl && (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Attached Evidence</p>
+              <div className="relative rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
+                <img 
+                  src={report.proofUrl} 
+                  alt="Field Evidence" 
+                  className="w-full h-auto max-h-64 object-contain mx-auto"
+                />
+                <a 
+                  href={report.proofUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="absolute bottom-2 right-2 bg-black/50 backdrop-blur-md text-white px-2.5 py-1 rounded text-[10px] font-bold hover:bg-black/70 transition-colors"
+                >
+                  View Full Image
+                </a>
+              </div>
             </div>
           )}
 

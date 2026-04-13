@@ -61,7 +61,9 @@ export const useFarmManager = () => {
     endDate: string;
     lineItems: { activityName: string; estimatedCostRwf: number }[];
   }) => {
+    console.log('useFarmManager: submitBudgetRequest START', data);
     const res = await api.post('/farm-manager/budget-requests', data);
+    console.log('useFarmManager: submitBudgetRequest SUCCESS', res);
     await fetchBudgetRequests();
     await fetchCycles();
     return res;
@@ -76,13 +78,21 @@ export const useFarmManager = () => {
     actualCostRwf: number;
     notes?: string;
     hasProof?: boolean;
+    proofUrl?: string;
     budgetRequestId?: string;
   }) => {
-    const res = await api.post('/farm-manager/field-reports', data);
-    await fetchFieldReports();
-    await fetchCycles();
-    await fetchDashboard();
-    return res;
+    console.log('useFarmManager: submitFieldReport START', data);
+    try {
+      const res = await api.post('/farm-manager/field-reports', data);
+      console.log('useFarmManager: submitFieldReport SUCCESS', res);
+      await fetchFieldReports();
+      await fetchCycles();
+      await fetchDashboard();
+      return res;
+    } catch (err) {
+      console.error('useFarmManager: submitFieldReport FAILED', err);
+      throw err;
+    }
   };
 
   const submitYieldForecast = async (data: {

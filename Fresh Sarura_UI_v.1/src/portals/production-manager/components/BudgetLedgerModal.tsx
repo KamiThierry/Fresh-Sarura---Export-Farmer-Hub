@@ -61,6 +61,7 @@ const BudgetLedgerModal = ({ isOpen, onClose, budgetCategories, fieldReports, cy
                                     <tr>
                                         <th className="px-4 py-3">Category</th>
                                         <th className="px-4 py-3 text-right">Allocated</th>
+                                        <th className="px-4 py-3 text-right">Approved</th>
                                         <th className="px-4 py-3 text-right">Actual Spent</th>
                                         <th className="px-4 py-3 text-right">Variance (Remaining)</th>
                                         <th className="px-4 py-3 text-center">Status</th>
@@ -84,6 +85,7 @@ const BudgetLedgerModal = ({ isOpen, onClose, budgetCategories, fieldReports, cy
                                             <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                                                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{cat.name}</td>
                                                 <td className="px-4 py-3 text-right text-gray-500">{allocated.toLocaleString()}</td>
+                                                <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-200">{cat.approved?.toLocaleString() || '0'}</td>
                                                 <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-200">{spent.toLocaleString()}</td>
                                                 <td className={`px-4 py-3 text-right font-bold ${isNegative ? 'text-red-500' : 'text-green-500'}`}>
                                                     {isNegative ? '' : '+'}{variance.toLocaleString()}
