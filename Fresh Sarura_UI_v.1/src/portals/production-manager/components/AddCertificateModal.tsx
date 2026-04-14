@@ -53,7 +53,7 @@ const AddCertificateModal = ({ isOpen, onClose, onSubmit, defaultFarmer }: AddCe
             />
 
             {/* Modal Panel */}
-            <div className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            <div className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
 
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-white dark:bg-gray-800">
@@ -70,7 +70,7 @@ const AddCertificateModal = ({ isOpen, onClose, onSubmit, defaultFarmer }: AddCe
                 </div>
 
                 {/* Form Content */}
-                <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50 dark:bg-gray-900/50">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-gray-50/50 dark:bg-gray-900/50">
                     <form id="cert-form" onSubmit={handleSubmit} className="space-y-6">
 
                         {/* Farmer Selection */}

@@ -18,6 +18,7 @@ interface NotificationsModalProps {
     notifications: Notification[];
     onMarkAsRead: (id: string) => void;
     onMarkAllAsRead: () => void;
+    onClearAll: () => void;
 }
 
 const typeConfig = {
@@ -58,7 +59,7 @@ const typeConfig = {
     }
 };
 
-const NotificationsModal = ({ isOpen, onClose, notifications, onMarkAsRead, onMarkAllAsRead }: NotificationsModalProps) => {
+const NotificationsModal = ({ isOpen, onClose, notifications, onMarkAsRead, onMarkAllAsRead, onClearAll }: NotificationsModalProps) => {
     const navigate = useNavigate();
 
     if (!isOpen) return null;
@@ -90,7 +91,7 @@ const NotificationsModal = ({ isOpen, onClose, notifications, onMarkAsRead, onMa
             />
 
             {/* Panel */}
-            <div className="relative w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 dark:border-gray-700 max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+            <div className="relative w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 dark:border-gray-700 max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/50 flex-shrink-0">
@@ -112,7 +113,7 @@ const NotificationsModal = ({ isOpen, onClose, notifications, onMarkAsRead, onMa
                 </div>
 
                 {/* Notification List */}
-                <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50/40 dark:bg-gray-900/30">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 bg-gray-50/40 dark:bg-gray-900/30">
                     {notifications.length === 0 ? (
                         <div className="py-20 text-center">
                             <Bell size={32} className="mx-auto text-gray-300 mb-3" />
@@ -124,30 +125,54 @@ const NotificationsModal = ({ isOpen, onClose, notifications, onMarkAsRead, onMa
                             const config = typeConfig[n.type] || typeConfig.BUDGET_REQUEST;
                             const Icon = config.icon;
                             const ActionIcon = config.actionIcon;
+
+                            // Dynamic styles for unread states
+                            const unreadBorderColor = n.type === 'BUDGET_REJECTED' || n.type === 'REPORT_FLAGGED' ? 'border-l-red-500' : 
+                                                    n.type === 'BUDGET_APPROVED' ? 'border-l-green-500' : 
+                                                    n.type === 'FORECAST_VERIFIED' ? 'border-l-blue-500' : 'border-l-amber-500';
+
                             return (
                                 <div
                                     key={n._id}
-                                    className={`p-4 rounded-xl border transition-all shadow-sm ${n.isRead ? 'bg-white/50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-700' : 'bg-white dark:bg-gray-700 border-green-100 dark:border-green-900/30 font-bold shadow-md'}`}
+                                    className={`relative p-4 rounded-xl border transition-all duration-300 ${
+                                        n.isRead 
+                                            ? 'bg-gray-50/40 dark:bg-gray-800/20 border-gray-100 dark:border-gray-700 opacity-70 grayscale-[0.3]' 
+                                            : `bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 shadow-md border-l-4 ${unreadBorderColor} scale-[1.02] z-10`
+                                    }`}
                                 >
-                                    <div className="flex items-start gap-3">
-                                        <div className={`p-2.5 rounded-xl shrink-0 ${config.iconColor}`}>
+                                    <div className="flex items-start gap-4">
+                                        <div className={`p-2.5 rounded-xl shrink-0 ${config.iconColor} ${n.isRead ? 'opacity-60' : 'shadow-sm'}`}>
                                             <Icon size={18} />
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-start justify-between gap-2">
-                                                <p className={`text-sm text-gray-900 dark:text-white ${n.isRead ? 'font-medium' : 'font-bold'}`}>
+                                                <p className={`text-sm tracking-tight ${n.isRead ? 'text-gray-600 dark:text-gray-400 font-medium' : 'text-gray-900 dark:text-white font-bold'}`}>
                                                     {n.title}
                                                 </p>
                                                 {!n.isRead && (
-                                                    <span className="w-2 h-2 rounded-full bg-green-600 shrink-0 mt-1" title="Unread" />
+                                                    <div className="flex items-center gap-1.5 shrink-0 transition-opacity">
+                                                        <span className="text-[9px] font-black text-green-600 dark:text-green-500 uppercase tracking-widest">New</span>
+                                                        <span className="relative flex h-2 w-2">
+                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600"></span>
+                                                        </span>
+                                                    </div>
                                                 )}
                                             </div>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{n.message}</p>
-                                            <div className="flex items-center justify-between mt-3">
-                                                <span className="text-[10px] text-gray-400 whitespace-nowrap">{formatTime(n.createdAt)}</span>
+                                            <p className={`text-xs mt-1 line-clamp-2 leading-relaxed ${n.isRead ? 'text-gray-400' : 'text-gray-500 dark:text-gray-300'}`}>
+                                                {n.message}
+                                            </p>
+                                            <div className="flex items-center justify-between mt-4">
+                                                <span className="text-[10px] font-medium text-gray-400 whitespace-nowrap bg-gray-100 dark:bg-gray-900/50 px-2 py-0.5 rounded-md">
+                                                    {formatTime(n.createdAt)}
+                                                </span>
                                                 <button
                                                     onClick={() => handleAction(n._id, n.link)}
-                                                    className={`flex items-center gap-1.5 py-1 px-3 rounded-lg text-xs font-bold transition-all ${config.btnColor}`}
+                                                    className={`flex items-center gap-1.5 py-1.5 px-4 rounded-lg text-xs font-bold transition-all ${
+                                                        n.isRead 
+                                                            ? 'bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:text-gray-400' 
+                                                            : config.btnColor + ' shadow-sm active:scale-95'
+                                                    }`}
                                                 >
                                                     <ActionIcon size={12} />
                                                     {config.action}
@@ -162,13 +187,21 @@ const NotificationsModal = ({ isOpen, onClose, notifications, onMarkAsRead, onMa
                 </div>
 
                 {/* Footer */}
-                <div className="flex-shrink-0 px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/50">
+                <div className="flex-shrink-0 px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/50 flex items-center justify-between gap-4">
                     <button
                         onClick={onMarkAllAsRead}
                         disabled={notifications.every(n => n.isRead)}
-                        className="w-full text-xs font-bold text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors disabled:opacity-40"
+                        className="flex-1 text-xs font-bold text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors disabled:opacity-40"
                     >
                         Mark all as read
+                    </button>
+                    <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
+                    <button
+                        onClick={onClearAll}
+                        disabled={notifications.length === 0}
+                        className="flex-1 text-xs font-bold text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors disabled:opacity-40"
+                    >
+                        Clear All
                     </button>
                 </div>
             </div>

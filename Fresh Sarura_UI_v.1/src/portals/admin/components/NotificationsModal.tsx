@@ -4,6 +4,7 @@ import { X, Bell, AlertTriangle, UserPlus, ShieldAlert } from 'lucide-react';
 interface NotificationsModalProps {
     isOpen: boolean;
     onClose: () => void;
+    onClearAll?: () => void;
 }
 
 const NOTIFICATIONS = [
@@ -33,7 +34,7 @@ const NOTIFICATIONS = [
     },
 ];
 
-const NotificationsModal = ({ isOpen, onClose }: NotificationsModalProps) => {
+const NotificationsModal = ({ isOpen, onClose, onClearAll }: NotificationsModalProps) => {
     if (!isOpen) return null;
 
     return createPortal(
@@ -83,12 +84,19 @@ const NotificationsModal = ({ isOpen, onClose }: NotificationsModalProps) => {
                 </div>
 
                 {/* Footer */}
-                <div className="flex-shrink-0 px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/50">
+                <div className="flex-shrink-0 px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/50 flex items-center justify-between gap-4">
                     <button
                         onClick={onClose}
-                        className="w-full text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                        className="flex-1 text-xs font-bold text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-200 transition-colors"
                     >
                         Mark all as read
+                    </button>
+                    <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
+                    <button
+                        onClick={onClearAll}
+                        className="flex-1 text-xs font-bold text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                    >
+                        Clear All
                     </button>
                 </div>
             </div>

@@ -48,6 +48,13 @@ const Header = () => {
         } catch (err) { console.error(err); }
     };
 
+    const handleClearAll = async () => {
+        try {
+            await api.delete('/notifications');
+            fetchNotifications();
+        } catch (err) { console.error(err); }
+    };
+
     useEffect(() => {
         fetchNotifications();
         const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
@@ -192,6 +199,7 @@ const Header = () => {
                 notifications={notifications}
                 onMarkAsRead={handleMarkAsRead}
                 onMarkAllAsRead={handleMarkAllAsRead}
+                onClearAll={handleClearAll}
             />
         </header>
     );

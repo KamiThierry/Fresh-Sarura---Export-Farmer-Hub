@@ -114,7 +114,7 @@ const QCInspectionModal = ({ isOpen, onClose, onSubmit, intakeId, onConfirm }: Q
             />
 
             {/* Modal Container */}
-            <div className="relative w-full max-w-5xl max-h-[90vh] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
+            <div className="relative w-full max-w-5xl max-h-[85vh] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 z-10">
@@ -142,7 +142,7 @@ const QCInspectionModal = ({ isOpen, onClose, onSubmit, intakeId, onConfirm }: Q
 
                     {!selectedIntake ? (
                         // Step 1: Selection View
-                        <div className="w-full h-full overflow-y-auto p-6 md:p-8">
+                        <div className="w-full h-full overflow-y-auto custom-scrollbar p-6 md:p-8">
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Pending Intakes</h3>
                             <div className="space-y-3">
                                 {filteredIntakes.map(intake => (
@@ -177,7 +177,7 @@ const QCInspectionModal = ({ isOpen, onClose, onSubmit, intakeId, onConfirm }: Q
                         // Step 2: Inspection Form (Split View)
                         <>
                             {/* Left Column: Metrics & Decision */}
-                            <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 border-r border-gray-100 dark:border-gray-700">
+                            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8 space-y-8 border-r border-gray-100 dark:border-gray-700">
 
                                 {/* Section 1: Quality Metrics */}
                                 <section>

@@ -88,7 +88,7 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
             />
 
             {/* Modal */}
-            <div className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            <div className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
                 {/* Header */}
                 <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-white dark:bg-gray-800">
                     <div>
@@ -104,7 +104,7 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                 </div>
 
                 {/* Content */}
-                <div className="p-6 space-y-8 flex-1 overflow-y-auto">
+                <div className="p-6 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
 
                     {/* Section 1: Context */}
                     <section className="space-y-4">

@@ -42,6 +42,16 @@ export const markAllAsRead = async (req, res) => {
     }
 };
 
+// DELETE /api/v1/notifications
+export const clearAllNotifications = async (req, res) => {
+    try {
+        await Notification.deleteMany({ recipient: req.user._id });
+        res.status(200).json({ status: 'success', message: 'All notifications cleared.' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
 // Helper function to create notifications (not an API)
 export const createNotification = async ({ recipient, sender, type, title, message, link }) => {
     try {

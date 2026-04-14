@@ -34,6 +34,13 @@ const FarmManagerHeader = () => {
         } catch (err) { console.error(err); }
     };
 
+    const handleClearAll = async () => {
+        try {
+            await api.delete('/notifications');
+            fetchNotifications();
+        } catch (err) { console.error(err); }
+    };
+
     useEffect(() => {
         const userStr = localStorage.getItem('user');
         if (userStr) {
@@ -114,6 +121,7 @@ const FarmManagerHeader = () => {
                 notifications={notifications}
                 onMarkAsRead={handleMarkAsRead}
                 onMarkAllAsRead={handleMarkAllAsRead}
+                onClearAll={handleClearAll}
             />
         </header>
     );

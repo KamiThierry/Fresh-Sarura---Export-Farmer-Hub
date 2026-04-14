@@ -54,7 +54,7 @@ const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalPro
             />
 
             {/* Modal */}
-            <div className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 dark:border-gray-700 max-h-[90vh]">
+            <div className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 dark:border-gray-700 max-h-[85vh]">
 
                 {/* Header */}
                 <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/50 flex-shrink-0">
@@ -89,7 +89,7 @@ const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalPro
                 </div>
 
                 {/* Scrollable Body */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
 
                     {/* Approved Scope Panel (replaces SOP) */}
                     <div className="space-y-3">

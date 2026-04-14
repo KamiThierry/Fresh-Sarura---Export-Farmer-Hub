@@ -200,7 +200,7 @@ export const approveBudgetRequest = async (req, res) => {
             type: 'BUDGET_APPROVED',
             title: 'Budget Request Approved',
             message: `Your budget request for ${request.cycleName || 'Crop Cycle'} has been approved.`,
-            link: '/fm/crop-planning'
+            link: '/farm-manager/crop-planning'
         });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
@@ -225,7 +225,7 @@ export const rejectBudgetRequest = async (req, res) => {
             type: 'BUDGET_REJECTED',
             title: 'Budget Request Rejected',
             message: `Your budget request for ${request.cycleName || 'Crop Cycle'} was rejected. Reason: ${req.body.pmNote || 'None provided'}`,
-            link: '/fm/crop-planning'
+            link: '/farm-manager/crop-planning'
         });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
@@ -250,7 +250,7 @@ export const verifyForecast = async (req, res) => {
             type: 'FORECAST_VERIFIED',
             title: 'Forecast Verified',
             message: `Your yield forecast for cycle ${forecast.cycleId} has been verified by the PM.`,
-            link: '/fm/crop-planning'
+            link: '/farm-manager/yield-forecast'
         });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
@@ -275,7 +275,7 @@ export const flagFieldReport = async (req, res) => {
             type: 'REPORT_FLAGGED',
             title: 'Field Report Flagged',
             message: `Your field report for cycle ${report.cycleId} was flagged. Reason: ${req.body.reason}`,
-            link: '/fm/crop-planning'
+            link: '/farm-manager/crop-planning'
         });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });

@@ -86,7 +86,7 @@ const BudgetActivityRequestModal = ({
             <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={onClose} />
 
             {/* Modal */}
-            <div className="relative w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+            <div className="relative w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
 
                 {/* Header */}
                 <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 shrink-0">
@@ -152,7 +152,7 @@ const BudgetActivityRequestModal = ({
                         </div>
 
                         {/* Scrollable line items */}
-                        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-4">
                             <div className="flex items-center justify-between mb-1">
                                 <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Proposed Activities</p>
                                 <p className="text-xs text-gray-400">{lineItems.length} item{lineItems.length !== 1 ? 's' : ''}</p>
