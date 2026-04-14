@@ -3,6 +3,26 @@ import CropCycle from '../models/CropCycle.js';
 import BudgetRequest from '../models/BudgetRequest.js';
 import YieldForecast from '../models/YieldForecast.js';
 import FieldReport from '../models/FieldReport.js';
+import User from '../models/User.js';
+import { createNotification } from './notificationController.js';
+
+// ── Helper: Notify all Production Managers ──────────────────────────
+const notifyAllPMs = async ({ senderId, senderName, type, title, message, link }) => {
+    try {
+        const pms = await User.find({ role: 'production_manager', isActive: true });
+        const notifications = pms.map(pm => createNotification({
+            recipient: pm._id,
+            sender: senderId,
+            type,
+            title,
+            message: `${senderName}: ${message}`,
+            link
+        }));
+        await Promise.all(notifications);
+    } catch (err) {
+        console.error('Failed to notify PMs:', err);
+    }
+};
 
 // ── Helper: find the Farmer doc linked to the logged-in user ──────────
 const getMyFarmer = async (userId) => {
@@ -140,6 +160,16 @@ export const submitBudgetRequest = async (req, res) => {
             message: 'Budget request submitted. Awaiting PM approval.',
             data: request,
         });
+
+        // Trigger Notification
+        notifyAllPMs({
+            senderId: req.user._id,
+            senderName: req.user.name,
+            type: 'BUDGET_REQUEST',
+            title: 'New Budget Request',
+            message: `New budget request submitted for ${cycleName || 'Crop Cycle'}.`,
+            link: '/pm/crop-planning'
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -206,6 +236,17 @@ export const submitFieldReport = async (req, res) => {
             message: 'Field report submitted successfully.',
             data: report,
         });
+
+        // Trigger Notification (Optional, maybe PM only needs to see flagged ones? 
+        // But user said "exchange between FM and PM", so we notify of new logs too)
+        notifyAllPMs({
+            senderId: req.user._id,
+            senderName: req.user.name,
+            type: 'BUDGET_REQUEST', // Reusing type or we could add a new one
+            title: 'New Field Report',
+            message: `A new field report was submitted for cycle ${cycleId}.`,
+            link: '/pm/crop-planning'
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -251,6 +292,16 @@ export const submitYieldForecast = async (req, res) => {
             status: 'success',
             message: 'Yield forecast submitted. Awaiting PM verification.',
             data: forecast,
+        });
+
+        // Trigger Notification
+        notifyAllPMs({
+            senderId: req.user._id,
+            senderName: req.user.name,
+            type: 'BUDGET_REQUEST',
+            title: 'New Yield Forecast',
+            message: `A new yield forecast has been submitted for cycle ${cycleId}.`,
+            link: '/pm/crop-planning'
         });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });

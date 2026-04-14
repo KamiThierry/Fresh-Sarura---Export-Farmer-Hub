@@ -2,6 +2,7 @@ import CropCycle from '../models/CropCycle.js';
 import BudgetRequest from '../models/BudgetRequest.js';
 import YieldForecast from '../models/YieldForecast.js';
 import FieldReport from '../models/FieldReport.js';
+import { createNotification } from './notificationController.js';
 
 // GET /api/v1/crop-cycles  (supports ?farmer_id=<id> filter)
 export const getCropCycles = async (req, res) => {
@@ -191,6 +192,16 @@ export const approveBudgetRequest = async (req, res) => {
         }
 
         res.status(200).json({ status: 'success', data: request });
+
+        // Trigger Notification
+        createNotification({
+            recipient: request.submittedBy,
+            sender: req.user._id,
+            type: 'BUDGET_APPROVED',
+            title: 'Budget Request Approved',
+            message: `Your budget request for ${request.cycleName || 'Crop Cycle'} has been approved.`,
+            link: '/fm/crop-planning'
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -206,6 +217,16 @@ export const rejectBudgetRequest = async (req, res) => {
         );
         if (!request) return res.status(404).json({ status: 'error', message: 'Request not found.' });
         res.status(200).json({ status: 'success', data: request });
+
+        // Trigger Notification
+        createNotification({
+            recipient: request.submittedBy,
+            sender: req.user._id,
+            type: 'BUDGET_REJECTED',
+            title: 'Budget Request Rejected',
+            message: `Your budget request for ${request.cycleName || 'Crop Cycle'} was rejected. Reason: ${req.body.pmNote || 'None provided'}`,
+            link: '/fm/crop-planning'
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -221,6 +242,16 @@ export const verifyForecast = async (req, res) => {
         );
         if (!forecast) return res.status(404).json({ status: 'error', message: 'Forecast not found.' });
         res.status(200).json({ status: 'success', data: forecast });
+
+        // Trigger Notification
+        createNotification({
+            recipient: forecast.submittedBy,
+            sender: req.user._id,
+            type: 'FORECAST_VERIFIED',
+            title: 'Forecast Verified',
+            message: `Your yield forecast for cycle ${forecast.cycleId} has been verified by the PM.`,
+            link: '/fm/crop-planning'
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -236,6 +267,16 @@ export const flagFieldReport = async (req, res) => {
         );
         if (!report) return res.status(404).json({ status: 'error', message: 'Report not found.' });
         res.status(200).json({ status: 'success', data: report });
+
+        // Trigger Notification
+        createNotification({
+            recipient: report.submittedBy,
+            sender: req.user._id,
+            type: 'REPORT_FLAGGED',
+            title: 'Field Report Flagged',
+            message: `Your field report for cycle ${report.cycleId} was flagged. Reason: ${req.body.reason}`,
+            link: '/fm/crop-planning'
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }

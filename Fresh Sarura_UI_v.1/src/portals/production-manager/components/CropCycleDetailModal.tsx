@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import EvidenceViewModal from './EvidenceViewModal';
 import BudgetLedgerModal from './BudgetLedgerModal';
+import BudgetRejectionModal from './BudgetRejectionModal';
 import { api } from '@/lib/api';
 
 interface CropCycleDetailModalProps {
@@ -37,6 +38,10 @@ const CropCycleDetailModal = ({
   const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
   const [selectedFieldReport, setSelectedFieldReport] = useState<any>(null);
   const [selectedEvidenceTask, setSelectedEvidenceTask] = useState<any>(null);
+  const [rejectionModalConfig, setRejectionModalConfig] = useState<{ isOpen: boolean; requestId: string | null }>({
+    isOpen: false,
+    requestId: null,
+  });
 
   // ─── Per-forecast reply text ───────────────────────────────────────
   const [replyText, setReplyText] = useState<{ [id: string]: string }>({});
@@ -95,11 +100,15 @@ const CropCycleDetailModal = ({
     } catch (err) { console.error(err); }
   };
 
-  const handleRejectRequest = async (requestId: string) => {
+  const handleConfirmRejection = async (requestId: string, pmNote: string) => {
     try {
-      await api.patch(`/crop-cycles/budget-requests/${requestId}/reject`, {});
+      await api.patch(`/crop-cycles/budget-requests/${requestId}/reject`, { pmNote });
       fetchFull();
     } catch (err) { console.error(err); }
+  };
+
+  const handleRejectRequest = (requestId: string) => {
+    setRejectionModalConfig({ isOpen: true, requestId });
   };
 
   const handleVerifyForecast = async (forecastId: string, pmReply: string) => {
@@ -577,13 +586,13 @@ const CropCycleDetailModal = ({
                             <div className="flex gap-2">
                               <button
                                 onClick={() => handleRejectRequest(req._id)}
-                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 text-xs font-bold hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-all"
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 text-xs font-bold hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-all font-sans"
                               >
                                 <ThumbsDown size={13} /> Reject
                               </button>
                               <button
                                 onClick={() => handleApproveRequest(req._id)}
-                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-bold shadow-md transition-all"
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-bold shadow-md transition-all font-sans"
                               >
                                 <ThumbsUp size={13} /> Approve
                               </button>
@@ -595,8 +604,15 @@ const CropCycleDetailModal = ({
                             </div>
                           )}
                           {isRejected && (
-                            <div className="flex items-center gap-1.5 text-red-500 text-xs font-bold">
-                              <AlertCircle size={14} /> Rejected
+                            <div className="flex flex-col gap-1 text-red-500">
+                              <div className="flex items-center gap-1.5 text-xs font-bold">
+                                <AlertCircle size={14} /> Rejected
+                              </div>
+                              {req.pmNote && (
+                                <p className="text-[10px] bg-red-50 dark:bg-red-900/10 p-2 rounded-lg border border-red-100 dark:border-red-800/30">
+                                  Note: {req.pmNote}
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>
@@ -740,6 +756,12 @@ const CropCycleDetailModal = ({
         report={selectedFieldReport}
         isReadOnly={isClosed}
         onFlag={(reason: string) => selectedFieldReport?._id && handleFlagReport(selectedFieldReport._id, reason)}
+      />
+      <BudgetRejectionModal
+        isOpen={rejectionModalConfig.isOpen}
+        onClose={() => setRejectionModalConfig({ isOpen: false, requestId: null })}
+        requestId={rejectionModalConfig.requestId}
+        onConfirm={handleConfirmRejection}
       />
     </div>,
     document.body

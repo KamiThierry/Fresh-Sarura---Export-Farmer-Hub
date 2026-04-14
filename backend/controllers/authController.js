@@ -130,3 +130,55 @@ export const register = async (req, res) => {
         res.status(500).json({ message: 'Server error during registration' });
     }
 };
+
+// @route PATCH /api/auth/me
+export const updateMe = async (req, res) => {
+    try {
+        const { name, email, phone, preferences } = req.body;
+        
+        const user = await User.findByIdAndUpdate(
+            req.user.id,
+            { name, email, phone, preferences },
+            { new: true, runValidators: true }
+        );
+
+        res.status(200).json({
+            status: 'success',
+            data: { user }
+        });
+    } catch (error) {
+        logger.error('Update me error:', error.message);
+        res.status(500).json({ message: 'Server error during profile update' });
+    }
+};
+
+// @route PATCH /api/auth/update-password
+export const updatePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        logger.info(`Password update attempt for user: ${req.user.id}`);
+
+        const user = await User.findById(req.user.id).select('+password');
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        
+        const isMatch = await user.comparePassword(currentPassword);
+        if (!isMatch) {
+            logger.warn(`Password mismatch for user: ${req.user.id}`);
+            return res.status(401).json({ message: 'Incorrect current password' });
+        }
+
+        user.password = newPassword;
+        await user.save();
+
+        logger.info(`Password updated successfully for user: ${req.user.id}`);
+        res.status(200).json({
+            status: 'success',
+            message: 'Password updated successfully'
+        });
+    } catch (error) {
+        logger.error('Update password error:', error.message);
+        res.status(500).json({ message: error.message || 'Server error during password update' });
+    }
+};

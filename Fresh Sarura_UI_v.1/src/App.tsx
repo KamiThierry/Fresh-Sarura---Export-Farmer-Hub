@@ -11,9 +11,6 @@ import QCOfficerRoutes from './portals/qc-officer/QCOfficerRoutes';
 import LandingPage from './pages/Index';
 import ProtectedRoute from './components/ProtectedRoute';
 
-// Import other portals as you build them:
-// import AdminRoutes from './portals/admin/AdminRoutes';
-
 function App() {
   return (
     <BrowserRouter>

@@ -1,7 +1,55 @@
+import { useState, useEffect } from 'react';
 import { Leaf, Search, Bell } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../../shared/component/ThemeToggle';
+import NotificationsModal from '../../shared/component/NotificationsModal';
+import { api } from '@/lib/api';
 
-const Header = () => {
+const FarmManagerHeader = () => {
+    const navigate = useNavigate();
+    const [currentUser, setCurrentUser] = useState<any>(null);
+    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+    const [notifications, setNotifications] = useState<any[]>([]);
+
+    const fetchNotifications = async () => {
+        try {
+            const res = await api.get('/notifications');
+            setNotifications(res.data);
+        } catch (err) {
+            console.error('Failed to fetch notifications:', err);
+        }
+    };
+
+    const handleMarkAsRead = async (id: string) => {
+        try {
+            await api.patch(`/notifications/${id}/read`);
+            fetchNotifications();
+        } catch (err) { console.error(err); }
+    };
+
+    const handleMarkAllAsRead = async () => {
+        try {
+            await api.patch('/notifications/read-all');
+            fetchNotifications();
+        } catch (err) { console.error(err); }
+    };
+
+    useEffect(() => {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            try {
+                setCurrentUser(JSON.parse(userStr));
+            } catch (e) {
+                console.error('Error parsing user data:', e);
+            }
+        }
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
+        return () => clearInterval(interval);
+    }, []);
+
+    const unreadCount = notifications.filter(n => !n.isRead).length;
+
     return (
         <header className="fixed top-[10px] left-[10px] right-[10px] h-16 bg-white/80 dark:bg-gray-800/90 backdrop-blur-md border border-gray-200 dark:border-gray-700 z-40 px-6 flex items-center justify-between transition-colors duration-300 rounded-2xl shadow-sm">
             <div className="flex items-center gap-3">
@@ -31,24 +79,44 @@ const Header = () => {
                 <ThemeToggle />
 
                 {/* Notification Icon */}
-                <button className="relative p-2.5 rounded-xl bg-white/80 hover:bg-red-500 hover:text-white transition-all shadow-sm dark:bg-gray-700/50 dark:text-gray-200 dark:hover:bg-red-600" title="1 Unread Notification - PM Flagged Report">
+                <button 
+                    onClick={() => setIsNotificationsOpen(true)}
+                    className="relative p-2.5 rounded-xl bg-white/80 hover:bg-[#4CAF50] hover:text-white transition-all shadow-sm dark:bg-gray-700/50 dark:text-gray-200 dark:hover:bg-green-600"
+                >
                     <Bell size={18} />
-                    <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-white dark:ring-gray-800 animate-pulse"></span>
+                    {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center bg-green-600 rounded-full text-[10px] font-bold text-white ring-2 ring-white dark:ring-gray-800 animate-pulse">
+                            {unreadCount}
+                        </span>
+                    )}
                 </button>
 
                 {/* User Avatar & Profile */}
-                <div className="flex items-center gap-3 pl-2 border-l border-gray-200 dark:border-gray-700">
+                <div 
+                    onClick={() => navigate('/farm-manager/settings')}
+                    className="flex items-center gap-3 pl-2 border-l border-gray-200 dark:border-gray-700 cursor-pointer hover:opacity-80 transition-opacity"
+                >
                     <div className="text-right hidden md:block">
-                        <p className="text-sm font-semibold text-[#222222] dark:text-white">Farm Manager</p>
+                        <p className="text-sm font-semibold text-[#222222] dark:text-white">
+                            {currentUser?.name || 'Farm Manager'}
+                        </p>
                         <p className="text-xs text-[#6B7280] dark:text-gray-400">Field Ops</p>
                     </div>
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-semibold shadow-md">
-                        FM
+                        {currentUser?.name ? currentUser.name.split(' ').map((n: any) => n[0]).join('') : 'FM'}
                     </div>
                 </div>
             </div>
+
+            <NotificationsModal 
+                isOpen={isNotificationsOpen}
+                onClose={() => setIsNotificationsOpen(false)}
+                notifications={notifications}
+                onMarkAsRead={handleMarkAsRead}
+                onMarkAllAsRead={handleMarkAllAsRead}
+            />
         </header>
     );
 };
 
-export default Header;
+export default FarmManagerHeader;

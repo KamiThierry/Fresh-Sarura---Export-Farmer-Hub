@@ -104,16 +104,20 @@ const CropPlanning = () => {
 
     // Map a DB cycle into the shape CycleCard expects
     const mapCycle = (cycle: any) => {
-        const approvedTasks: Task[] = (cycle.myRequests ?? [])
-            .filter((r: any) => r.approvalStatus === 'Approved')
+        // 2. Map all relevant "Tasks" (Approved requests, Rejected requests, and Flagged reports)
+        const allActivityLogs: Task[] = (cycle.myRequests ?? [])
+            .filter((r: any) => r.approvalStatus === 'Approved' || r.approvalStatus === 'Rejected')
             .flatMap((r: any) =>
                 (r.lineItems ?? []).map((item: any, i: number) => {
                     const activityName = item.activityName;
                     
                     // Check if there is already a FIELD REPORT for this activity
-                    const existingReport = (cycle.myFieldReports ?? []).find(
-                        (report: any) => report.description === activityName
-                    );
+                    // (only applies to approved items)
+                    const existingReport = r.approvalStatus === 'Approved'
+                        ? (cycle.myFieldReports ?? []).find(
+                            (report: any) => report.description === activityName
+                        )
+                        : null;
 
                     return {
                         id: `${r._id}-${i}`,
@@ -127,10 +131,33 @@ const CropPlanning = () => {
                         block: existingReport?.block || cycle.block_name || '',
                         approvedBudgetRwf: item.estimatedCostRwf,
                         actualCostRwf: existingReport?.actualCostRwf,
-                        approvalStatus: 'Approved' as const,
+                        approvalStatus: r.approvalStatus as 'Approved' | 'Rejected',
+                        pmNote: r.pmNote, // Reason for rejection / additional feedback
                     };
                 })
             );
+
+        // 3. Also include pure field reports that were FLAGGED by PM
+        const flaggedReports: Task[] = (cycle.myFieldReports ?? [])
+            .filter((report: any) => report.status === 'Flagged')
+            .map((report: any) => ({
+                id: report._id,
+                title: report.description || 'Field Activity',
+                category: report.category,
+                date: report.createdAt
+                    ? new Date(report.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+                    : '—',
+                completed: false, // Flagged means it needs correction
+                proofRequired: report.hasProof,
+                block: report.block || cycle.block_name || '',
+                approvedBudgetRwf: report.approvedAmountRwf,
+                actualCostRwf: report.actualCostRwf,
+                approvalStatus: 'Flagged' as const,
+                pmNote: report.pmFlag, // PM note about why it was flagged
+                fieldNote: report.notes,
+            }));
+
+        const combinedLogs = [...allActivityLogs, ...flaggedReports];
 
         const pendingForThisCycle: BudgetRequest[] = budgetRequests
             .filter((r: any) => r.cycleId === cycle._id && r.approvalStatus === 'Pending')
@@ -163,7 +190,7 @@ const CropPlanning = () => {
             nextMilestone: cycle.expected_harvest_date
                 ? `Harvest by ${new Date(cycle.expected_harvest_date).toLocaleDateString()}`
                 : 'No milestone set',
-            tasks: approvedTasks,
+            tasks: combinedLogs,
             _pendingRequests: pendingForThisCycle,
         };
     };

@@ -3,6 +3,7 @@ import { api } from '@/lib/api';
 import { Sprout, Plus, AlertTriangle, ChevronRight, BarChart2 } from 'lucide-react';
 import CreateCropCycleModal from '../components/CreateCropCycleModal';
 import CropCycleDetailModal from '../components/CropCycleDetailModal';
+import BudgetRejectionModal from '../components/BudgetRejectionModal';
 import Toast from '../../shared/component/Toast';
 import { usePMContext } from '@/context/PMContext';
 
@@ -11,6 +12,10 @@ const CropPlanning = () => {
     const [selectedCycle, setSelectedCycle] = useState<any>(null);
     const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
     const [initialTab, setInitialTab] = useState<'overview' | 'financials' | 'requests' | 'forecasts'>('overview');
+    const [rejectionModalConfig, setRejectionModalConfig] = useState<{ isOpen: boolean; requestId: string | null }>({
+        isOpen: false,
+        requestId: null,
+    });
 
     const { 
         cycles, 
@@ -22,7 +27,7 @@ const CropPlanning = () => {
 
     const handleApproveRequest = async (requestId: string) => {
         try {
-            await api.patch(`/crop-cycles/budget-requests/${requestId}/approve`, { pmNote: 'Approved via dashboard' });
+            await api.patch(`/crop-cycles/budget-requests/${requestId}/approve`, { pmNote: 'Approved' });
             setToast({ message: 'Request Approved', subtitle: 'The budget allocation has been updated.' });
             refreshPendingRequests();
             refreshCycles();
@@ -32,15 +37,19 @@ const CropPlanning = () => {
         }
     };
 
-    const handleRejectRequest = async (requestId: string) => {
+    const handleConfirmRejection = async (requestId: string, pmNote: string) => {
         try {
-            await api.patch(`/crop-cycles/budget-requests/${requestId}/reject`, { pmNote: 'Rejected via dashboard' });
+            await api.patch(`/crop-cycles/budget-requests/${requestId}/reject`, { pmNote });
             setToast({ message: 'Request Rejected' });
             refreshPendingRequests();
         } catch (err) {
             console.error('Failed to reject request:', err);
             setToast({ message: 'Error', subtitle: 'Failed to reject request.' });
         }
+    };
+
+    const handleRejectRequest = (requestId: string) => {
+        setRejectionModalConfig({ isOpen: true, requestId });
     };
 
     const calculateProgress = (spent: number, total: number) => {
@@ -181,7 +190,7 @@ const CropPlanning = () => {
                                             <div className="flex gap-3 mt-2 md:mt-0 flex-shrink-0">
                                                 <button
                                                     onClick={() => handleRejectRequest(request._id)}
-                                                    className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 font-medium text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                                    className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 font-medium text-sm hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-colors"
                                                 >
                                                     Reject Request
                                                 </button>
@@ -349,6 +358,14 @@ const CropPlanning = () => {
                     onCloseCycle={(finalYield) => handleCloseCycle(selectedCycle._id, finalYield)}
                 />
             )}
+
+            {/* Modal 3: Rejection Feedback */}
+            <BudgetRejectionModal
+                isOpen={rejectionModalConfig.isOpen}
+                onClose={() => setRejectionModalConfig({ isOpen: false, requestId: null })}
+                requestId={rejectionModalConfig.requestId}
+                onConfirm={handleConfirmRejection}
+            />
         </div>
     );
 };

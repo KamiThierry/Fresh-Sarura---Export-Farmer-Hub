@@ -107,6 +107,23 @@ export const useFarmManager = () => {
     return res;
   };
 
+  const updateProfile = async (data: { name: string; phone: string; email?: string; preferences?: any }) => {
+    const res = await api.patch('/auth/me', data);
+    if (res.status === 'success') {
+      // Update local storage so Header and other components stay in sync
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const updatedUser = { ...currentUser, ...res.data.user };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setDashboard(prev => prev ? { ...prev, user: res.data.user } : prev);
+    }
+    return res;
+  };
+
+  const updatePassword = async (data: { currentPassword: string; newPassword: string }) => {
+    const res = await api.patch('/auth/update-password', data);
+    return res;
+  };
+
   const refreshAll = useCallback(async () => {
     setLoading(true);
     await Promise.all([
@@ -134,6 +151,8 @@ export const useFarmManager = () => {
     submitBudgetRequest,
     submitFieldReport,
     submitYieldForecast,
+    updateProfile,
+    updatePassword,
     refreshAll,
     fetchCycles,
     fetchForecasts,

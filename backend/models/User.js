@@ -33,6 +33,18 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: true,
     },
+    preferences: {
+        language: { type: String, default: 'English' },
+        darkMode: { type: Boolean, default: false },
+        dataSaver: { type: Boolean, default: false },
+        notifications: {
+            taskReminders: { type: Boolean, default: true },
+            weatherAlerts: { type: Boolean, default: true },
+            budgetApprovals: { type: Boolean, default: true },
+            push: { type: Boolean, default: true },
+            sms: { type: Boolean, default: false }
+        }
+    }
 }, { timestamps: true });
 
 // Hash password before saving

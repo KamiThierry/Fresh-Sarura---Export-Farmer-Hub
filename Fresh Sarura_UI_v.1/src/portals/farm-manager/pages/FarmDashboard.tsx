@@ -21,7 +21,7 @@ const FarmDashboard = () => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const farmerName = dashboard?.farmer?.full_name || user?.name || 'Farm Manager';
 
-    const activeCycles = cycles.filter((c: any) => c.status === 'Active');
+    const activeCycles = cycles.filter((c: any) => c.status?.toLowerCase() === 'active');
 
     const stats = [
         {
@@ -217,21 +217,25 @@ const FarmDashboard = () => {
                                 <div className="text-center py-8 text-gray-400 text-sm">No active cycles</div>
                             ) : (
                                 activeCycles.map((cycle: any) => (
-                                    <div key={cycle._id} className="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-xl transition-colors mb-1">
+                                    <div 
+                                        key={cycle._id} 
+                                        onClick={() => navigate('/farm-manager/crop-planning')}
+                                        className="flex items-center justify-between p-3 hover:bg-green-50 dark:hover:bg-green-900/10 rounded-xl transition-all cursor-pointer group mb-1 border border-transparent hover:border-green-100 dark:hover:border-green-800"
+                                    >
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-green-600 font-bold text-xs">
+                                            <div className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-green-600 font-bold text-xs group-hover:scale-110 transition-transform">
                                                 {cycle.crop_name?.substring(0, 2).toUpperCase()}
                                             </div>
                                             <div>
-                                                <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{cycle.crop_name}</p>
+                                                <p className="text-sm font-bold text-gray-800 dark:text-gray-100 group-hover:text-green-600 transition-colors">{cycle.crop_name}</p>
                                                 <p className="text-xs text-gray-500">{cycle.season}</p>
                                             </div>
                                         </div>
-                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${cycle.status === 'Harvesting'
+                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${cycle.status === 'harvesting'
                                             ? 'bg-amber-100 text-amber-700 animate-pulse'
                                             : 'bg-green-100 text-green-700'
                                             }`}>
-                                            {cycle.status}
+                                            {cycle.status?.charAt(0).toUpperCase() + cycle.status?.slice(1)}
                                         </span>
                                     </div>
                                 ))

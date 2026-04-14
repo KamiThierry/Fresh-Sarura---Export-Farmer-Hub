@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Leaf, Search, Bell, Users, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle'; // Adjusted import path
+import NotificationsModal from '../../shared/component/NotificationsModal';
+import { api } from '@/lib/api';
 
 // --- Mock Global Index ---
 const searchIndex = [
@@ -14,12 +16,43 @@ const searchIndex = [
 const Header = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+    const [notifications, setNotifications] = useState<any[]>([]);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
 
     // Get real user data
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : { name: 'User', role: 'Staff' };
+
+    const fetchNotifications = async () => {
+        try {
+            const res = await api.get('/notifications');
+            setNotifications(res.data);
+        } catch (err) {
+            console.error('Failed to fetch notifications:', err);
+        }
+    };
+
+    const handleMarkAsRead = async (id: string) => {
+        try {
+            await api.patch(`/notifications/${id}/read`);
+            fetchNotifications();
+        } catch (err) { console.error(err); }
+    };
+
+    const handleMarkAllAsRead = async () => {
+        try {
+            await api.patch('/notifications/read-all');
+            fetchNotifications();
+        } catch (err) { console.error(err); }
+    };
+
+    useEffect(() => {
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
+        return () => clearInterval(interval);
+    }, []);
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -54,6 +87,8 @@ const Header = () => {
         setIsDropdownOpen(false);
         navigate(url); // Assumes you have React Router setup. Modify if you use different navigation.
     };
+
+    const unreadCount = notifications.filter(n => !n.isRead).length;
 
     return (
         <header className="fixed top-[10px] left-[10px] right-[10px] h-16 bg-white/80 dark:bg-gray-800/90 backdrop-blur-md border-theme z-40 px-6 flex items-center justify-between transition-colors duration-300 rounded-2xl shadow-floating">
@@ -123,9 +158,16 @@ const Header = () => {
                 <ThemeToggle />
 
                 {/* Notification Icon */}
-                <button className="relative p-2.5 rounded-xl bg-white/80 hover:bg-[#4CAF50] hover:text-white transition-all shadow-sm dark:bg-gray-700/50 dark:text-gray-200 dark:hover:bg-green-600">
+                <button 
+                    onClick={() => setIsNotificationsOpen(true)}
+                    className="relative p-2.5 rounded-xl bg-white/80 hover:bg-[#4CAF50] hover:text-white transition-all shadow-sm dark:bg-gray-700/50 dark:text-gray-200 dark:hover:bg-green-600"
+                >
                     <Bell size={18} />
-                    <span className="absolute top-1 right-1 w-2 h-2 bg-[#4CAF50] rounded-full ring-2 ring-white dark:ring-gray-800"></span>
+                    {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center bg-green-600 rounded-full text-[10px] font-bold text-white ring-2 ring-white dark:ring-gray-800">
+                            {unreadCount}
+                        </span>
+                    )}
                 </button>
 
                 {/* User Avatar & Profile */}
@@ -143,6 +185,14 @@ const Header = () => {
                     </button>
                 </div>
             </div>
+
+            <NotificationsModal 
+                isOpen={isNotificationsOpen}
+                onClose={() => setIsNotificationsOpen(false)}
+                notifications={notifications}
+                onMarkAsRead={handleMarkAsRead}
+                onMarkAllAsRead={handleMarkAllAsRead}
+            />
         </header>
     );
 };
