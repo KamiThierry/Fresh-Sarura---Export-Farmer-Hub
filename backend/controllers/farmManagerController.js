@@ -237,12 +237,11 @@ export const submitFieldReport = async (req, res) => {
             data: report,
         });
 
-        // Trigger Notification (Optional, maybe PM only needs to see flagged ones? 
-        // But user said "exchange between FM and PM", so we notify of new logs too)
+        // Trigger Notification to PMs
         notifyAllPMs({
             senderId: req.user._id,
             senderName: req.user.name,
-            type: 'BUDGET_REQUEST', // Reusing type or we could add a new one
+            type: 'FIELD_REPORT',
             title: 'New Field Report',
             message: `A new field report was submitted for cycle ${cycleId}.`,
             link: '/pm/crop-planning'
@@ -294,11 +293,11 @@ export const submitYieldForecast = async (req, res) => {
             data: forecast,
         });
 
-        // Trigger Notification
+        // Trigger Notification to PMs
         notifyAllPMs({
             senderId: req.user._id,
             senderName: req.user.name,
-            type: 'BUDGET_REQUEST',
+            type: 'YIELD_FORECAST',
             title: 'New Yield Forecast',
             message: `A new yield forecast has been submitted for cycle ${cycleId}.`,
             link: '/pm/crop-planning'

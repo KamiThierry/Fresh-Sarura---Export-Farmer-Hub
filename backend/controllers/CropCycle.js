@@ -1,4 +1,5 @@
 import CropCycle from '../models/CropCycle.js';
+import Farmer from '../models/Farmer.js';
 import BudgetRequest from '../models/BudgetRequest.js';
 import YieldForecast from '../models/YieldForecast.js';
 import FieldReport from '../models/FieldReport.js';
@@ -9,7 +10,9 @@ export const getCropCycles = async (req, res) => {
     try {
         const filter = {};
         if (req.query.farmer_id) filter.farmer_id = req.query.farmer_id;
-        const cycles = await CropCycle.find(filter).sort({ createdAt: -1 });
+        const cycles = await CropCycle.find(filter)
+            .populate('farmer_id')
+            .sort({ createdAt: -1 });
         res.status(200).json({ status: 'success', results: cycles.length, data: cycles });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
@@ -68,6 +71,23 @@ export const createCropCycle = async (req, res) => {
             registeredBy: req.user._id,
         });
 
+        // Trigger Notification for the Farm Manager
+        try {
+            const farmer = await Farmer.findById(farmer_id);
+            if (farmer && farmer.userId) {
+                await createNotification({
+                    recipient: farmer.userId,
+                    sender: req.user._id,
+                    type: 'NEW_CYCLE',
+                    title: 'New Crop Cycle Assigned',
+                    message: `You have been assigned a new ${crop_name} cycle for ${season}.`,
+                    link: '/farm-manager/crop-planning'
+                });
+            }
+        } catch (notifyErr) {
+            console.error('Failed to send assignment notification:', notifyErr);
+        }
+
         res.status(201).json({ status: 'success', message: 'Crop cycle created!', data: cycle });
     } catch (err) {
         console.error("Error creating crop cycle:", err);
@@ -103,7 +123,9 @@ export const deleteCropCycle = async (req, res) => {
 // GET /api/v1/crop-cycles/:id/full  — returns cycle + all related sub-documents
 export const getCropCycleFull = async (req, res) => {
     try {
-        const cycle = await CropCycle.findById(req.params.id);
+        const cycle = await CropCycle.findById(req.params.id)
+            .populate('farmer_id')
+            .populate('registeredBy');
         if (!cycle) return res.status(404).json({ status: 'error', message: 'Cycle not found.' });
 
         const [budgetRequests, forecasts, fieldReports] = await Promise.all([
@@ -277,6 +299,56 @@ export const flagFieldReport = async (req, res) => {
             message: `Your field report for cycle ${report.cycleId} was flagged. Reason: ${req.body.reason}`,
             link: '/farm-manager/crop-planning'
         });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// GET /api/v1/crop-cycles/forecasts/pending
+export const getPendingForecasts = async (req, res) => {
+    try {
+        const forecasts = await YieldForecast.find({ status: 'Pending' }).sort({ createdAt: -1 });
+        res.status(200).json({ status: 'success', data: forecasts });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// GET /api/v1/crop-cycles/field-reports/pending (getters)
+export const getPendingFieldReports = async (req, res) => {
+    try {
+        const reports = await FieldReport.find({ status: 'Submitted' }).sort({ createdAt: -1 });
+        res.status(200).json({ status: 'success', data: reports });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// PATCH /api/v1/crop-cycles/budget-requests/:id/read
+export const markRequestAsRead = async (req, res) => {
+    try {
+        await BudgetRequest.findByIdAndUpdate(req.params.id, { isReadByPM: true });
+        res.status(200).json({ status: 'success' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// PATCH /api/v1/crop-cycles/yield-forecasts/:id/read
+export const markForecastAsRead = async (req, res) => {
+    try {
+        await YieldForecast.findByIdAndUpdate(req.params.id, { isReadByPM: true });
+        res.status(200).json({ status: 'success' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// PATCH /api/v1/crop-cycles/field-reports/:id/read
+export const markReportAsRead = async (req, res) => {
+    try {
+        await FieldReport.findByIdAndUpdate(req.params.id, { isReadByPM: true });
+        res.status(200).json({ status: 'success' });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }

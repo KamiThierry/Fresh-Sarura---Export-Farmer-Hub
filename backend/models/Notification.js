@@ -12,7 +12,7 @@ const notificationSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['BUDGET_REQUEST', 'BUDGET_APPROVED', 'BUDGET_REJECTED', 'REPORT_FLAGGED', 'FORECAST_VERIFIED'],
+        enum: ['BUDGET_REQUEST', 'BUDGET_APPROVED', 'BUDGET_REJECTED', 'REPORT_FLAGGED', 'FORECAST_VERIFIED', 'NEW_CYCLE', 'YIELD_FORECAST', 'FIELD_REPORT'],
         required: true
     },
     title: {

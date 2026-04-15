@@ -9,7 +9,7 @@ export interface ActivityLineItem {
 
 export interface BudgetRequest {
     id: number;
-    cycleId: number;
+    cycleId: string | number;
     cycleName: string;
     submittedBy: string;
     submittedAt: string;

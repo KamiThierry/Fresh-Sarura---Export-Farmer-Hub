@@ -10,6 +10,7 @@ const yieldForecastSchema = new mongoose.Schema(
     confidence: { type: String, enum: ['Low', 'Medium', 'High'], default: 'Medium' },
     notes: { type: String },
     status: { type: String, enum: ['Pending', 'Verified'], default: 'Pending' },
+    isReadByPM: { type: Boolean, default: false },
     pmReply: { type: String },
   },
   { timestamps: true }

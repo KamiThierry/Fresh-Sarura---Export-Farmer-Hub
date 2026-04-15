@@ -21,6 +21,7 @@ const budgetRequestSchema = new mongoose.Schema(
       enum: ['Pending', 'Approved', 'Rejected'],
       default: 'Pending',
     },
+    isReadByPM: { type: Boolean, default: false },
     pmNote: { type: String },
   },
   { timestamps: true }

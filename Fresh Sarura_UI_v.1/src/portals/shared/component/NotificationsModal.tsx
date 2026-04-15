@@ -1,10 +1,10 @@
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { X, FileWarning, Clock, Truck, Eye, Upload, ArrowRight, Bell, CheckCircle2, AlertCircle, TrendingUp } from 'lucide-react';
+import { X, FileWarning, Clock, Truck, Eye, Upload, ArrowRight, Bell, CheckCircle2, AlertCircle, TrendingUp, Leaf } from 'lucide-react';
 
 interface Notification {
     _id: string;
-    type: 'BUDGET_REQUEST' | 'BUDGET_APPROVED' | 'BUDGET_REJECTED' | 'REPORT_FLAGGED' | 'FORECAST_VERIFIED';
+    type: 'BUDGET_REQUEST' | 'BUDGET_APPROVED' | 'BUDGET_REJECTED' | 'REPORT_FLAGGED' | 'FORECAST_VERIFIED' | 'NEW_CYCLE' | 'YIELD_FORECAST' | 'FIELD_REPORT';
     title: string;
     message: string;
     link?: string;
@@ -56,6 +56,27 @@ const typeConfig = {
         action: 'View Forecast',
         actionIcon: Eye,
         btnColor: 'bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    },
+    NEW_CYCLE: {
+        icon: Leaf,
+        iconColor: 'text-green-600 bg-green-50 dark:bg-green-900/20',
+        action: 'Go to Planning',
+        actionIcon: ArrowRight,
+        btnColor: 'bg-green-600 hover:bg-green-700 text-white',
+    },
+    YIELD_FORECAST: {
+        icon: TrendingUp,
+        iconColor: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20',
+        action: 'Verify',
+        actionIcon: CheckCircle2,
+        btnColor: 'bg-blue-600 hover:bg-blue-700 text-white',
+    },
+    FIELD_REPORT: {
+        icon: Upload,
+        iconColor: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20',
+        action: 'Review',
+        actionIcon: Eye,
+        btnColor: 'bg-emerald-600 hover:bg-emerald-700 text-white',
     }
 };
 
@@ -128,8 +149,8 @@ const NotificationsModal = ({ isOpen, onClose, notifications, onMarkAsRead, onMa
 
                             // Dynamic styles for unread states
                             const unreadBorderColor = n.type === 'BUDGET_REJECTED' || n.type === 'REPORT_FLAGGED' ? 'border-l-red-500' : 
-                                                    n.type === 'BUDGET_APPROVED' ? 'border-l-green-500' : 
-                                                    n.type === 'FORECAST_VERIFIED' ? 'border-l-blue-500' : 'border-l-amber-500';
+                                                    (n.type === 'BUDGET_APPROVED' || n.type === 'NEW_CYCLE' || n.type === 'FIELD_REPORT') ? 'border-l-green-500' : 
+                                                    (n.type === 'FORECAST_VERIFIED' || n.type === 'YIELD_FORECAST') ? 'border-l-blue-500' : 'border-l-amber-500';
 
                             return (
                                 <div

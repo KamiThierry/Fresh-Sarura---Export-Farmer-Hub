@@ -19,6 +19,7 @@ const fieldReportSchema = new mongoose.Schema(
       enum: ['Submitted', 'Flagged', 'Cleared'],
       default: 'Submitted',
     },
+    isReadByPM: { type: Boolean, default: false },
     pmFlag: { type: String },
   },
   { timestamps: true }

@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const cropCycleSchema = new mongoose.Schema({
-    cycleId: { type: String, unique: true },   // auto-generated e.g. CC-001
+    cycleId: { type: String, unique: true },
     farm_name: { type: String },
     crop_name: { type: String, required: true },
     season: { type: String, required: true },
@@ -45,10 +45,10 @@ cropCycleSchema.pre('save', async function (next) {
     // Build budget_categories from the flat budget_* fields when first created
     if (this.isNew && (!this.budget_categories || this.budget_categories.length === 0)) {
         this.budget_categories = [
-            { name: 'Seeds & Seedlings', allocated: this.budget_seeds      || 0, spent: 0 },
-            { name: 'Fertilizers',       allocated: this.budget_fertilizers || 0, spent: 0 },
-            { name: 'Chemicals',         allocated: this.budget_chemicals   || 0, spent: 0 },
-            { name: 'Labor',             allocated: this.budget_labor       || 0, spent: 0 },
+            { name: 'Seeds & Seedlings', allocated: this.budget_seeds || 0, spent: 0 },
+            { name: 'Fertilizers', allocated: this.budget_fertilizers || 0, spent: 0 },
+            { name: 'Chemicals', allocated: this.budget_chemicals || 0, spent: 0 },
+            { name: 'Labor', allocated: this.budget_labor || 0, spent: 0 },
         ];
     }
 
@@ -56,4 +56,4 @@ cropCycleSchema.pre('save', async function (next) {
 });
 
 const CropCycle = mongoose.model('CropCycle', cropCycleSchema);
-export default CropCycle;
+export default CropCycle;

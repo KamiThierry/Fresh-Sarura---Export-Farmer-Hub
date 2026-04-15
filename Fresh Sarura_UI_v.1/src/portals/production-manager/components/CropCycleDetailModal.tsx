@@ -18,10 +18,11 @@ interface CropCycleDetailModalProps {
   onCloseCycle?: (finalYield: string) => void;
   onCycleUpdated?: () => void;
   initialTab?: 'overview' | 'financials' | 'requests' | 'forecasts';
+  initialItemId?: string | null;
 }
 
 const CropCycleDetailModal = ({
-  isOpen, onClose, cycle, onCloseCycle, onCycleUpdated, initialTab
+  isOpen, onClose, cycle, onCloseCycle, onCycleUpdated, initialTab, initialItemId
 }: CropCycleDetailModalProps) => {
 
   const [activeTab, setActiveTab] = useState<'overview' | 'financials' | 'requests' | 'forecasts'>(initialTab || 'overview');
@@ -66,7 +67,31 @@ const CropCycleDetailModal = ({
       fetchFull();
       setActiveTab(initialTab || 'overview');
     }
-  }, [isOpen, cycle?._id]);
+  }, [isOpen, cycle?._id, initialTab]);
+
+  // Handle deep-linking to specific items
+  useEffect(() => {
+    if (fullData && initialItemId) {
+      // Check field reports
+      const report = fullData.fieldReports?.find((r: any) => r._id === initialItemId);
+      if (report) {
+        setSelectedFieldReport(report);
+        return;
+      }
+      // Check budget requests (just open the tab)
+      const req = fullData.budgetRequests?.find((r: any) => r._id === initialItemId);
+      if (req) {
+        setActiveTab('requests');
+        return;
+      }
+      // Check forecasts
+      const forecast = fullData.forecasts?.find((f: any) => f._id === initialItemId);
+      if (forecast) {
+        setActiveTab('forecasts');
+        return;
+      }
+    }
+  }, [fullData, initialItemId]);
 
   if (!isOpen || !cycle) return null;
 
@@ -168,9 +193,8 @@ const CropCycleDetailModal = ({
   const displayCycleId    = fullData?.cycle?.cycleId || cycle.cycleId || cycle._id;
   const displayBudget     = fullData?.cycle?.total_budget || cycle.budget || 0;
   const displaySpent      = fullData?.cycle?.spent || cycle.spent || 0;
-  const displayYieldGoal  = fullData?.cycle?.yield_goal_kg != null
-    ? `${(fullData.cycle.yield_goal_kg as number).toLocaleString()} kg`
-    : cycle.yieldGoal || 'TBD';
+  const displayYieldGoal  = fullData?.cycle?.yield_goal_kg ? `${fullData.cycle.yield_goal_kg.toLocaleString()} kg` : cycle.yieldGoal || '—';
+  const displayFarmer     = fullData?.cycle?.farmer_id?.full_name || '—';
 
   const isClosed = (cycleStatus || '').toLowerCase() === 'completed';
 
@@ -196,7 +220,7 @@ const CropCycleDetailModal = ({
                 </span>
               </div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                {displayCrop} • {displayLandSize} • {displayStartDate} – {displayEndDate}
+                {displayCrop} • Managed by {displayFarmer} • {displayLandSize} • {displayStartDate} – {displayEndDate}
               </p>
             </div>
           </div>

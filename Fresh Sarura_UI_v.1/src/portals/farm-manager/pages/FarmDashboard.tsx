@@ -5,7 +5,7 @@ import {
     Activity, TrendingUp, Truck, Package,
     Sprout, Leaf, Calendar, Loader2
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import HarvestReadyModal from '../components/HarvestReadyModal';
 import RequestSuppliesModal from '../components/RequestSuppliesModal';
 import { useFarmManager } from '../../../lib/useFarmManager';
@@ -14,8 +14,9 @@ const FarmDashboard = () => {
     const navigate = useNavigate();
     const [isHarvestModalOpen, setIsHarvestModalOpen] = useState(false);
     const [isSuppliesModalOpen, setIsSuppliesModalOpen] = useState(false);
+    const [timeRange, setTimeRange] = useState(30); // days
 
-    const { dashboard, cycles, loading, submitFieldReport } = useFarmManager();
+    const { dashboard, cycles, loading, submitFieldReport, submitBudgetRequest } = useFarmManager();
 
     // Get farmer name from localStorage user object (set at login)
     const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -101,11 +102,28 @@ const FarmDashboard = () => {
         },
     ];
 
-    // Build harvest chart from real cycle budget data
-    const harvestHistory = cycles.slice(0, 4).map((c: any, i: number) => ({
-        week: c.crop_name?.substring(0, 4) || `C${i + 1}`,
-        kgs: c.spent || 0,
-    }));
+    // Build chart data comparing Actual Spend vs Planned Budget
+    const budgetData = cycles
+        .filter((c: any) => {
+            if (!c.createdAt) return true; // Show if no date (fallback)
+            const created = new Date(c.createdAt);
+            const now = new Date();
+            const diffTime = Math.abs(now.getTime() - created.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays <= timeRange;
+        })
+        .slice(0, 5)
+        .map((c: any) => ({
+            name: c.crop_name?.length > 12 ? c.crop_name.substring(0, 10) + '...' : c.crop_name || 'Cycle',
+            actual: c.spent || 0,
+            planned: c.total_budget || 0,
+        }));
+
+    // Currency formatter
+    const formatCurrency = (val: number) => {
+        if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
+        return val.toString();
+    };
 
     if (loading) {
         return (
@@ -182,18 +200,66 @@ const FarmDashboard = () => {
                                 <h4 className="font-bold text-gray-800 dark:text-gray-100">Budget Spent Per Cycle</h4>
                                 <p className="text-xs text-gray-500">Actual spend vs budget per active cycle</p>
                             </div>
-                            <div className="p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                                <Calendar size={18} className="text-gray-500 dark:text-gray-300" />
+                            <div className="relative group">
+                                <select 
+                                    value={timeRange}
+                                    onChange={(e) => setTimeRange(Number(e.target.value))}
+                                    className="appearance-none bg-gray-50 dark:bg-gray-700 border border-gray-100 dark:border-gray-600 rounded-xl px-4 py-2 pr-10 text-xs font-bold text-gray-600 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500/20 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600/80 transition-all outline-none"
+                                >
+                                    <option value={7}>Last 7 Days</option>
+                                    <option value={30}>Last 30 Days</option>
+                                    <option value={90}>Last 90 Days</option>
+                                </select>
+                                <Calendar size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                             </div>
                         </div>
                         <div className="h-64 w-full">
-                            {harvestHistory.length > 0 ? (
+                            {budgetData.length > 0 ? (
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={harvestHistory}>
-                                        <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9CA3AF' }} />
-                                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9CA3AF' }} />
-                                        <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                                        <Bar dataKey="kgs" fill="#10B981" radius={[4, 4, 0, 0]} barSize={30} />
+                                    <BarChart data={budgetData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                        <XAxis 
+                                            dataKey="name" 
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fontSize: 11, fill: '#6B7280', fontWeight: 500 }} 
+                                        />
+                                        <YAxis 
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fontSize: 11, fill: '#9CA3AF' }}
+                                            tickFormatter={formatCurrency}
+                                        />
+                                        <Tooltip 
+                                            cursor={{ fill: 'rgba(16, 185, 129, 0.05)' }} 
+                                            contentStyle={{ 
+                                                borderRadius: '12px', 
+                                                border: 'none', 
+                                                boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+                                                padding: '12px'
+                                            }}
+                                            formatter={(value: any) => [`${Number(value).toLocaleString()} Rwf`]}
+                                        />
+                                        <Legend 
+                                            verticalAlign="top" 
+                                            align="right" 
+                                            iconType="circle"
+                                            wrapperStyle={{ paddingBottom: '20px', fontSize: '12px' }}
+                                        />
+                                        <Bar 
+                                            name="Planned Budget" 
+                                            dataKey="planned" 
+                                            fill="#D97706" 
+                                            radius={[4, 4, 0, 0]} 
+                                            barSize={20} 
+                                        />
+                                        <Bar 
+                                            name="Actual Spend" 
+                                            dataKey="actual" 
+                                            fill="#059669" 
+                                            radius={[4, 4, 0, 0]} 
+                                            barSize={20} 
+                                        />
                                     </BarChart>
                                 </ResponsiveContainer>
                             ) : (
@@ -275,6 +341,23 @@ const FarmDashboard = () => {
             <RequestSuppliesModal
                 isOpen={isSuppliesModalOpen}
                 onClose={() => setIsSuppliesModalOpen(false)}
+                cycles={cycles}
+                onSubmit={async (request) => {
+                    // Clean line items to match backend expected shape
+                    const cleanLineItems = request.lineItems.map(item => ({
+                        activityName: item.activityName,
+                        category: item.category,
+                        estimatedCostRwf: item.estimatedCostRwf
+                    }));
+
+                    await submitBudgetRequest({
+                        cycleId: String(request.cycleId),
+                        cycleName: request.cycleName,
+                        startDate: request.startDate,
+                        endDate: request.endDate,
+                        lineItems: cleanLineItems,
+                    });
+                }}
             />
         </>
     );
