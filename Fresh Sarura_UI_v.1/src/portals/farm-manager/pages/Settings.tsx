@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-    User, Smartphone, Globe, Moon, Bell, Shield, MapPin,
+    User, Smartphone, Globe, Moon, Shield, MapPin,
     Save, ChevronRight, Scale, Lock, Eye, EyeOff, Loader2
 } from 'lucide-react';
 import { useFarmManager } from '../../../lib/useFarmManager';
@@ -27,7 +27,7 @@ const Settings = () => {
     });
 
     // Section 3: Notification Settings State
-    const [notifications, setNotifications] = useState({
+    const [notifications] = useState({
         taskReminders: currentUser.preferences?.notifications?.taskReminders || true,
         weatherAlerts: currentUser.preferences?.notifications?.weatherAlerts || true,
         budgetApprovals: currentUser.preferences?.notifications?.budgetApprovals || true,

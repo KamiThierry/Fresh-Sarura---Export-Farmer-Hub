@@ -19,10 +19,11 @@ interface CropCycleDetailModalProps {
   onCycleUpdated?: () => void;
   initialTab?: 'overview' | 'financials' | 'requests' | 'forecasts';
   initialItemId?: string | null;
+  initialAdjust?: boolean;
 }
 
 const CropCycleDetailModal = ({
-  isOpen, onClose, cycle, onCloseCycle, onCycleUpdated, initialTab, initialItemId
+  isOpen, onClose, cycle, onCloseCycle, onCycleUpdated, initialTab, initialItemId, initialAdjust
 }: CropCycleDetailModalProps) => {
 
   const [activeTab, setActiveTab] = useState<'overview' | 'financials' | 'requests' | 'forecasts'>(initialTab || 'overview');
@@ -35,7 +36,7 @@ const CropCycleDetailModal = ({
   // ─── Sub-modal state ───────────────────────────────────────────────
   const [isLedgerOpen, setIsLedgerOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
-  const [isAdjustBudgetOpen, setIsAdjustBudgetOpen] = useState(false);
+  const [isAdjustBudgetOpen, setIsAdjustBudgetOpen] = useState(initialAdjust || false);
   const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
   const [selectedFieldReport, setSelectedFieldReport] = useState<any>(null);
   const [selectedEvidenceTask, setSelectedEvidenceTask] = useState<any>(null);
@@ -43,6 +44,7 @@ const CropCycleDetailModal = ({
     isOpen: false,
     requestId: null,
   });
+  const [overdraftWarning, setOverdraftWarning] = useState<any>(null); // { requestId, details }
 
   // ─── Per-forecast reply text ───────────────────────────────────────
   const [replyText, setReplyText] = useState<{ [id: string]: string }>({});
@@ -118,11 +120,20 @@ const CropCycleDetailModal = ({
   const globalVariance = totalAllocated - totalSpent;
 
   // ─── Actions ──────────────────────────────────────────────────────
-  const handleApproveRequest = async (requestId: string) => {
+  const handleApproveRequest = async (requestId: string, forceApprove = false) => {
     try {
-      await api.patch(`/crop-cycles/budget-requests/${requestId}/approve`, {});
+      await api.patch(`/crop-cycles/budget-requests/${requestId}/approve`, { forceApprove });
+      setOverdraftWarning(null);
       fetchFull();
-    } catch (err) { console.error(err); }
+    } catch (err: any) {
+      if (err.code === 'BUDGET_OVERDRAFT') {
+        setOverdraftWarning({ requestId, details: err.overdraftDetails });
+      } else if (err.code === 'CYCLE_CLOSED') {
+        alert(err.message);
+      } else {
+        console.error(err);
+      }
+    }
   };
 
   const handleConfirmRejection = async (requestId: string, pmNote: string) => {
@@ -539,7 +550,16 @@ const CropCycleDetailModal = ({
               ) : (
                 <div className="space-y-4">
                   {budgetRequests.map((req: any) => {
-                    const unallocated = displayBudget - displaySpent;
+                    const primaryCatName = req.lineItems?.[0]?.category || 'General';
+                    const catInfo = budgetCategories.find((c: any) => c.name === primaryCatName);
+                    
+                    // Specific category unallocated if found, global fallback otherwise
+                    const usedUnallocated = catInfo 
+                      ? (catInfo.allocated - (catInfo.spent || 0)) 
+                      : (displayBudget - displaySpent);
+                    
+                    const catLabel = catInfo ? `${catInfo.name} Remaining` : 'Unallocated Remaining';
+
                     const isApproved = req.approvalStatus === 'Approved';
                     const isRejected = req.approvalStatus === 'Rejected';
                     const isPending  = req.approvalStatus === 'Pending';
@@ -569,9 +589,10 @@ const CropCycleDetailModal = ({
 
                         <div className="px-5 py-3">
                           <table className="w-full text-left text-xs">
-                            <thead>
+                             <thead>
                               <tr className="text-gray-400 font-semibold border-b border-gray-100 dark:border-gray-700">
                                 <th className="pb-2 pr-4">Activity</th>
+                                <th className="pb-2 px-2">Category</th>
                                 <th className="pb-2 text-right">Est. Cost</th>
                               </tr>
                             </thead>
@@ -579,6 +600,7 @@ const CropCycleDetailModal = ({
                               {req.lineItems?.map((item: any, i: number) => (
                                 <tr key={i}>
                                   <td className="py-2 pr-4 font-medium text-gray-800 dark:text-gray-200">{item.activityName}</td>
+                                  <td className="py-2 px-2 text-gray-500">{item.category}</td>
                                   <td className="py-2 text-right font-mono text-gray-700 dark:text-gray-300">{fmt(item.estimatedCostRwf)}</td>
                                 </tr>
                               ))}
@@ -593,13 +615,13 @@ const CropCycleDetailModal = ({
                               <span className="font-bold text-gray-800 dark:text-gray-200">{fmt(req.totalRequestedRwf)} Rwf</span>
                             </div>
                             <div className="w-px h-6 bg-gray-200 dark:bg-gray-700" />
-                            <div>
-                              <span className="block text-[10px] uppercase text-gray-400 mb-0.5">Unallocated Remaining</span>
-                              <span className={`font-bold ${unallocated < req.totalRequestedRwf ? 'text-red-600' : 'text-green-600'}`}>
-                                {fmt(unallocated)} Rwf
+                             <div>
+                              <span className="block text-[10px] uppercase text-gray-400 mb-0.5">{catLabel}</span>
+                              <span className={`font-bold ${usedUnallocated < req.totalRequestedRwf ? 'text-red-600' : 'text-green-600'}`}>
+                                {fmt(usedUnallocated)} Rwf
                               </span>
                             </div>
-                            {unallocated < req.totalRequestedRwf && (
+                            {usedUnallocated < req.totalRequestedRwf && (
                               <span className="flex items-center gap-1 text-red-500 text-[10px] font-semibold">
                                 <AlertCircle size={11} /> Exceeds budget!
                               </span>
@@ -787,6 +809,13 @@ const CropCycleDetailModal = ({
         requestId={rejectionModalConfig.requestId}
         onConfirm={handleConfirmRejection}
       />
+      <OverdraftWarningModal
+        isOpen={!!overdraftWarning}
+        onClose={() => setOverdraftWarning(null)}
+        details={overdraftWarning?.details || []}
+        onConfirm={() => handleApproveRequest(overdraftWarning.requestId, true)}
+        onAdjust={() => { setOverdraftWarning(null); setIsAdjustBudgetOpen(true); }}
+      />
     </div>,
     document.body
   );
@@ -956,7 +985,7 @@ const FieldReportDetailsModal = ({
   return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200 overflow-hidden">
+      <div className="relative w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh] overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
           <div>
             <h3 className="text-base font-bold text-gray-900 dark:text-white">Field Report</h3>
@@ -966,7 +995,7 @@ const FieldReportDetailsModal = ({
           </div>
           <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 transition-colors"><X size={16} /></button>
         </div>
-        <div className="p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
           <div>
             <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Description</p>
             <p className="text-sm font-medium text-gray-900 dark:text-white">{report.description}</p>
@@ -1073,3 +1102,74 @@ const FieldReportDetailsModal = ({
 };
 
 export default CropCycleDetailModal;
+
+const OverdraftWarningModal = ({
+    isOpen, onClose, details, onConfirm, onAdjust
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    details: any[];
+    onConfirm: () => void;
+    onAdjust: () => void;
+}) => {
+    if (!isOpen) return null;
+    return createPortal(
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={onClose} />
+            <div className="relative w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-red-100 dark:border-red-900/30 animate-in zoom-in-95 duration-200 overflow-hidden">
+                <div className="px-6 py-5 bg-red-50 dark:bg-red-900/10 border-b border-red-100 dark:border-red-900/30 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 flex items-center justify-center shrink-0">
+                        <AlertCircle size={24} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-red-800 dark:text-red-400">Budget Overdraft!</h3>
+                        <p className="text-xs text-red-600 dark:text-red-500 font-medium">This request exceeds the category limits.</p>
+                    </div>
+                </div>
+
+                <div className="p-6">
+                    <div className="space-y-4 mb-6">
+                        {details.map((d, i) => (
+                            <div key={i} className="p-3 rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{d.category}</span>
+                                    <span className="text-xs font-mono font-bold text-red-600">+{d.excess.toLocaleString()} Rwf</span>
+                                </div>
+                                <div className="flex justify-between text-[11px] text-gray-500 font-medium">
+                                    <span>Remaining: {d.remaining.toLocaleString()} Rwf</span>
+                                    <span>Requested: {d.requested.toLocaleString()} Rwf</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-6">
+                        You can either adjust the allocated budget for these categories first, or force-approve this request anyway.
+                    </p>
+
+                    <div className="flex flex-col gap-3">
+                        <button
+                            onClick={onConfirm}
+                            className="w-full py-3 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-bold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors shadow-lg"
+                        >
+                            Approve Anyway
+                        </button>
+                        <button
+                            onClick={onAdjust}
+                            className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors shadow-lg shadow-red-900/20"
+                        >
+                            Adjust Budget First
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="w-full py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};

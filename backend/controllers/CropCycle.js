@@ -182,30 +182,85 @@ export const getPendingBudgetRequests = async (req, res) => {
     }
 };
 
-// PATCH /api/v1/budget-requests/:id/approve
+// PATCH /api/v1/budget-requests/:id/approve   — V3 + V4
 export const approveBudgetRequest = async (req, res) => {
     try {
-        const request = await BudgetRequest.findByIdAndUpdate(
+        const request = await BudgetRequest.findById(req.params.id);
+        if (!request) return res.status(404).json({ status: 'error', message: 'Request not found.' });
+
+        // ── V4: Block approval on completed/cancelled cycles ──────────────
+        const cycle = await CropCycle.findById(request.cycleId);
+        if (!cycle) return res.status(404).json({ status: 'error', message: 'Linked crop cycle not found.' });
+
+        if (cycle.status === 'completed' || cycle.status === 'cancelled') {
+            return res.status(400).json({
+                status: 'error',
+                code: 'CYCLE_CLOSED',
+                message: `Cannot approve a budget request for a ${cycle.status} crop cycle.`,
+            });
+        }
+
+        // ── V3: Check category budget ceiling ─────────────────────────────
+        // Build a map of how much each category would exceed if approved
+        const overdraftDetails = [];
+
+        if (cycle.budget_categories?.length > 0) {
+            // Group request line items by category
+            const requestedByCategory = {};
+            for (const item of request.lineItems) {
+                const cat = item.category || 'General';
+                requestedByCategory[cat] = (requestedByCategory[cat] || 0) + (item.estimatedCostRwf || 0);
+            }
+
+            for (const [catName, requestedAmount] of Object.entries(requestedByCategory)) {
+                const budgetCat = cycle.budget_categories.find(c => c.name === catName);
+                console.log(`[Validation] Checking category: ${catName}`, {
+                    found: !!budgetCat,
+                    allocated: budgetCat?.allocated,
+                    approved: budgetCat?.approved,
+                    requested: requestedAmount
+                });
+                
+                if (budgetCat) {
+                    const remainingBudget = (budgetCat.allocated || 0) - (budgetCat.approved || 0);
+                    if (requestedAmount > remainingBudget) {
+                        console.warn(`[Validation] OVERDRAFT detected for ${catName}: requested ${requestedAmount} > remaining ${remainingBudget}`);
+                        overdraftDetails.push({
+                            category: catName,
+                            requested: requestedAmount,
+                            remaining: remainingBudget,
+                            excess: requestedAmount - remainingBudget,
+                        });
+                    }
+                }
+            }
+        }
+
+        // If overdraft detected AND PM hasn't confirmed they want to proceed, block it
+        // The frontend sends { pmNote, forceApprove: true } when PM confirms override
+        if (overdraftDetails.length > 0 && !req.body.forceApprove) {
+            return res.status(400).json({
+                status: 'error',
+                code: 'BUDGET_OVERDRAFT',
+                message: 'Approving this request will exceed the allocated budget for one or more categories.',
+                overdraftDetails,
+            });
+        }
+
+        // All checks passed — approve and update category budgets
+        const updatedRequest = await BudgetRequest.findByIdAndUpdate(
             req.params.id,
             { approvalStatus: 'Approved', pmNote: req.body.pmNote || '' },
             { new: true }
         );
-        if (!request) return res.status(404).json({ status: 'error', message: 'Request not found.' });
 
-        // Update the crop cycle buckets automatically
-        const cycle = await CropCycle.findById(request.cycleId);
-        if (cycle && cycle.budget_categories) {
+        if (cycle.budget_categories) {
             let totalAdded = 0;
-            // Iterate and update the categories
             const updatedCategories = cycle.budget_categories.map(cat => {
                 const matchingItems = request.lineItems.filter(item => item.category === cat.name);
                 const sumForCat = matchingItems.reduce((acc, item) => acc + (item.estimatedCostRwf || 0), 0);
-                
                 totalAdded += sumForCat;
-                return {
-                    ...cat.toObject(),
-                    approved: (cat.approved || 0) + sumForCat
-                };
+                return { ...cat.toObject(), approved: (cat.approved || 0) + sumForCat };
             });
 
             cycle.budget_categories = updatedCategories;
@@ -213,9 +268,8 @@ export const approveBudgetRequest = async (req, res) => {
             await cycle.save();
         }
 
-        res.status(200).json({ status: 'success', data: request });
+        res.status(200).json({ status: 'success', data: updatedRequest });
 
-        // Trigger Notification
         createNotification({
             recipient: request.submittedBy,
             sender: req.user._id,
@@ -229,18 +283,30 @@ export const approveBudgetRequest = async (req, res) => {
     }
 };
 
-// PATCH /api/v1/budget-requests/:id/reject
+// PATCH /api/v1/budget-requests/:id/reject   — V4
 export const rejectBudgetRequest = async (req, res) => {
     try {
-        const request = await BudgetRequest.findByIdAndUpdate(
+        const request = await BudgetRequest.findById(req.params.id);
+        if (!request) return res.status(404).json({ status: 'error', message: 'Request not found.' });
+
+        // ── V4: Block rejection on completed/cancelled cycles ─────────────
+        const cycle = await CropCycle.findById(request.cycleId);
+        if (cycle && (cycle.status === 'completed' || cycle.status === 'cancelled')) {
+            return res.status(400).json({
+                status: 'error',
+                code: 'CYCLE_CLOSED',
+                message: `Cannot reject a budget request for a ${cycle.status} crop cycle.`,
+            });
+        }
+
+        const updatedRequest = await BudgetRequest.findByIdAndUpdate(
             req.params.id,
             { approvalStatus: 'Rejected', pmNote: req.body.pmNote || '' },
             { new: true }
         );
-        if (!request) return res.status(404).json({ status: 'error', message: 'Request not found.' });
-        res.status(200).json({ status: 'success', data: request });
 
-        // Trigger Notification
+        res.status(200).json({ status: 'success', data: updatedRequest });
+
         createNotification({
             recipient: request.submittedBy,
             sender: req.user._id,
@@ -362,10 +428,17 @@ export const adjustBudget = async (req, res) => {
         if (!cycle) return res.status(404).json({ status: 'error', message: 'Cycle not found.' });
 
         const existing = cycle.budget_categories || [];
+        console.log(`[Adjust] Adjusting ${categoryName} to ${newAllocated} for cycle ${cycle.cycleId}`);
+        
         const updated = existing.map(cat =>
-            cat.name === categoryName ? { ...cat.toObject(), allocated: newAllocated } : cat
+            cat.name === categoryName ? { ...cat.toObject(), allocated: Number(newAllocated) } : cat
         );
         cycle.budget_categories = updated;
+        
+        // Recalculate total_budget to keep it in sync
+        cycle.total_budget = cycle.budget_categories.reduce((sum, cat) => sum + (cat.allocated || 0), 0);
+        console.log(`[Adjust] New Total Budget: ${cycle.total_budget}`);
+        
         await cycle.save();
         res.status(200).json({ status: 'success', data: cycle });
     } catch (err) {

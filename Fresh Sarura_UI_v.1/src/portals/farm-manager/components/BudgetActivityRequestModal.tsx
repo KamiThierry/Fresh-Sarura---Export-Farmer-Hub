@@ -32,6 +32,7 @@ const BudgetActivityRequestModal = ({
     const [globalStartDate, setGlobalStartDate] = useState('');
     const [globalEndDate, setGlobalEndDate] = useState('');
     const [submitted, setSubmitted] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
 
     if (!isOpen) return null;
 
@@ -50,8 +51,9 @@ const BudgetActivityRequestModal = ({
         setLineItems(prev => prev.filter(l => l.id !== id));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setSubmitError(null);
 
         const request: BudgetRequest = {
             id: Date.now(),
@@ -66,14 +68,17 @@ const BudgetActivityRequestModal = ({
             approvalStatus: 'Pending',
         };
 
-        onSubmit(request);
-        setSubmitted(true);
-
-        setTimeout(() => {
-            setSubmitted(false);
-            setLineItems([emptyLine()]);
-            onClose();
-        }, 1800);
+        try {
+            await onSubmit(request);
+            setSubmitted(true);
+            setTimeout(() => {
+                setSubmitted(false);
+                setLineItems([emptyLine()]);
+                onClose();
+            }, 1800);
+        } catch (err: any) {
+            setSubmitError(err.message || 'Failed to submit request.');
+        }
     };
 
     const isValid = globalStartDate && globalEndDate && lineItems.every(
@@ -258,8 +263,15 @@ const BudgetActivityRequestModal = ({
                                 </span>
                             </div>
 
-                            {/* Validation hint */}
-                            {!isValid && lineItems.some(l => l.activityName) && (
+                            {/* Error messages / Validation hint */}
+                            {submitError && (
+                                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-800 flex items-center gap-2 text-xs text-red-600 dark:text-red-400 font-bold">
+                                    <AlertCircle size={14} />
+                                    {submitError}
+                                </div>
+                            )}
+
+                            {!isValid && lineItems.some(l => l.activityName) && !submitError && (
                                 <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-medium">
                                     <AlertCircle size={13} />
                                     Please complete all fields for every activity before submitting.

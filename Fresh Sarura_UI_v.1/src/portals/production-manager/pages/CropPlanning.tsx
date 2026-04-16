@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
-import { Sprout, Plus, AlertTriangle, ChevronRight, BarChart2 } from 'lucide-react';
+import { Sprout, Plus, AlertTriangle, ChevronRight, BarChart2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import CreateCropCycleModal from '../components/CreateCropCycleModal';
 import CropCycleDetailModal from '../components/CropCycleDetailModal';
 import BudgetRejectionModal from '../components/BudgetRejectionModal';
@@ -17,6 +18,8 @@ const CropPlanning = () => {
         requestId: null,
     });
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+    const [overdraftWarning, setOverdraftWarning] = useState<any>(null); // { requestId, details }
+    const [initialAdjust, setInitialAdjust] = useState(false);
 
     const { 
         cycles, 
@@ -34,15 +37,20 @@ const CropPlanning = () => {
     const activeCycles = cycles.filter((c: any) => c.status !== 'completed');
     const completedCycles = cycles.filter((c: any) => c.status === 'completed');
 
-    const handleApproveRequest = async (requestId: string) => {
+    const handleApproveRequest = async (requestId: string, forceApprove = false) => {
         try {
-            await api.patch(`/crop-cycles/budget-requests/${requestId}/approve`, { pmNote: 'Approved' });
+            await api.patch(`/crop-cycles/budget-requests/${requestId}/approve`, { forceApprove, pmNote: 'Approved' });
             setToast({ message: 'Request Approved', subtitle: 'The budget allocation has been updated.' });
+            setOverdraftWarning(null);
             refreshPendingRequests();
             refreshCycles();
-        } catch (err) {
-            console.error('Failed to approve request:', err);
-            setToast({ message: 'Error', subtitle: 'Failed to approve request.' });
+        } catch (err: any) {
+            if (err.code === 'BUDGET_OVERDRAFT') {
+                setOverdraftWarning({ requestId, details: err.overdraftDetails });
+            } else {
+                console.error('Failed to approve request:', err);
+                setToast({ message: 'Error', subtitle: err.message || 'Failed to approve request.' });
+            }
         }
     };
 
@@ -345,10 +353,12 @@ const CropPlanning = () => {
                     onClose={() => {
                         setSelectedCycle(null);
                         setSelectedItemId(null);
+                        setInitialAdjust(false);
                     }} 
                     cycle={selectedCycle} 
                     initialTab={initialTab}
                     initialItemId={selectedItemId}
+                    initialAdjust={initialAdjust}
                     onCloseCycle={(finalYield) => handleCloseCycle(selectedCycle._id, finalYield)}
                 />
             )}
@@ -359,6 +369,26 @@ const CropPlanning = () => {
                 onClose={() => setRejectionModalConfig({ isOpen: false, requestId: null })}
                 requestId={rejectionModalConfig.requestId}
                 onConfirm={handleConfirmRejection}
+            />
+
+            <OverdraftWarningModal
+                isOpen={!!overdraftWarning}
+                onClose={() => setOverdraftWarning(null)}
+                details={overdraftWarning?.details || []}
+                onConfirm={() => handleApproveRequest(overdraftWarning.requestId, true)}
+                onAdjust={() => {
+                    const req = pendingRequests.find((r: any) => r._id === overdraftWarning.requestId);
+                    const cycleToOpen = cycles.find((c: any) => c._id === req?.cycleId);
+                    if (cycleToOpen) {
+                        setOverdraftWarning(null);
+                        setInitialAdjust(true);
+                        setInitialTab('requests'); // Switch to requests tab immediately
+                        setSelectedItemId(overdraftWarning.requestId); // Focus on the request
+                        handleOpenDetail(cycleToOpen);
+                    } else {
+                        setOverdraftWarning(null);
+                    }
+                }}
             />
         </div>
     );
@@ -447,3 +477,74 @@ const CycleCard = ({ cycle, onSelect, calculateProgress }: { cycle: any, onSelec
 };
 
 export default CropPlanning;
+
+const OverdraftWarningModal = ({
+    isOpen, onClose, details, onConfirm, onAdjust
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    details: any[];
+    onConfirm: () => void;
+    onAdjust: () => void;
+}) => {
+    if (!isOpen) return null;
+    return createPortal(
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={onClose} />
+            <div className="relative w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-red-100 dark:border-red-900/30 animate-in zoom-in-95 duration-200 overflow-hidden">
+                <div className="px-6 py-5 bg-red-50 dark:bg-red-900/10 border-b border-red-100 dark:border-red-900/30 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 flex items-center justify-center shrink-0">
+                        <AlertCircle size={24} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-red-800 dark:text-red-400">Budget Overdraft!</h3>
+                        <p className="text-xs text-red-600 dark:text-red-500 font-medium">This request exceeds the category limits.</p>
+                    </div>
+                </div>
+
+                <div className="p-6">
+                    <div className="space-y-4 mb-6">
+                        {details.map((d, i) => (
+                            <div key={i} className="p-3 rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{d.category}</span>
+                                    <span className="text-xs font-mono font-bold text-red-600">+{d.excess.toLocaleString()} Rwf</span>
+                                </div>
+                                <div className="flex justify-between text-[11px] text-gray-500 font-medium">
+                                    <span>Remaining: {d.remaining.toLocaleString()} Rwf</span>
+                                    <span>Requested: {d.requested.toLocaleString()} Rwf</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-6">
+                        You can either adjust the allocated budget for these categories first, or force-approve this request anyway.
+                    </p>
+
+                    <div className="flex flex-col gap-3">
+                        <button
+                            onClick={onConfirm}
+                            className="w-full py-3 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-bold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors shadow-lg"
+                        >
+                            Approve Anyway
+                        </button>
+                        <button
+                            onClick={onAdjust}
+                            className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors shadow-lg shadow-red-900/20"
+                        >
+                            Adjust Budget First
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="w-full py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};

@@ -25,6 +25,12 @@ const YieldForecasting = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const cycle = activeCycles.find((c: any) => c._id === selectedCycle);
+        if (cycle && new Date(harvestDate) < new Date(cycle.start_date)) {
+            alert(`Invalid Harvest Date: Cannot be earlier than the cycle start date (${new Date(cycle.start_date).toLocaleDateString()}).`);
+            return;
+        }
+
         try {
             await submitYieldForecast({
                 cycleId: String(selectedCycle),
@@ -40,9 +46,9 @@ const YieldForecasting = () => {
             setNotes('');
             alert('Forecast submitted successfully!');
             fetchForecasts();
-        } catch (err) {
+        } catch (err: any) {
             console.error('Forecast submission failed:', err);
-            alert('Failed to submit forecast: ' + err);
+            alert('Failed to submit forecast: ' + (err.response?.data?.message || err.message || err));
         }
     };
 
@@ -136,6 +142,7 @@ const YieldForecasting = () => {
                                             <input
                                                 type="date"
                                                 required
+                                                min={new Date().toISOString().split('T')[0]}
                                                 value={harvestDate}
                                                 onChange={(e) => setHarvestDate(e.target.value)}
                                                 className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"

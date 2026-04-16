@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, CheckCircle, AlertTriangle, XCircle, Activity, Upload, FileText, Image as ImageIcon, Calendar, User, Scale, Thermometer, Search, ArrowLeft, Clock, Bug, Trash2, ShieldCheck, CheckCircle2, ArrowRight, Gavel, Sliders, ChevronRight } from 'lucide-react';
+import { X, CheckCircle, AlertTriangle, Activity, Image as ImageIcon, Scale, ShieldCheck, CheckCircle2, ArrowRight } from 'lucide-react';
 
 interface QCInspectionModalProps {
     isOpen: boolean;
@@ -82,10 +82,6 @@ const QCInspectionModal = ({ isOpen, onClose, onSubmit, intakeId, onConfirm }: Q
 
     const handleClose = () => {
         onClose();
-    };
-
-    const handleBack = () => {
-        setSelectedIntake(null);
     };
 
     const handleSubmit = (e: React.FormEvent) => {

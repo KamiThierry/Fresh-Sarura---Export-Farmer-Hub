@@ -22,14 +22,14 @@ const FarmManagerHeader = () => {
 
     const handleMarkAsRead = async (id: string) => {
         try {
-            await api.patch(`/notifications/${id}/read`);
+            await api.patch(`/notifications/${id}/read`, {});
             fetchNotifications();
         } catch (err) { console.error(err); }
     };
 
     const handleMarkAllAsRead = async () => {
         try {
-            await api.patch('/notifications/read-all');
+            await api.patch('/notifications/read-all', {});
             fetchNotifications();
         } catch (err) { console.error(err); }
     };

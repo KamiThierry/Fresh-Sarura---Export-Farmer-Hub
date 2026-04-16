@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Search, Filter, Plus, Download,
   Users, UserCheck, Map, FileWarning, MapPin, ChevronDown, FileSpreadsheet, FileText,
@@ -11,7 +11,7 @@ import Pagination from '../../shared/component/Pagination';
 import Toast from '../../shared/component/Toast';
 import { Farmer } from '@/types';
 
-import { api } from '@/lib/api';
+
 import { usePMContext } from '@/context/PMContext';
 
 const FarmerManagement = () => {

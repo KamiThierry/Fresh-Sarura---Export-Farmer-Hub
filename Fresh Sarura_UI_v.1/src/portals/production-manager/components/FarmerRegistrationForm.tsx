@@ -250,7 +250,7 @@ const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) 
                         }
                       });
                     },
-                    (error) => {
+                    (_error) => {
                       alert("Unable to retrieve your location");
                     }
                   );

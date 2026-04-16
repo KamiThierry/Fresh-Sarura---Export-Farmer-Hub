@@ -14,12 +14,21 @@ interface TaskExecutionModalProps {
 }
 
 const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalProps) => {
-    const [notes, setNotes] = useState('');
-    const [proofImage, setProofImage] = useState<string | null>(null);
-    const [actualCost, setActualCost] = useState<string>('');
+    const [notes, setNotes] = useState(task.fieldNote || '');
+    const [proofImage, setProofImage] = useState<string | null>(task.proofUrl || null);
+    const [actualCost, setActualCost] = useState<string>(task.actualCostRwf?.toString() || '');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const canComplete = !task.proofRequired || (task.proofRequired && proofImage);
+    // V6.2 Core Logic: Hard Budget Block
+    const approvedBudget = task.approvedBudgetRwf ?? task.estimatedCostRwf ?? 0;
+    const actual = parseFloat(actualCost) || 0;
+    const isOverBudget = approvedBudget > 0 && actual > approvedBudget;
+    
+    // Variance is still calculated for display but no longer allows submission if >0
+    const variancePercent = approvedBudget > 0 ? Math.round(((actual - approvedBudget) / approvedBudget) * 100) : 0;
+
+    const needsNoteForVariance = approvedBudget > 0 && actual > (approvedBudget * 1.5) && !notes.trim();
+    const canComplete = (!task.proofRequired || (task.proofRequired && proofImage)) && !isOverBudget && !needsNoteForVariance;
 
     const handleUploadClick = () => {
         fileInputRef.current?.click();
@@ -144,8 +153,42 @@ const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalPro
                             value={actualCost}
                             onChange={(e) => setActualCost(e.target.value)}
                             placeholder="e.g. 45000"
-                            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 transition"
+                            className={`w-full px-4 py-3 rounded-xl border bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 transition ${
+                                isOverBudget 
+                                ? 'border-red-300 dark:border-red-800/60 focus:ring-red-500/40' 
+                                : 'border-gray-200 dark:border-gray-600 focus:ring-emerald-500/40'
+                            }`}
                         />
+                        
+                        {/* V6.2 Hard Budget Block Alert */}
+                        {isOverBudget && (
+                            <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20 rounded-xl animate-in fade-in slide-in-from-top-1">
+                                <AlertCircle size={18} className="text-red-600 dark:text-red-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-red-800 dark:text-red-400">
+                                        Budget Limit Exceeded
+                                    </p>
+                                    <p className="text-xs text-red-700/80 dark:text-red-500/80 mt-0.5 leading-relaxed">
+                                        Actual cost ({fmtRwf(actual)}) cannot exceed the approved budget for this task ({fmtRwf(approvedBudget)}). Please contact the PM to request a budget adjustment if additional funds are required.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* V6 High Variance Warning (Now only shown if not strictly over budget, though V6.2 makes this mostly redundant for overruns) */}
+                        {!isOverBudget && approvedBudget > 0 && actual > (approvedBudget * 1.5) && (
+                            <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/20 rounded-xl animate-in fade-in slide-in-from-top-1">
+                                <AlertCircle size={18} className="text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-amber-800 dark:text-amber-400">
+                                        High Variance Warning
+                                    </p>
+                                    <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mt-0.5">
+                                        A note is required for variances exceeding 50%.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Proof of Work / Receipts Upload */}
@@ -197,8 +240,18 @@ const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalPro
 
                     {/* Field Notes & Variances */}
                     <div className="space-y-2">
-                        <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                            Field Notes & Variances <span className="text-gray-400 font-normal">(Optional)</span>
+                        <label className="text-sm font-bold text-gray-900 dark:text-white flex items-center justify-between">
+                            <span className="flex items-center gap-2">
+                                <FileText size={16} className="text-emerald-600 dark:text-emerald-400" />
+                                Field Notes & Variances
+                            </span>
+                            {isOverBudget ? (
+                                <span className="text-[10px] text-red-600 dark:text-red-400 uppercase font-bold tracking-wider">Blocked</span>
+                            ) : approvedBudget > 0 && actual > (approvedBudget * 1.5) ? (
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400 uppercase font-bold tracking-wider">Required for variance</span>
+                            ) : (
+                                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Optional</span>
+                            )}
                         </label>
                         <textarea
                             value={notes}
@@ -216,6 +269,16 @@ const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalPro
                     {task.proofRequired && !proofImage && (
                         <p className="text-xs text-center text-red-500 font-medium">
                             * Please upload proof of work or a receipt to submit
+                        </p>
+                    )}
+                    {needsNoteForVariance && !isOverBudget && (
+                        <p className="text-xs text-center text-amber-600 dark:text-amber-500 font-medium">
+                            * Note required to justify the {variancePercent}% budget overrun
+                        </p>
+                    )}
+                    {isOverBudget && (
+                        <p className="text-xs text-center text-red-500 font-bold">
+                            * Cannot submit: Amount exceeds approved budget
                         </p>
                     )}
                     <button

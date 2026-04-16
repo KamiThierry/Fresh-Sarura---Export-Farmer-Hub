@@ -38,4 +38,5 @@ export interface Task {
     pmNote?: string;             // PM's feedback / rejection reason
     fieldNote?: string;          // FM's field notes submitted with report
     category?: string;           // Labor, Inputs, etc.
+    proofUrl?: string;           // URL of the evidence image (for resubmission)
 }

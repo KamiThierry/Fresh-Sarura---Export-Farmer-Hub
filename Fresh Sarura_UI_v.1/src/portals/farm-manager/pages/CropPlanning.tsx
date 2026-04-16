@@ -95,11 +95,12 @@ const CropPlanning = () => {
                 endDate: request.endDate,
                 lineItems: cleanLineItems,
             });
+            setIsRequestModalOpen(false);
+            setSelectedCycle(null);
         } catch (err) {
             console.error('Failed to submit budget request:', err);
+            throw err; // Re-throw to allow modal to handle it
         }
-        setIsRequestModalOpen(false);
-        setSelectedCycle(null);
     };
 
     // Map a DB cycle into the shape CycleCard expects
@@ -155,6 +156,7 @@ const CropPlanning = () => {
                 approvalStatus: 'Flagged' as const,
                 pmNote: report.pmFlag, // PM note about why it was flagged
                 fieldNote: report.notes,
+                proofUrl: report.proofUrl,
             }));
 
         const combinedLogs = [...allActivityLogs, ...flaggedReports];

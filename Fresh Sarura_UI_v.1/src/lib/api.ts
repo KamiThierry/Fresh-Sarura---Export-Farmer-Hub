@@ -11,7 +11,13 @@ export const api = {
             headers: getHeaders(),
         });
         const result = await response.json();
-        if (!response.ok) throw new Error(result.message || 'Something went wrong');
+        if (!response.ok) {
+            const error: any = new Error(result.message || 'Something went wrong');
+            error.code = result.code;
+            error.overdraftDetails = result.overdraftDetails;
+            error.status = response.status;
+            throw error;
+        }
         return result;
     },
     post: async (endpoint: string, data: object) => {
@@ -21,7 +27,12 @@ export const api = {
             body: JSON.stringify(data),
         });
         const result = await response.json();
-        if (!response.ok) throw new Error(result.message || 'Something went wrong');
+        if (!response.ok) {
+            const error: any = new Error(result.message || 'Something went wrong');
+            error.code = result.code;
+            error.status = response.status;
+            throw error;
+        }
         return result;
     },
     patch: async (endpoint: string, data: object) => {
@@ -31,7 +42,13 @@ export const api = {
             body: JSON.stringify(data),
         });
         const result = await response.json();
-        if (!response.ok) throw new Error(result.message || 'Something went wrong');
+        if (!response.ok) {
+            const error: any = new Error(result.message || 'Something went wrong');
+            error.code = result.code;
+            error.overdraftDetails = result.overdraftDetails;
+            error.status = response.status;
+            throw error;
+        }
         return result;
     },
     delete: async (endpoint: string) => {

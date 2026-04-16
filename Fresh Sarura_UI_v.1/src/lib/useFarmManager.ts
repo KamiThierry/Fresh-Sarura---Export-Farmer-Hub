@@ -114,7 +114,7 @@ export const useFarmManager = () => {
       const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
       const updatedUser = { ...currentUser, ...res.data.user };
       localStorage.setItem('user', JSON.stringify(updatedUser));
-      setDashboard(prev => prev ? { ...prev, user: res.data.user } : prev);
+      setDashboard((prev: any) => prev ? { ...prev, user: res.data.user } : prev);
     }
     return res;
   };
