@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Calculator, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { X, Calculator, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface CreateCropCycleModalProps {
@@ -10,7 +10,6 @@ interface CreateCropCycleModalProps {
 }
 
 const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModalProps) => {
-    // Form state mirrors the model fields exactly
     const [formData, setFormData] = useState({
         farmer_id: '',
         farm_name: '',
@@ -34,7 +33,18 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
     const [farmers, setFarmers] = useState<any[]>([]);
     const [farmersLoading, setFarmersLoading] = useState(false);
 
-    // Fetch farmers from MongoDB whenever the modal opens
+    // Derived: selected farmer object
+    const selectedFarmer = farmers.find(f => f._id === formData.farmer_id) ?? null;
+    const farmerMaxHa: number = selectedFarmer?.farm_size_hectares ?? 0;
+
+    // Validation flags
+    const blockExceedsMax = farmerMaxHa > 0 && parseFloat(formData.block_size_hectares) > farmerMaxHa;
+    const fieldExceedsMax = farmerMaxHa > 0 && parseFloat(formData.field_size_hectares) > farmerMaxHa;
+
+    // Produce types from selected farmer
+    const produceTypes: string[] = selectedFarmer?.produce_types ?? [];
+
+    // Fetch farmers when modal opens
     useEffect(() => {
         if (!isOpen) return;
         setFarmersLoading(true);
@@ -44,7 +54,7 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
             .finally(() => setFarmersLoading(false));
     }, [isOpen]);
 
-    // Recalculate remaining budget whenever total or buckets change
+    // Recalculate remaining budget
     useEffect(() => {
         const allocated = formData.budget_seeds + formData.budget_fertilizers + formData.budget_chemicals + formData.budget_labor;
         setRemaining(formData.total_budget - allocated);
@@ -59,14 +69,27 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
         setFormData(prev => ({ ...prev, [field]: parseFloat(value) || 0 }));
     };
 
-    // When a farmer is selected, auto-populate farm_name and farmer_id
+    // When a farmer is selected — auto-populate all farmer-derived fields
     const handleFarmerSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const selectedId = e.target.value;
         const farmer = farmers.find(f => f._id === selectedId);
+        const farmHa = farmer?.farm_size_hectares ?? '';
+        const yieldGoal = farmer?.production_capacity_tons
+            ? String(Math.round(farmer.production_capacity_tons * 1000))
+            : '';
+        const types: string[] = farmer?.produce_types ?? [];
+
         setFormData(prev => ({
             ...prev,
             farmer_id: selectedId,
             farm_name: farmer?.farm_name || farmer?.full_name || '',
+            // Auto-select crop if only one produce type
+            crop_name: types.length === 1 ? types[0] : '',
+            // Pre-fill sizes with farmer's registered farm size
+            block_size_hectares: farmHa ? String(farmHa) : '',
+            field_size_hectares: farmHa ? String(farmHa) : '',
+            // Pre-fill yield goal
+            yield_goal_kg: yieldGoal,
         }));
     };
 
@@ -88,7 +111,7 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
             />
 
             {/* Modal */}
-            <div className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            <div className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
                 {/* Header */}
                 <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-white dark:bg-gray-800">
                     <div>
@@ -111,7 +134,7 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                         <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">1. Context</h3>
                         <div className="space-y-4">
 
-                            {/* Farmer / Farm selection — stores farmer_id */}
+                            {/* Farmer / Farm selection */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Farm / Farmer</label>
                                 <select
@@ -134,17 +157,64 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                                 </select>
                             </div>
 
+                            {/* Farmer Constraints Info Panel — shown only when a farmer is selected */}
+                            {selectedFarmer && (
+                                <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40 rounded-xl p-4 space-y-2">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <Info size={14} className="text-green-600" />
+                                        <p className="text-xs font-bold text-green-700 dark:text-green-400 uppercase tracking-wide">Farmer Constraints</p>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-3 text-xs">
+                                        <div>
+                                            <p className="text-gray-400 font-medium">Farm Size</p>
+                                            <p className="font-bold text-gray-800 dark:text-gray-100">
+                                                {selectedFarmer.farm_size_hectares ?? '—'} Ha
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-400 font-medium">Capacity</p>
+                                            <p className="font-bold text-gray-800 dark:text-gray-100">
+                                                {selectedFarmer.production_capacity_tons != null
+                                                    ? `${selectedFarmer.production_capacity_tons} t/season`
+                                                    : '—'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-400 font-medium">Produce Types</p>
+                                            <p className="font-bold text-gray-800 dark:text-gray-100 truncate" title={produceTypes.join(', ')}>
+                                                {produceTypes.length > 0 ? produceTypes.join(', ') : '—'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-2 gap-4">
+                                {/* Crop — dropdown from produce_types if farmer selected, otherwise text input */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Crop</label>
-                                    <input
-                                        type="text"
-                                        name="crop_name"
-                                        value={formData.crop_name}
-                                        onChange={handleInputChange}
-                                        placeholder="e.g. Avocado"
-                                        className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-green-500"
-                                    />
+                                    {produceTypes.length > 0 ? (
+                                        <select
+                                            name="crop_name"
+                                            value={formData.crop_name}
+                                            onChange={handleInputChange}
+                                            className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-green-500"
+                                        >
+                                            {produceTypes.length > 1 && <option value="">Select crop...</option>}
+                                            {produceTypes.map((type) => (
+                                                <option key={type} value={type}>{type}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <input
+                                            type="text"
+                                            name="crop_name"
+                                            value={formData.crop_name}
+                                            onChange={handleInputChange}
+                                            placeholder="e.g. Avocado"
+                                            className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-green-500"
+                                        />
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Season</label>
@@ -217,8 +287,18 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                                         placeholder="e.g. 2.5"
                                         min="0"
                                         step="0.1"
-                                        className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-green-500"
+                                        className={`w-full p-2.5 rounded-lg border bg-gray-50 dark:bg-gray-900 outline-none focus:ring-2 ${
+                                            blockExceedsMax
+                                                ? 'border-red-400 focus:ring-red-400'
+                                                : 'border-gray-200 dark:border-gray-700 focus:ring-green-500'
+                                        }`}
                                     />
+                                    {blockExceedsMax && (
+                                        <p className="text-xs text-red-500 font-medium mt-1 flex items-center gap-1">
+                                            <AlertTriangle size={11} />
+                                            Exceeds registered farm size of {farmerMaxHa} Ha
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
@@ -232,8 +312,18 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                                     placeholder="e.g. 10"
                                     min="0"
                                     step="0.1"
-                                    className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-green-500"
+                                    className={`w-full p-2.5 rounded-lg border bg-gray-50 dark:bg-gray-900 outline-none focus:ring-2 ${
+                                        fieldExceedsMax
+                                            ? 'border-red-400 focus:ring-red-400'
+                                            : 'border-gray-200 dark:border-gray-700 focus:ring-green-500'
+                                    }`}
                                 />
+                                {fieldExceedsMax && (
+                                    <p className="text-xs text-red-500 font-medium mt-1 flex items-center gap-1">
+                                        <AlertTriangle size={11} />
+                                        Exceeds registered farm size of {farmerMaxHa} Ha
+                                    </p>
+                                )}
                             </div>
 
                             <div>
@@ -254,6 +344,11 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                                         className="w-full pl-12 p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-green-500"
                                     />
                                 </div>
+                                {selectedFarmer?.production_capacity_tons && (
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        Pre-filled from farmer capacity ({selectedFarmer.production_capacity_tons} t/season). Adjust if needed.
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </section>
@@ -309,7 +404,7 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                         </div>
                     </div>
 
-                    {/* Section 3: Category Buckets — flat fields matching model */}
+                    {/* Section 3: Category Buckets */}
                     <section className="space-y-4">
                         <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">3. Category Allocation ("Buckets")</h3>
                         <div className="space-y-4">

@@ -37,10 +37,12 @@ const Performance = () => {
     const clearedCount = fieldReports.filter((r: any) => r.status === 'Cleared').length;
     const totalReports = fieldReports.length;
 
-    // Reliability: % of reports that reached "Cleared" status
-    const reliability = totalReports > 0 
-        ? Math.round((clearedCount / totalReports) * 100) 
-        : 100;
+    // Verified Forecasts: how many forecasts the PM has verified
+    const totalForecasts = forecasts.length;
+    const verifiedForecastCount = verifiedForecasts.length;
+    const verifiedRate = totalForecasts > 0
+        ? Math.round((verifiedForecastCount / totalForecasts) * 100)
+        : 0;
 
     // Quality Score: Start at 100%, deduct 5% for each flagged report (min 50%)
     const qualityScore = Math.max(50, 100 - (flaggedCount * 5));
@@ -106,14 +108,20 @@ const Performance = () => {
                     </div>
                 </div>
 
-                {/* Reliability */}
+                {/* Forecasts Verified */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between group transition-all hover:border-purple-200 dark:hover:border-purple-900/40">
                     <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Reliability</p>
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{reliability}%</h3>
-                        <p className="text-xs text-purple-600 font-medium mt-1">Task Compliance</p>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Forecasts Verified</p>
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                            {verifiedForecastCount} <span className="text-base font-medium text-gray-400">of {totalForecasts}</span>
+                        </h3>
+                        <p className={`text-xs font-medium mt-1 ${verifiedRate >= 60 ? 'text-purple-600' : 'text-orange-500'}`}>
+                            {totalForecasts > 0 ? `${verifiedRate}% Verified by PM` : 'No forecasts yet'}
+                        </p>
                     </div>
-                    <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-full text-purple-600 group-hover:scale-110 transition-transform">
+                    <div className={`p-3 rounded-full group-hover:scale-110 transition-transform ${
+                        verifiedRate >= 60 ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-600' : 'bg-orange-50 dark:bg-orange-900/20 text-orange-500'
+                    }`}>
                         <Clock size={24} />
                     </div>
                 </div>
@@ -154,7 +162,7 @@ const Performance = () => {
                             <thead>
                                 <tr className="bg-gray-50 dark:bg-gray-900/50 text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b border-gray-100 dark:border-gray-700">
                                     <th className="px-6 py-4">Date</th>
-                                    <th className="px-6 py-4">Batch ID</th>
+                                    <th className="px-6 py-4">Crop ID</th>
                                     <th className="px-6 py-4">Crop</th>
                                     <th className="px-6 py-4">Quantity</th>
                                     <th className="px-6 py-4">Status</th>

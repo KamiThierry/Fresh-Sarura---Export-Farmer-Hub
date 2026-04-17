@@ -76,43 +76,109 @@ const YieldForecasting = () => {
             </div>
 
             {/* Top Stats Row (The Feedback Loop) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Card 1: Next Harvest */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center">
-                        <Calendar size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Next Harvest Due</p>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white">Oct 15</p>
-                    </div>
-                </div>
+            {(() => {
+                // ── Derived stats from real forecast data ──────────────────
+                const pendingOrVerified = forecasts.filter((f: any) =>
+                    f.harvestDate && (f.status === 'Pending' || f.status === 'Verified')
+                );
 
-                {/* Card 2: Est. Volume */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 flex items-center justify-center">
-                        <Scale size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Est. Volume</p>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white">4,500 kg</p>
-                    </div>
-                </div>
+                // Card 1: soonest upcoming harvest date
+                const nextHarvestDate = pendingOrVerified
+                    .map((f: any) => new Date(f.harvestDate))
+                    .filter((d: Date) => d >= new Date())
+                    .sort((a: Date, b: Date) => a.getTime() - b.getTime())[0];
 
-                {/* Card 3: Accuracy */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-purple-50 dark:bg-purple-900/20 text-purple-600 flex items-center justify-center">
-                        <Target size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Your Accuracy</p>
-                        <div className="flex items-baseline gap-2">
-                            <p className="text-2xl font-bold text-gray-900 dark:text-white">92%</p>
-                            <span className="text-xs text-gray-400">Last 3 forecasts</span>
+                const nextHarvestLabel = nextHarvestDate
+                    ? nextHarvestDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                    : '—';
+
+                // Card 2: sum of predictionKg from latest forecast per active cycle
+                const latestPerCycle: Record<string, any> = {};
+                [...forecasts].sort((a: any, b: any) =>
+                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                ).forEach((f: any) => {
+                    if (!latestPerCycle[f.cycleId]) latestPerCycle[f.cycleId] = f;
+                });
+                const estVolume = Object.values(latestPerCycle).reduce(
+                    (sum: number, f: any) => sum + (f.predictionKg || 0), 0
+                );
+                const estVolumeLabel = estVolume > 0 ? `${estVolume.toLocaleString()} kg` : '—';
+
+                // Card 3: verified forecast count + rate
+                const totalForecasts = forecasts.length;
+                const verifiedForecasts = forecasts.filter((f: any) => f.status === 'Verified');
+                const verifiedCount = verifiedForecasts.length;
+                const verificationRate = totalForecasts > 0
+                    ? Math.round((verifiedCount / totalForecasts) * 100)
+                    : null;
+                const accuracyLabel = verifiedCount > 0 ? `${verifiedCount} Verified` : '—';
+                const accuracySubLabel = verificationRate !== null
+                    ? `${verificationRate}% of ${totalForecasts} forecast${totalForecasts !== 1 ? 's' : ''}`
+                    : 'No forecasts submitted yet';
+
+                return (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Card 1: Next Harvest */}
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center shrink-0">
+                                <Calendar size={24} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Next Harvest Due</p>
+                                {loading ? (
+                                    <div className="h-7 w-20 bg-gray-100 dark:bg-gray-700 rounded animate-pulse mt-1" />
+                                ) : (
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{nextHarvestLabel}</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Card 2: Est. Volume */}
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 flex items-center justify-center shrink-0">
+                                <Scale size={24} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Est. Volume</p>
+                                {loading ? (
+                                    <div className="h-7 w-24 bg-gray-100 dark:bg-gray-700 rounded animate-pulse mt-1" />
+                                ) : (
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{estVolumeLabel}</p>
+                                )}
+                                {!loading && estVolume > 0 && (
+                                    <p className="text-xs text-gray-400 mt-0.5">Across {Object.keys(latestPerCycle).length} active cycle{Object.keys(latestPerCycle).length !== 1 ? 's' : ''}</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Card 3: Accuracy */}
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${
+                                verifiedCount === 0 ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-600' :
+                                (verificationRate ?? 0) >= 60 ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' :
+                                'bg-orange-50 dark:bg-orange-900/20 text-orange-500'
+                            }`}>
+                                <Target size={24} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Your Accuracy</p>
+                                {loading ? (
+                                    <div className="h-7 w-16 bg-gray-100 dark:bg-gray-700 rounded animate-pulse mt-1" />
+                                ) : (
+                                    <div className="flex items-baseline gap-2">
+                                        <p className={`text-2xl font-bold ${
+                                            verifiedCount === 0 ? 'text-gray-400' :
+                                            (verificationRate ?? 0) >= 60 ? 'text-emerald-600' : 'text-orange-500'
+                                        }`}>{accuracyLabel}</p>
+                                        <span className="text-xs text-gray-400">{accuracySubLabel}</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
+                );
+            })()}
+
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
