@@ -398,11 +398,10 @@ const CropPlanning = () => {
 const CycleCard = ({ cycle, onSelect, calculateProgress }: { cycle: any, onSelect: () => void, calculateProgress: any }) => {
     const spent = cycle.spent ?? 0;
     const total = cycle.total_budget ?? 0;
-    const varianceVal = spent - total;
-    const isOver = varianceVal > 0;
+    const approved = cycle.approved ?? 0;
     const progress = cycle.status === 'completed' || cycle.status === 'harvesting'
         ? 100
-        : calculateProgress(spent, total);
+        : calculateProgress(approved, total);
     
     const statusLabel = cycle.status === 'active' ? '● Active'
         : cycle.status === 'harvesting' ? '◉ Harvesting'
@@ -425,7 +424,7 @@ const CycleCard = ({ cycle, onSelect, calculateProgress }: { cycle: any, onSelec
                         {cycle.crop_name}
                     </h4>
                 </div>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isOver ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${cycle.status === 'completed' ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-600'}`}>
                     <BarChart2 size={16} />
                 </div>
             </div>
@@ -441,12 +440,12 @@ const CycleCard = ({ cycle, onSelect, calculateProgress }: { cycle: any, onSelec
                 </span>
             </div>
 
-            {/* Budget Variance */}
+            {/* Cycle Progress */}
             <div className="mb-6">
                 <div className="flex justify-between items-end mb-2">
-                    <span className="text-sm font-medium text-gray-500">Budget Usage</span>
-                    <span className={`text-sm font-bold ${isOver ? 'text-red-600' : 'text-green-600'}`}>
-                        {isOver ? `OVER BUDGET (-${varianceVal.toLocaleString()})` : `On Track (${Math.round(progress)}%)`}
+                    <span className="text-sm font-medium text-gray-500">Cycle Progress</span>
+                    <span className={`text-sm font-bold ${progress >= 90 ? 'text-amber-600' : 'text-green-600'}`}>
+                        {Math.round(progress)}% Approved
                     </span>
                 </div>
                 <div className="relative h-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -454,14 +453,14 @@ const CycleCard = ({ cycle, onSelect, calculateProgress }: { cycle: any, onSelec
                         className={`absolute top-0 left-0 h-full rounded-full transition-all duration-500 ${
                             cycle.status === 'harvesting' ? 'bg-amber-500' :
                             cycle.status === 'completed' ? 'bg-gray-400' :
-                            isOver ? 'bg-red-500' : 'bg-green-500'
+                            progress >= 90 ? 'bg-amber-500' : 'bg-green-500'
                         }`}
                         style={{ width: `${progress}%` }}
                     />
                 </div>
                 <div className="flex justify-between mt-1 text-[10px] font-mono text-gray-400">
-                    <span>{spent.toLocaleString()} spent</span>
-                    <span>{total.toLocaleString()} budget</span>
+                    <span>{approved.toLocaleString()} approved</span>
+                    <span>{total.toLocaleString()} total</span>
                 </div>
             </div>
 

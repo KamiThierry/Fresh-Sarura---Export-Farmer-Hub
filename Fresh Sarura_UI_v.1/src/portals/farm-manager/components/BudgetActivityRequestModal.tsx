@@ -8,6 +8,8 @@ interface BudgetActivityRequestModalProps {
     onClose: () => void;
     cycleId: number;
     cycleName: string;
+    cycleStartDate?: string;
+    cycleEndDate?: string;
     submittedBy?: string;
     /** Called with the finalised BudgetRequest on submission */
     onSubmit: (request: BudgetRequest) => void;
@@ -25,6 +27,8 @@ const BudgetActivityRequestModal = ({
     onClose,
     cycleId,
     cycleName,
+    cycleStartDate,
+    cycleEndDate,
     submittedBy = 'Farm Manager',
     onSubmit,
 }: BudgetActivityRequestModalProps) => {
@@ -81,7 +85,16 @@ const BudgetActivityRequestModal = ({
         }
     };
 
-    const isValid = globalStartDate && globalEndDate && lineItems.every(
+    const isWithinBounds = (dateStr: string) => {
+        if (!dateStr) return true;
+        if (cycleStartDate && new Date(dateStr) < new Date(cycleStartDate)) return false;
+        if (cycleEndDate && new Date(dateStr) > new Date(cycleEndDate)) return false;
+        return true;
+    };
+
+    const isDateViolation = (globalStartDate && !isWithinBounds(globalStartDate)) || (globalEndDate && !isWithinBounds(globalEndDate));
+
+    const isValid = globalStartDate && globalEndDate && !isDateViolation && lineItems.every(
         l => l.activityName.trim() && l.category && l.category.trim() && l.estimatedCostRwf > 0
     );
 
@@ -137,8 +150,12 @@ const BudgetActivityRequestModal = ({
                                         type="date"
                                         value={globalStartDate}
                                         onChange={e => setGlobalStartDate(e.target.value)}
+                                        min={cycleStartDate}
+                                        max={cycleEndDate}
                                         required
-                                        className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all"
+                                        className={`w-full px-3 py-2.5 rounded-lg border bg-gray-50 dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all ${
+                                            globalStartDate && !isWithinBounds(globalStartDate) ? 'border-red-500' : 'border-gray-200 dark:border-gray-600'
+                                        }`}
                                     />
                                 </div>
                                 <div>
@@ -149,11 +166,21 @@ const BudgetActivityRequestModal = ({
                                         type="date"
                                         value={globalEndDate}
                                         onChange={e => setGlobalEndDate(e.target.value)}
+                                        min={cycleStartDate}
+                                        max={cycleEndDate}
                                         required
-                                        className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all"
+                                        className={`w-full px-3 py-2.5 rounded-lg border bg-gray-50 dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all ${
+                                            globalEndDate && !isWithinBounds(globalEndDate) ? 'border-red-500' : 'border-gray-200 dark:border-gray-600'
+                                        }`}
                                     />
                                 </div>
                             </div>
+                            {isDateViolation && (
+                                <p className="mt-2 text-[10px] text-red-500 font-bold flex items-center gap-1">
+                                    <AlertCircle size={10} />
+                                    Error: Dates must be between {cycleStartDate ? new Date(cycleStartDate).toLocaleDateString() : 'start'} and {cycleEndDate ? new Date(cycleEndDate).toLocaleDateString() : 'harvest'}.
+                                </p>
+                            )}
                         </div>
 
                         {/* Scrollable line items */}

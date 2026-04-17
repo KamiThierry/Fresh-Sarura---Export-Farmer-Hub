@@ -4,12 +4,13 @@ import {
   X, ClipboardList, FileText, CheckCircle2,
   AlertCircle, TrendingUp,
   Target, Coins, Activity, Sprout, ThumbsUp, ThumbsDown,
-  ListChecks, Lock, Plus, Loader2
+  ListChecks, Lock, Plus, Loader2, Download, ChevronDown
 } from 'lucide-react';
 import EvidenceViewModal from './EvidenceViewModal';
 import BudgetLedgerModal from './BudgetLedgerModal';
 import BudgetRejectionModal from './BudgetRejectionModal';
 import { api } from '@/lib/api';
+import Toast from '../../shared/component/Toast';
 
 interface CropCycleDetailModalProps {
   isOpen: boolean;
@@ -48,6 +49,8 @@ const CropCycleDetailModal = ({
 
   // ─── Per-forecast reply text ───────────────────────────────────────
   const [replyText, setReplyText] = useState<{ [id: string]: string }>({});
+  const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   // ─── Fetch all cycle data ──────────────────────────────────────────
   const fetchFull = async () => {
@@ -182,6 +185,254 @@ const CropCycleDetailModal = ({
     } catch (err) { console.error(err); }
   };
 
+  const handleCloseAttempt = () => {
+    const pendingCount = budgetRequests.filter((r: any) => r.approvalStatus === 'Pending').length;
+    if (pendingCount > 0) {
+      setToast({
+        message: "Pending Requests Found",
+        subtitle: `There are ${pendingCount} pending budget requests for this cycle. Reject or approve them before closing.`
+      });
+      return;
+    }
+    setIsConfirmCloseOpen(true);
+  };
+
+  const handleExportCSV = () => {
+    let csvContent = '';
+    let filename = `${displayCycleId}_${activeTab}.csv`;
+
+    if (activeTab === 'overview') {
+      csvContent = [
+        ['Field', 'Value'],
+        ['Cycle ID', displayCycleId],
+        ['Crop', displayCrop],
+        ['Farmer', displayFarmer],
+        ['Status', cycleStatus],
+        ['Land Size', displayLandSize],
+        ['Start Date', displayStartDate],
+        ['Expected Harvest', displayEndDate],
+        ['Yield Goal', displayYieldGoal],
+        ['Total Budget (Rwf)', fmt(displayBudget)],
+        ['Total Approved (Rwf)', fmt(totalApproved)],
+        ['Total Spent (Rwf)', fmt(totalSpent)],
+        ['Cycle Progress (%)', displayBudget > 0 ? Math.round((totalApproved / displayBudget) * 100) : 0],
+        ['Field Reports', fieldReports.length],
+        ['Budget Requests', budgetRequests.length],
+        ['Pending Requests', budgetRequests.filter((r: any) => r.approvalStatus === 'Pending').length],
+      ].map(row => row.join(',')).join('\n');
+    } else if (activeTab === 'financials') {
+      csvContent = [
+        ['Category', 'Allocated (Rwf)', 'Approved (Rwf)', 'Actual Spent (Rwf)', 'Variance (Rwf)'],
+        ...budgetCategories.map((c: any) => [
+          c.name,
+          c.allocated || 0,
+          c.approved || 0,
+          c.spent || 0,
+          (c.allocated || 0) - (c.spent || 0),
+        ]),
+        [],
+        ['TOTAL', totalAllocated, totalApproved, totalSpent, globalVariance],
+      ].map(row => row.join(',')).join('\n');
+    } else if (activeTab === 'requests') {
+      csvContent = [
+        ['Submitted By', 'Status', 'Period Start', 'Period End', 'Activities', 'Total Requested (Rwf)', 'Submitted At', 'PM Note'],
+        ...budgetRequests.map((r: any) => [
+          r.submittedByName || 'Farm Manager',
+          r.approvalStatus,
+          fmtDate(r.startDate),
+          fmtDate(r.endDate),
+          `"${r.lineItems?.map((i: any) => i.activityName).join('; ') || ''}"`,
+          r.totalRequestedRwf || 0,
+          new Date(r.createdAt).toLocaleString(),
+          `"${r.pmNote || ''}"`,
+        ]),
+      ].map(row => row.join(',')).join('\n');
+    } else if (activeTab === 'forecasts') {
+      csvContent = [
+        ['Submitted By', 'Status', 'Expected Harvest', 'Predicted (kg)', 'Confidence', 'Notes', 'PM Reply'],
+        ...forecasts.map((f: any) => [
+          f.submittedByName || 'Farm Manager',
+          f.status,
+          fmtDate(f.harvestDate),
+          f.predictionKg || 0,
+          f.confidence || '',
+          `"${(f.notes || '').replace(/"/g, '""')}"`,
+          `"${(f.pmReply || '').replace(/"/g, '""')}"`,
+        ]),
+      ].map(row => row.join(',')).join('\n');
+    }
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExportMenu(false);
+  };
+
+  const handleExportPDF = () => {
+    // All display vars are closures from render scope — safe to use here
+    const cycleProgress = displayBudget > 0
+      ? Math.min(Math.round((totalApproved / displayBudget) * 100), 100)
+      : 0;
+
+    const categoryRows = budgetCategories.map((c: any) => {
+      const variance = (c.allocated || 0) - (c.spent || 0);
+      const approvedPct = c.allocated > 0 ? Math.round(((c.approved || 0) / c.allocated) * 100) : 0;
+      return `<tr>
+        <td>${c.name}</td>
+        <td class="num">${(c.allocated || 0).toLocaleString()}</td>
+        <td class="num">${(c.approved || 0).toLocaleString()}</td>
+        <td class="num">${(c.spent || 0).toLocaleString()}</td>
+        <td class="num ${variance < 0 ? 'over' : 'under'}">${variance >= 0 ? '+' : ''}${variance.toLocaleString()}</td>
+        <td class="num">${approvedPct}%</td>
+      </tr>`;
+    }).join('');
+
+    const requestRows = budgetRequests.map((r: any) => `<tr>
+      <td>${r.submittedByName || 'Farm Manager'}</td>
+      <td>${fmtDate(r.startDate)} – ${fmtDate(r.endDate)}</td>
+      <td>${(r.lineItems?.map((i: any) => i.activityName) || []).join(', ') || '—'}</td>
+      <td class="num">${(r.totalRequestedRwf || 0).toLocaleString()}</td>
+      <td class="${r.approvalStatus === 'Approved' ? 'st-approved' : r.approvalStatus === 'Rejected' ? 'st-rejected' : 'st-pending'}">${r.approvalStatus}</td>
+      <td>${r.pmNote || '—'}</td>
+    </tr>`).join('');
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Financial Report – ${displayCycleId}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,sans-serif;font-size:11px;color:#111;padding:28px 36px;background:#fff}
+    /* ── Header ── */
+    .header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:2.5px solid #166534;margin-bottom:18px}
+    .brand{display:flex;align-items:center;gap:10px}
+    .brand-logo{width:40px;height:40px;background:#166534;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:900}
+    .brand-name{font-size:20px;font-weight:900;color:#166534;line-height:1.1}
+    .brand-sub{font-size:9px;color:#666;margin-top:1px;letter-spacing:.5px;text-transform:uppercase}
+    .report-info{text-align:right}
+    .report-title{font-size:13px;font-weight:800;color:#166534}
+    .report-sub{font-size:9px;color:#555;margin-top:3px}
+    /* ── Info grid ── */
+    .info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;background:#f0faf3;border:1px solid #bbddc8;border-radius:6px;padding:10px 14px;margin-bottom:16px}
+    .info-label{font-size:8px;font-weight:700;text-transform:uppercase;color:#555;letter-spacing:.4px}
+    .info-value{font-size:11px;font-weight:700;color:#111;margin-top:1px}
+    /* ── Summary cards ── */
+    .summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+    .card{border:1px solid #ddd;border-radius:6px;padding:10px 12px;text-align:center}
+    .card.hl{border-color:#166534;background:#f0faf3}
+    .card-label{font-size:8px;font-weight:700;text-transform:uppercase;color:#777;letter-spacing:.4px}
+    .card-value{font-size:14px;font-weight:900;color:#111;margin-top:4px}
+    .card-value.green{color:#166534}.card-value.red{color:#b91c1c}.card-value.amber{color:#b45309}
+    /* ── Progress ── */
+    .prog-row{display:flex;justify-content:space-between;font-size:9px;font-weight:700;margin-bottom:4px}
+    .prog-wrap{background:#e5e7eb;border-radius:4px;height:7px;overflow:hidden;margin-bottom:16px}
+    .prog-fill{height:100%;border-radius:4px}
+    /* ── Section titles ── */
+    .sec-title{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.6px;color:#166534;
+      border-bottom:1.5px solid #bbddc8;padding-bottom:4px;margin-bottom:8px}
+    /* ── Tables ── */
+    table{width:100%;border-collapse:collapse;margin-bottom:18px;font-size:10px}
+    th{background:#166534;color:#fff;padding:5px 8px;text-align:left;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+    td{padding:5px 8px;border-bottom:1px solid #eee;vertical-align:top}
+    tr:nth-child(even) td{background:#f9fafb}
+    .num{text-align:right;font-variant-numeric:tabular-nums;font-family:monospace}
+    .total-row td{font-weight:800;background:#f0faf3!important;border-top:2px solid #166534;font-size:11px}
+    .over{color:#b91c1c}.under{color:#166534}
+    .st-approved{color:#166534;font-weight:700}.st-rejected{color:#b91c1c;font-weight:700}.st-pending{color:#b45309;font-weight:700}
+    /* ── Footer ── */
+    .footer{margin-top:24px;border-top:1px solid #ddd;padding-top:8px;display:flex;justify-content:space-between;font-size:8px;color:#999}
+    @media print{body{padding:12px 20px}button{display:none!important}}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">
+      <div class="brand-logo">🌿</div>
+      <div>
+        <div class="brand-name">FreshSarura</div>
+        <div class="brand-sub">Export Farmer Hub</div>
+      </div>
+    </div>
+    <div class="report-info">
+      <div class="report-title">Financial Production Report</div>
+      <div class="report-sub">${displayCycleId} &nbsp;•&nbsp; ${displayCrop} &nbsp;•&nbsp; ${(cycleStatus || '').toUpperCase()}</div>
+      <div class="report-sub">Generated: ${new Date().toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}</div>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div><div class="info-label">Farmer</div><div class="info-value">${displayFarmer}</div></div>
+    <div><div class="info-label">Land Size</div><div class="info-value">${displayLandSize}</div></div>
+    <div><div class="info-label">Season</div><div class="info-value">${fullData?.cycle?.season || cycle.season || '—'}</div></div>
+    <div><div class="info-label">Start Date</div><div class="info-value">${displayStartDate}</div></div>
+    <div><div class="info-label">Expected Harvest</div><div class="info-value">${displayEndDate}</div></div>
+    <div><div class="info-label">Yield Goal</div><div class="info-value">${displayYieldGoal}</div></div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="card"><div class="card-label">Total Allocated</div><div class="card-value">${totalAllocated.toLocaleString()} Rwf</div></div>
+    <div class="card hl"><div class="card-label">Total Approved</div><div class="card-value green">${totalApproved.toLocaleString()} Rwf</div></div>
+    <div class="card"><div class="card-label">Actual Spent</div><div class="card-value">${totalSpent.toLocaleString()} Rwf</div></div>
+    <div class="card"><div class="card-label">Budget Variance</div><div class="card-value ${globalVariance >= 0 ? 'green' : 'red'}">${globalVariance >= 0 ? '+' : ''}${globalVariance.toLocaleString()} Rwf</div></div>
+  </div>
+
+  <div class="prog-row"><span>Cycle Progress (Approved / Allocated)</span><span style="color:${cycleProgress >= 90 ? '#b45309' : '#166534'}">${cycleProgress}%</span></div>
+  <div class="prog-wrap"><div class="prog-fill" style="width:${cycleProgress}%;background:${cycleProgress >= 90 ? '#b45309' : '#166534'}"></div></div>
+
+  <div class="sec-title">Budget by Category</div>
+  <table>
+    <thead><tr>
+      <th>Category</th>
+      <th class="num">Allocated (Rwf)</th>
+      <th class="num">Approved (Rwf)</th>
+      <th class="num">Actual Spent (Rwf)</th>
+      <th class="num">Variance (Rwf)</th>
+      <th class="num">% Approved</th>
+    </tr></thead>
+    <tbody>
+      ${categoryRows || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:12px">No category data available</td></tr>'}
+      <tr class="total-row">
+        <td>TOTAL</td>
+        <td class="num">${totalAllocated.toLocaleString()}</td>
+        <td class="num">${totalApproved.toLocaleString()}</td>
+        <td class="num">${totalSpent.toLocaleString()}</td>
+        <td class="num ${globalVariance < 0 ? 'over' : 'under'}">${globalVariance >= 0 ? '+' : ''}${globalVariance.toLocaleString()}</td>
+        <td class="num">${totalAllocated > 0 ? Math.round((totalApproved / totalAllocated) * 100) : 0}%</td>
+      </tr>
+    </tbody>
+  </table>
+
+  ${budgetRequests.length > 0 ? `
+  <div class="sec-title">Budget Activity Requests (${budgetRequests.length})</div>
+  <table>
+    <thead><tr>
+      <th>Submitted By</th><th>Period</th><th>Activities</th>
+      <th class="num">Amount (Rwf)</th><th>Status</th><th>PM Note</th>
+    </tr></thead>
+    <tbody>${requestRows}</tbody>
+  </table>` : ''}
+
+  <div class="footer">
+    <span>FreshSarura Export Farmer Hub &nbsp;•&nbsp; Confidential — Internal Use Only</span>
+    <span>Cycle: ${displayCycleId}</span>
+  </div>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank', 'width=900,height=750,scrollbars=yes');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      setTimeout(() => win.print(), 600);
+    }
+    setShowExportMenu(false);
+  };
+
   // ─── Helpers ──────────────────────────────────────────────────────
   const getStatusColor = (status: string) => {
     switch ((status || '').toLowerCase()) {
@@ -242,16 +493,58 @@ const CropCycleDetailModal = ({
               </button>
             ) : (
               <button
-                onClick={() => setIsConfirmCloseOpen(true)}
+                onClick={handleCloseAttempt}
                 className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 text-sm font-bold transition-colors flex items-center gap-1.5 border border-red-100 dark:border-red-800/50"
               >
                 Close Crop Cycle
               </button>
             )}
             <span className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
-            <button onClick={() => setIsReportOpen(true)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 transition-colors" title="Generate Report">
-              <FileText size={20} />
-            </button>
+
+            {/* Export Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowExportMenu(prev => !prev)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors shadow-sm"
+              >
+                <Download size={15} />
+                Export Data
+                <ChevronDown size={14} className={`transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
+              </button>
+              {showExportMenu && (
+                <>
+                  <div className="fixed inset-0 z-[10000]" onClick={() => setShowExportMenu(false)} />
+                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-[10001] overflow-hidden">
+                    <p className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-700">Export Options</p>
+                    <button
+                      onClick={handleExportCSV}
+                      className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-green-50 dark:bg-green-900/20 flex items-center justify-center shrink-0">
+                        <FileText size={15} className="text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Export CSV</p>
+                        <p className="text-xs text-gray-400">Raw data for current tab</p>
+                      </div>
+                    </button>
+                    <button
+                      onClick={handleExportPDF}
+                      className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left border-t border-gray-50 dark:border-gray-700/50"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center shrink-0">
+                        <Download size={15} className="text-purple-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Save as PDF</p>
+                        <p className="text-xs text-gray-400">Print or save page as PDF</p>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
             <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 transition-colors">
               <X size={20} />
             </button>
@@ -331,7 +624,19 @@ const CropCycleDetailModal = ({
 
               {/* Cycle Progress */}
               <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Cycle Progress</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Cycle Progress</h3>
+                  {(() => {
+                    const cycleProgress = displayBudget > 0
+                      ? Math.min(Math.round((totalApproved / displayBudget) * 100), 100)
+                      : 0;
+                    return (
+                      <span className={`text-sm font-bold ${cycleProgress >= 90 ? 'text-amber-600' : 'text-green-600'}`}>
+                        {cycleProgress}% budget approved
+                      </span>
+                    );
+                  })()}
+                </div>
                 {(cycleStatus || '').toLowerCase() === 'harvesting' && (
                   <div className="mb-3 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 text-amber-700 dark:text-amber-400 text-xs font-semibold flex items-center gap-2">
                     <span className="animate-pulse w-2 h-2 rounded-full bg-amber-500 inline-block" />
@@ -345,10 +650,21 @@ const CropCycleDetailModal = ({
                 )}
                 <div className="relative pt-2 pb-2">
                   <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full transition-all duration-700 ${
-                      isClosed ? 'w-full bg-gray-400' :
-                      (cycleStatus || '').toLowerCase() === 'harvesting' ? 'w-full bg-amber-500' : 'w-[65%] bg-green-500'
-                    }`} />
+                    {(() => {
+                      const cycleProgress = displayBudget > 0
+                        ? Math.min(Math.round((totalApproved / displayBudget) * 100), 100)
+                        : 0;
+                      return (
+                        <div
+                          className={`h-full rounded-full transition-all duration-700 ${
+                            isClosed ? 'bg-gray-400' :
+                            (cycleStatus || '').toLowerCase() === 'harvesting' ? 'bg-amber-500' :
+                            cycleProgress >= 90 ? 'bg-amber-500' : 'bg-green-500'
+                          }`}
+                          style={{ width: isClosed ? '100%' : `${cycleProgress}%` }}
+                        />
+                      );
+                    })()}
                   </div>
                   <div className="flex justify-between mt-4 text-xs font-medium text-gray-500 dark:text-gray-400">
                     <div className="text-center">
@@ -357,7 +673,7 @@ const CropCycleDetailModal = ({
                     </div>
                     <div className="text-center">
                       <span className="block font-bold text-gray-900 dark:text-white">Current Stage</span>
-                      {(cycleStatus || '').toLowerCase() === 'harvesting' ? 'Harvesting' : isClosed ? 'Closed' : 'Vegetative Growth'}
+                      {(cycleStatus || '').toLowerCase() === 'harvesting' ? 'Harvesting' : isClosed ? 'Closed' : 'Active'}
                     </div>
                     <div className="text-center">
                       <span className="block text-gray-400">Harvest</span>
@@ -816,6 +1132,7 @@ const CropCycleDetailModal = ({
         onConfirm={() => handleApproveRequest(overdraftWarning.requestId, true)}
         onAdjust={() => { setOverdraftWarning(null); setIsAdjustBudgetOpen(true); }}
       />
+      {toast && <Toast message={toast.message} subtitle={toast.subtitle} onClose={() => setToast(null)} />}
     </div>,
     document.body
   );

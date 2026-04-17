@@ -4,6 +4,7 @@ import {
     Calendar, Scale, Target,
     Leaf, CheckCircle2, History, AlertCircle
 } from 'lucide-react';
+import Toast from '../../shared/component/Toast';
 
 const YieldForecasting = () => {
     const { cycles, forecasts, loading, submitYieldForecast, fetchForecasts } = useFarmManager();
@@ -15,6 +16,7 @@ const YieldForecasting = () => {
     const [quantity, setQuantity] = useState('');
     const [confidence, setConfidence] = useState('Medium');
     const [notes, setNotes] = useState('');
+    const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
 
     // Sync default cycle selection when data loads
     useEffect(() => {
@@ -27,7 +29,10 @@ const YieldForecasting = () => {
         e.preventDefault();
         const cycle = activeCycles.find((c: any) => c._id === selectedCycle);
         if (cycle && new Date(harvestDate) < new Date(cycle.start_date)) {
-            alert(`Invalid Harvest Date: Cannot be earlier than the cycle start date (${new Date(cycle.start_date).toLocaleDateString()}).`);
+            setToast({
+                message: "Invalid Harvest Date",
+                subtitle: `Cannot be earlier than the cycle start date (${new Date(cycle.start_date).toLocaleDateString()}).`
+            });
             return;
         }
 
@@ -44,11 +49,17 @@ const YieldForecasting = () => {
             setQuantity('');
             setConfidence('Medium');
             setNotes('');
-            alert('Forecast submitted successfully!');
+            setToast({
+                message: "Forecast Submitted",
+                subtitle: "The yield estimates have been sent to the Production Manager."
+            });
             fetchForecasts();
         } catch (err: any) {
             console.error('Forecast submission failed:', err);
-            alert('Failed to submit forecast: ' + (err.response?.data?.message || err.message || err));
+            setToast({
+                message: "Submission Error",
+                subtitle: err.response?.data?.message || err.message || "Failed to submit forecast"
+            });
         }
     };
 
@@ -274,6 +285,7 @@ const YieldForecasting = () => {
                 </div>
 
             </div>
+            {toast && <Toast message={toast.message} subtitle={toast.subtitle} onClose={() => setToast(null)} />}
         </div>
     );
 };

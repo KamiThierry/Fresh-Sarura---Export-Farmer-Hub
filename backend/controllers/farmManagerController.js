@@ -337,6 +337,21 @@ export const submitYieldForecast = async (req, res) => {
             });
         }
         // ─────────────────────────────────────────────────────────────────
+
+        // ── V8: Duplicate Prevention ─────────────────────────────────────
+        const existingPending = await YieldForecast.findOne({
+            cycleId,
+            submittedBy: req.user._id,
+            status: 'Pending'
+        });
+
+        if (existingPending) {
+            return res.status(409).json({
+                status: 'error',
+                message: 'You already have a pending forecast for this cycle. Please wait for PM verification before submitting a new one.'
+            });
+        }
+        // ─────────────────────────────────────────────────────────────────
  
         const forecast = await YieldForecast.create({
             cycleId,

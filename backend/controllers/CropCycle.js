@@ -329,6 +329,12 @@ export const verifyForecast = async (req, res) => {
             { new: true }
         );
         if (!forecast) return res.status(404).json({ status: 'error', message: 'Forecast not found.' });
+
+        // Auto-transition the parent crop cycle to 'harvesting'
+        if (forecast.cycleId) {
+            await CropCycle.findByIdAndUpdate(forecast.cycleId, { status: 'harvesting' });
+        }
+
         res.status(200).json({ status: 'success', data: forecast });
 
         // Trigger Notification
@@ -344,6 +350,7 @@ export const verifyForecast = async (req, res) => {
         res.status(500).json({ status: 'error', message: err.message });
     }
 };
+
 
 // PATCH /api/v1/field-reports/:id/flag
 export const flagFieldReport = async (req, res) => {

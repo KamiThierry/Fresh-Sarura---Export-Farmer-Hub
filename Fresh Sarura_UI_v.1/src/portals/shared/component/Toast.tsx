@@ -13,7 +13,7 @@ const Toast: React.FC<ToastProps> = ({ message, subtitle, onClose }) => {
     // Auto-dismiss after 4 seconds
     const timer = setTimeout(() => {
       onClose();
-    }, 10000);
+    }, 15000);
 
     return () => clearTimeout(timer);
   }, [onClose]);
@@ -42,7 +42,7 @@ const Toast: React.FC<ToastProps> = ({ message, subtitle, onClose }) => {
         }
 
         .animate-fresh-toast-drain {
-          animation: fresh-toast-drain 10s linear forwards;
+          animation: fresh-toast-drain 15s linear forwards;
         }
       `}</style>
 
