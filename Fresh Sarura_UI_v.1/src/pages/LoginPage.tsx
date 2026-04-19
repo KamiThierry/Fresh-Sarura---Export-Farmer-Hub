@@ -86,9 +86,12 @@ const LoginPage = () => {
 
         {/* Logo and Greeting */}
         <div className="text-center mb-6">
-          <Link to="/" className="text-2xl font-bold tracking-tight inline-block mb-4 hover:opacity-80 transition-opacity">
-            <span className="text-white">Fresh</span>
-            <span className="text-[#7ec99a]">Sarura</span>
+          <Link to="/" className="inline-block mb-4 hover:opacity-80 transition-opacity flex flex-col items-center">
+            <div className="text-2xl font-bold tracking-tight">
+              <span className="text-white">Fresh</span>
+              <span className="text-[#7ec99a]">Sarura</span>
+            </div>
+            <span className="text-[10px] font-bold text-gray-400 tracking-[1.5px] uppercase mt-0.5">Exports & Farmer Hub</span>
           </Link>
           <h1 className="text-white text-2xl font-serif font-bold mb-1">Welcome back</h1>
           <p className="text-white/65 text-[13px]">Log in to your account</p>
@@ -145,7 +148,7 @@ const LoginPage = () => {
           <div className="relative">
             <div className="flex justify-between items-center ml-1 mb-[5px]">
               <label htmlFor="password" className="text-white/60 text-[12px] font-medium">Password</label>
-              <button type="button" className="text-[#7ec99a] text-[11.5px] hover:underline focus:outline-none">Forgot password?</button>
+              <Link to="/forgot-password" size="sm" className="text-[#7ec99a] text-[11.5px] hover:underline focus:outline-none">Forgot password?</Link>
             </div>
             <div className="relative">
               <input

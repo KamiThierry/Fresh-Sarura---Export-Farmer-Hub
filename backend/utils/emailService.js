@@ -9,6 +9,65 @@ const transporter = nodemailer.createTransport({
     },
 });
 
+export const sendPasswordResetEmail = async ({ email, resetToken, userName }) => {
+    const resetURL = `http://localhost:5173/reset-password?token=${resetToken}`;
+    
+    const mailOptions = {
+        from: `"FreshSarura Security" <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: '🔐 Reset your FreshSarura password',
+        html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 32px; border-radius: 16px;">
+          
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #16a34a, #15803d); border-radius: 12px; padding: 32px; text-align: center; margin-bottom: 24px;">
+            <h1 style="color: white; font-size: 28px; margin: 0; font-weight: bold;">🌿 FreshSarura</h1>
+            <p style="color: #bbf7d0; margin: 8px 0 0 0; font-size: 14px;">Security & Account Access</p>
+          </div>
+
+          <!-- Message -->
+          <div style="background: white; border-radius: 12px; padding: 28px; margin-bottom: 16px; border: 1px solid #e5e7eb;">
+            <h2 style="color: #111827; font-size: 20px; margin: 0 0 12px 0;">Hello, ${userName}</h2>
+            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 24px 0;">
+              We received a request to reset your password for your FreshSarura account. 
+              Click the button below to set a new password. This link is valid for <strong>1 hour</strong>.
+            </p>
+
+            <!-- Reset Button -->
+            <div style="text-align: center; margin-bottom: 24px;">
+              <a href="${resetURL}" 
+                 style="display: inline-block; background: #16a34a; color: white; padding: 14px 36px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px;">
+                Reset My Password →
+              </a>
+            </div>
+
+            <p style="color: #6b7280; font-size: 13px; line-height: 1.6; margin: 0;">
+              If you didn't request a password reset, please ignore this email or contact support if you have concerns. Your password will remain unchanged.
+            </p>
+          </div>
+
+          <!-- Footer -->
+          <div style="text-align: center; padding: 16px;">
+            <p style="color: #9ca3af; font-size: 11px; margin: 0;">
+              FreshSarura · Export & Farmer Hub · Rwanda<br/>
+              If you're having trouble clicking the button, copy and paste the link into your browser:<br/>
+              <span style="color: #16a34a;">${resetURL}</span>
+            </p>
+          </div>
+
+        </div>
+        `,
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        logger.info(`Password reset email sent to: ${email}`);
+    } catch (error) {
+        logger.error(`Failed to send reset email to ${email}: ${error.message}`);
+        throw error;
+    }
+};
+
 export const sendFarmerWelcomeEmail = async ({ farmerName, email, password }) => {
     const mailOptions = {
         from: `"FreshSarura Platform" <${process.env.EMAIL_USER}>`,

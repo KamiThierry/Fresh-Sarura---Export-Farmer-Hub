@@ -31,8 +31,9 @@ const Navbar = () => {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-md border-b">
       <div className="container flex items-center justify-between h-16">
-        <button onClick={() => scrollTo("#top")} className="font-serif text-xl text-primary tracking-tight">
-          Fresh Sarura
+        <button onClick={() => scrollTo("#top")} className="flex flex-col items-start leading-tight">
+          <span className="font-serif text-xl text-primary tracking-tight">Fresh Sarura</span>
+          <span className="text-[10px] font-bold text-gray-500 tracking-wider">Exports & Farmer Hub</span>
         </button>
 
         {/* Desktop links */}

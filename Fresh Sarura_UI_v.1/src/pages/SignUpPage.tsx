@@ -169,9 +169,12 @@ const SignUpPage = () => {
 
         {/* Logo */}
         <div className="text-center mb-6">
-          <Link to="/" className="text-2xl font-bold tracking-tight inline-block mb-4 hover:opacity-80 transition-opacity">
-            <span className="text-white">Fresh</span>
-            <span className="text-[#7ec99a]">Sarura</span>
+          <Link to="/" className="inline-block mb-4 hover:opacity-80 transition-opacity flex flex-col items-center">
+            <div className="text-2xl font-bold tracking-tight">
+              <span className="text-white">Fresh</span>
+              <span className="text-[#7ec99a]">Sarura</span>
+            </div>
+            <span className="text-[10px] font-bold text-gray-400 tracking-[1.5px] uppercase mt-0.5">Exports & Farmer Hub</span>
           </Link>
           <h1 className="text-white text-2xl font-serif font-bold mb-1">Create Account</h1>
           <p className="text-white/65 text-[13px]">Join our agricultural community today</p>

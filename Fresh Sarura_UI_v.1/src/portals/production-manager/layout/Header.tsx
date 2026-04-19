@@ -5,6 +5,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import NotificationsModal from '../../shared/component/NotificationsModal';
 import { api } from '@/lib/api';
 import { usePMSearch } from '@/lib/useGlobalSearch';
+import logo from '@/assets/sarura_logo_nav.png';
 
 // --- Type badge colours ---
 const TYPE_COLOURS: Record<string, string> = {
@@ -93,9 +94,7 @@ const Header = () => {
     return (
         <header className="fixed top-[10px] left-[10px] right-[10px] h-16 bg-white/80 dark:bg-gray-800/90 backdrop-blur-md border-theme z-40 px-6 flex items-center justify-between transition-colors duration-300 rounded-2xl shadow-floating">
             <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center shadow-lg shadow-green-900/20">
-                    <Leaf className="text-white" size={18} strokeWidth={2.5} />
-                </div>
+                <img src={logo} alt="Fresh Sarura" className="h-10 w-auto" />
                 <div>
                     <h1 className="text-base font-bold text-green-700 dark:text-green-500 tracking-tight">Fresh Sarura</h1>
                     <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400">Export & Farmer Hub</p>

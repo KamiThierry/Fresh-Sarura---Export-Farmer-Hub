@@ -10,6 +10,7 @@ import DriverTaskView from './portals/driver/pages/DriverTaskView';
 import QCOfficerRoutes from './portals/qc-officer/QCOfficerRoutes';
 import LandingPage from './pages/Index';
 import ProtectedRoute from './components/ProtectedRoute';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 
 function App() {
   return (
@@ -19,6 +20,8 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignUpPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ForgotPasswordPage />} />
 
         {/* Production Manager Portal */}
         <Route path="/pm/*" element={
