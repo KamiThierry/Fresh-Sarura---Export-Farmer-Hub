@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
     Search, Filter, Download, Plus, MoreHorizontal,
     Package, DollarSign, Layers,
-    Leaf, ArrowRight, Printer, Clock,
+    Leaf, ArrowRight, Clock,
     ChevronDown, FileSpreadsheet, FileText
 } from 'lucide-react';
 import LogIntakeModal from '../components/LogIntakeModal';

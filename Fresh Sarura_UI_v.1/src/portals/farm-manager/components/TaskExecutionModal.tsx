@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
     X, Camera, UploadCloud, AlertCircle,
@@ -10,18 +10,39 @@ import type { Task } from '../../shared/types/activity';
 interface TaskExecutionModalProps {
     task: Task;
     onClose: () => void;
-    onComplete: (taskId: number, notes: string, hasProof: boolean, actualCostRwf: number | null) => void;
+    onComplete: (taskId: string | number, notes: string, hasProof: boolean, actualCostRwf: number | null, proofUrl: string | null, category: string | undefined, block: string | undefined) => void;
 }
 
 const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalProps) => {
-    const [notes, setNotes] = useState('');
-    const [proofImage, setProofImage] = useState<string | null>(null);
-    const [actualCost, setActualCost] = useState<string>('');
+    const [notes, setNotes] = useState(task.fieldNote || '');
+    const [proofImage, setProofImage] = useState<string | null>(task.proofUrl || null);
+    const [actualCost, setActualCost] = useState<string>(task.actualCostRwf?.toString() || '');
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const canComplete = !task.proofRequired || (task.proofRequired && proofImage);
+    // V6.2 Core Logic: Hard Budget Block
+    const approvedBudget = task.approvedBudgetRwf ?? task.estimatedCostRwf ?? 0;
+    const actual = parseFloat(actualCost) || 0;
+    const isOverBudget = approvedBudget > 0 && actual > approvedBudget;
+    
+    // Variance is still calculated for display but no longer allows submission if >0
+    const variancePercent = approvedBudget > 0 ? Math.round(((actual - approvedBudget) / approvedBudget) * 100) : 0;
 
-    const handleUpload = () => {
-        setProofImage('https://images.unsplash.com/photo-1625246333195-58197bd47d26?auto=format&fit=crop&q=80&w=300&h=200');
+    const needsNoteForVariance = approvedBudget > 0 && actual > (approvedBudget * 1.5) && !notes.trim();
+    const canComplete = (!task.proofRequired || (task.proofRequired && proofImage)) && !isOverBudget && !needsNoteForVariance;
+
+    const handleUploadClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setProofImage(reader.result as string);
+        };
+        reader.readAsDataURL(file);
     };
 
     const handleRemoveProof = () => {
@@ -42,7 +63,7 @@ const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalPro
             />
 
             {/* Modal */}
-            <div className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 dark:border-gray-700 max-h-[90vh]">
+            <div className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 dark:border-gray-700 max-h-[85vh]">
 
                 {/* Header */}
                 <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/50 flex-shrink-0">
@@ -77,7 +98,7 @@ const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalPro
                 </div>
 
                 {/* Scrollable Body */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
 
                     {/* Approved Scope Panel (replaces SOP) */}
                     <div className="space-y-3">
@@ -97,6 +118,18 @@ const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalPro
                                 <span className="font-bold text-emerald-700 dark:text-emerald-400">
                                     {task.approvedBudgetRwf != null ? fmtRwf(task.approvedBudgetRwf) : (task.estimatedCostRwf != null ? fmtRwf(task.estimatedCostRwf) : '—')}
                                 </span>
+                            </div>
+                        </div>
+
+                        {/* Category & Block Auto-populated */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-100 dark:border-gray-600 rounded-xl">
+                                <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Category</p>
+                                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{task.category || 'General'}</p>
+                            </div>
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-100 dark:border-gray-600 rounded-xl">
+                                <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Block</p>
+                                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{task.block || '—'}</p>
                             </div>
                         </div>
 
@@ -120,8 +153,42 @@ const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalPro
                             value={actualCost}
                             onChange={(e) => setActualCost(e.target.value)}
                             placeholder="e.g. 45000"
-                            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 transition"
+                            className={`w-full px-4 py-3 rounded-xl border bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 transition ${
+                                isOverBudget 
+                                ? 'border-red-300 dark:border-red-800/60 focus:ring-red-500/40' 
+                                : 'border-gray-200 dark:border-gray-600 focus:ring-emerald-500/40'
+                            }`}
                         />
+                        
+                        {/* V6.2 Hard Budget Block Alert */}
+                        {isOverBudget && (
+                            <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20 rounded-xl animate-in fade-in slide-in-from-top-1">
+                                <AlertCircle size={18} className="text-red-600 dark:text-red-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-red-800 dark:text-red-400">
+                                        Budget Limit Exceeded
+                                    </p>
+                                    <p className="text-xs text-red-700/80 dark:text-red-500/80 mt-0.5 leading-relaxed">
+                                        Actual cost ({fmtRwf(actual)}) cannot exceed the approved budget for this task ({fmtRwf(approvedBudget)}). Please contact the PM to request a budget adjustment if additional funds are required.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* V6 High Variance Warning (Now only shown if not strictly over budget, though V6.2 makes this mostly redundant for overruns) */}
+                        {!isOverBudget && approvedBudget > 0 && actual > (approvedBudget * 1.5) && (
+                            <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/20 rounded-xl animate-in fade-in slide-in-from-top-1">
+                                <AlertCircle size={18} className="text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-amber-800 dark:text-amber-400">
+                                        High Variance Warning
+                                    </p>
+                                    <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mt-0.5">
+                                        A note is required for variances exceeding 50%.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Proof of Work / Receipts Upload */}
@@ -135,15 +202,24 @@ const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalPro
                         </p>
 
                         {!proofImage ? (
-                            <button
-                                onClick={handleUpload}
-                                className="w-full h-32 border-2 border-dashed border-gray-200 dark:border-gray-600 rounded-xl flex flex-col items-center justify-center gap-2 text-gray-400 hover:text-emerald-600 hover:border-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all bg-gray-50/60 dark:bg-gray-700/30"
-                            >
-                                <div className="w-10 h-10 rounded-full bg-white dark:bg-gray-700 shadow-sm border border-gray-100 dark:border-gray-600 flex items-center justify-center">
-                                    <UploadCloud size={18} />
-                                </div>
-                                <span className="text-sm font-semibold">Tap to Take Photo / Upload</span>
-                            </button>
+                            <>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleFileChange}
+                                    accept="image/*"
+                                    className="hidden"
+                                />
+                                <button
+                                    onClick={handleUploadClick}
+                                    className="w-full h-32 border-2 border-dashed border-gray-200 dark:border-gray-600 rounded-xl flex flex-col items-center justify-center gap-2 text-gray-400 hover:text-emerald-600 hover:border-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all bg-gray-50/60 dark:bg-gray-700/30"
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-white dark:bg-gray-700 shadow-sm border border-gray-100 dark:border-gray-600 flex items-center justify-center">
+                                        <UploadCloud size={18} />
+                                    </div>
+                                    <span className="text-sm font-semibold">Tap to Take Photo / Upload</span>
+                                </button>
+                            </>
                         ) : (
                             <div className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 group">
                                 <img src={proofImage} alt="Proof of Work" className="w-full h-44 object-cover" />
@@ -164,8 +240,18 @@ const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalPro
 
                     {/* Field Notes & Variances */}
                     <div className="space-y-2">
-                        <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                            Field Notes & Variances <span className="text-gray-400 font-normal">(Optional)</span>
+                        <label className="text-sm font-bold text-gray-900 dark:text-white flex items-center justify-between">
+                            <span className="flex items-center gap-2">
+                                <FileText size={16} className="text-emerald-600 dark:text-emerald-400" />
+                                Field Notes & Variances
+                            </span>
+                            {isOverBudget ? (
+                                <span className="text-[10px] text-red-600 dark:text-red-400 uppercase font-bold tracking-wider">Blocked</span>
+                            ) : approvedBudget > 0 && actual > (approvedBudget * 1.5) ? (
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400 uppercase font-bold tracking-wider">Required for variance</span>
+                            ) : (
+                                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Optional</span>
+                            )}
                         </label>
                         <textarea
                             value={notes}
@@ -185,8 +271,21 @@ const TaskExecutionModal = ({ task, onClose, onComplete }: TaskExecutionModalPro
                             * Please upload proof of work or a receipt to submit
                         </p>
                     )}
+                    {needsNoteForVariance && !isOverBudget && (
+                        <p className="text-xs text-center text-amber-600 dark:text-amber-500 font-medium">
+                            * Note required to justify the {variancePercent}% budget overrun
+                        </p>
+                    )}
+                    {isOverBudget && (
+                        <p className="text-xs text-center text-red-500 font-bold">
+                            * Cannot submit: Amount exceeds approved budget
+                        </p>
+                    )}
                     <button
-                        onClick={() => onComplete(task.id, notes, !!proofImage, actualCost ? parseFloat(actualCost) : null)}
+                        onClick={() => {
+                            console.log('TaskExecutionModal: Submit clicked', { taskId: task.id, notes, proofImage });
+                            onComplete(task.id, notes, !!proofImage, actualCost ? parseFloat(actualCost) : null, proofImage, task.category, task.block);
+                        }}
                         disabled={!canComplete}
                         className={`w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${canComplete
                                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/25 active:scale-[0.98]'

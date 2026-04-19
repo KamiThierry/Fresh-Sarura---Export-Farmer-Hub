@@ -1,28 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Pencil, ShieldOff, Phone, Mail, MapPin, Leaf, Ruler, Star, BadgeCheck, Sprout, PackageCheck, Plus } from 'lucide-react';
+import { ArrowLeft, Pencil, ShieldOff, Phone, Mail, MapPin, Leaf, Ruler, Star, BadgeCheck, Sprout, PackageCheck, Plus, Loader2 } from 'lucide-react';
+import { Farmer } from '@/types';
 import AddCertificateModal from './AddCertificateModal';
-
-interface Farmer {
-  id: number;
-  name: string;
-  location: string;
-  crop: string;
-  size: string;
-  status: 'Active' | 'Inactive' | 'Auditing';
-  grade: string;
-  nationalId: string;
-  phone: string;
-  email: string;
-  address: string;
-}
+import EditFarmerModal from './EditFarmerModal';
+import DeleteFarmerModal from './DeleteFarmerModal';
+import { api } from '@/lib/api';
 
 interface FarmerProfileProps {
   farmer: Farmer;
   onBack: () => void;
 }
 
-const CROP_CYCLES: Record<number, { block: string; crop: string; planted: string; estYield: string; daysLeft: number }[]> = {
+const CROP_CYCLES: Record<string, { block: string; crop: string; planted: string; estYield: string; daysLeft: number }[]> = {
   1: [{ block: 'Block A', crop: 'French Beans', planted: '15 Jan 2026', estYield: '500 kg', daysLeft: 22 }],
   2: [
     { block: 'Block A', crop: 'Avocados (Hass)', planted: '01 Nov 2025', estYield: '12,000 kg', daysLeft: 60 },
@@ -37,7 +27,7 @@ const CROP_CYCLES: Record<number, { block: string; crop: string; planted: string
   ],
 };
 
-const HARVESTS: Record<number, { date: string; qty: string; crop: string; grade: string }[]> = {
+const HARVESTS: Record<string, { date: string; qty: string; crop: string; grade: string }[]> = {
   1: [
     { date: '28 Feb 2026', qty: '460 kg', crop: 'French Beans', grade: 'A' },
     { date: '15 Jan 2026', qty: '510 kg', crop: 'French Beans', grade: 'A' },
@@ -70,7 +60,7 @@ const HARVESTS: Record<number, { date: string; qty: string; crop: string; grade:
   ],
 };
 
-const CERTS: Record<number, string[]> = {
+const CERTS: Record<string, string[]> = {
   1: ['GlobalG.A.P.', 'Organic RW'],
   2: ['GlobalG.A.P.', 'Fair Trade', 'Rainforest Alliance'],
   3: ['Organic RW'],
@@ -95,17 +85,34 @@ const InfoRow = ({ icon, label, value }: { icon: React.ReactNode; label: string;
   </div>
 );
 
-const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
+const FarmerProfile = ({ farmer: initialFarmer, onBack }: FarmerProfileProps) => {
   const navigate = useNavigate();
+  // Local copy so edits update the UI immediately without a full page refetch
+  const [farmer, setFarmer] = useState<Farmer>(initialFarmer);
   const [isAddCertOpen, setIsAddCertOpen] = useState(false);
-  const cycles = CROP_CYCLES[farmer.id] ?? [];
-  const harvests = HARVESTS[farmer.id] ?? [];
-  const certs = CERTS[farmer.id] ?? [];
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [cycles, setCycles] = useState<any[]>([]);
+  const [cyclesLoading, setCyclesLoading] = useState(true);
+  const harvests = HARVESTS[farmer._id] ?? [];
+  const certs = CERTS[farmer._id] ?? [];
+
+  // Sync if parent swaps to a different farmer
+  useEffect(() => { setFarmer(initialFarmer); }, [initialFarmer._id]);
+
+  // Fetch real crop cycles assigned to this farmer
+  useEffect(() => {
+    setCyclesLoading(true);
+    api.get(`/crop-cycles?farmer_id=${farmer._id}`)
+      .then((res) => setCycles(res.data ?? []))
+      .catch((err) => console.error('Failed to load crop cycles:', err))
+      .finally(() => setCyclesLoading(false));
+  }, [farmer._id]);
 
   const handleCertClick = (certLabel: string) => {
     const params = new URLSearchParams({
-      farmerId: String(farmer.id),
-      farmerName: farmer.name,
+      farmerId: String(farmer._id),
+      farmerName: farmer.full_name,
       docType: 'Certification',
       certLabel,
     });
@@ -129,27 +136,33 @@ const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
             <span className="text-2xl font-black text-green-600 dark:text-green-400">
-              {farmer.name.charAt(0)}
+              {farmer.full_name.charAt(0)}
             </span>
           </div>
           <div>
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{farmer.name}</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{farmer.full_name}</h1>
               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_STYLE[farmer.status]}`}>
                 {farmer.status}
               </span>
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1">
-              <MapPin size={12} /> {farmer.location}
+              <MapPin size={12} /> {farmer.district}, {farmer.sector}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+          <button
+            onClick={() => setIsEditOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
             <Pencil size={15} /> Edit Profile
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 border border-red-200 dark:border-red-800 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-            <ShieldOff size={15} /> Suspend Account
+          <button
+            onClick={() => setIsDeleteOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-red-200 dark:border-red-800 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          >
+            <ShieldOff size={15} /> Account Actions
           </button>
         </div>
       </div>
@@ -161,7 +174,7 @@ const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5 space-y-4">
           <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Identity &amp; Contact</h3>
           <InfoRow icon={<BadgeCheck size={15} className="text-blue-500" />} label="National ID"
-            value={<span className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">{farmer.nationalId}</span>} />
+            value={<span className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">{farmer.national_id}</span>} />
           <InfoRow icon={<Phone size={15} className="text-green-500" />} label="Phone" value={farmer.phone} />
           <InfoRow icon={<Mail size={15} className="text-purple-500" />} label="Email" value={<span className="text-blue-600 dark:text-blue-400">{farmer.email}</span>} />
         </div>
@@ -170,9 +183,14 @@ const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5 space-y-4">
           <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Farm Specifications</h3>
           <InfoRow icon={<MapPin size={15} className="text-orange-500" />} label="Physical Address"
-            value={<span className="text-xs leading-relaxed">{farmer.address}</span>} />
-          <InfoRow icon={<Leaf size={15} className="text-green-500" />} label="Main Crop" value={farmer.crop} />
-          <InfoRow icon={<Ruler size={15} className="text-gray-500" />} label="Land Size" value={farmer.size} />
+            value={
+              <div className="flex flex-col">
+                <span className="text-xs leading-relaxed">{farmer.district}, {farmer.sector}</span>
+                <span className="text-[10px] text-gray-500">Cell: {farmer.cell}, Village: {farmer.village}</span>
+              </div>
+            } />
+          <InfoRow icon={<Leaf size={15} className="text-green-500" />} label="Main Crop" value={farmer.produce_types.join(', ')} />
+          <InfoRow icon={<Ruler size={15} className="text-gray-500" />} label="Land Size" value={`${farmer.farm_size_hectares} Ha`} />
         </div>
 
         {/* Performance */}
@@ -223,30 +241,43 @@ const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
             <Sprout size={15} className="text-green-500" />
             <h3 className="text-sm font-bold text-gray-900 dark:text-white">Active Crop Cycles</h3>
             <span className="ml-auto text-xs font-semibold px-2 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-full">
-              {cycles.length} active
+              {cyclesLoading ? '…' : `${cycles.length} active`}
             </span>
           </div>
-          {cycles.length > 0 ? (
+          {cyclesLoading ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-gray-400">
+              <Loader2 size={18} className="animate-spin" />
+              <span className="text-sm">Loading cycles…</span>
+            </div>
+          ) : cycles.length > 0 ? (
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 dark:bg-gray-900/40 text-[11px] uppercase tracking-wider text-gray-400">
                   <th className="px-5 py-2.5 text-left">Block</th>
                   <th className="px-5 py-2.5 text-left">Crop</th>
                   <th className="px-5 py-2.5 text-left">Planted</th>
-                  <th className="px-5 py-2.5 text-left">Est. Yield</th>
-                  <th className="px-5 py-2.5 text-left">Days Left</th>
+                  <th className="px-5 py-2.5 text-left">Yield Goal</th>
+                  <th className="px-5 py-2.5 text-left">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {cycles.map((c, i) => (
-                  <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                    <td className="px-5 py-3 font-medium text-gray-700 dark:text-gray-300">{c.block}</td>
-                    <td className="px-5 py-3 text-gray-600 dark:text-gray-400">{c.crop}</td>
-                    <td className="px-5 py-3 text-gray-500 text-xs">{c.planted}</td>
-                    <td className="px-5 py-3 font-semibold text-gray-800 dark:text-gray-200">{c.estYield}</td>
+                {cycles.map((c) => (
+                  <tr key={c._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                    <td className="px-5 py-3 font-medium text-gray-700 dark:text-gray-300">{c.block_name}</td>
+                    <td className="px-5 py-3 text-gray-600 dark:text-gray-400">{c.crop_name}</td>
+                    <td className="px-5 py-3 text-gray-500 text-xs">
+                      {c.planting_date ? new Date(c.planting_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                    </td>
+                    <td className="px-5 py-3 font-semibold text-gray-800 dark:text-gray-200">
+                      {c.yield_goal_kg != null ? `${c.yield_goal_kg.toLocaleString()} kg` : '—'}
+                    </td>
                     <td className="px-5 py-3">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${c.daysLeft <= 20 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'}`}>
-                        {c.daysLeft}d
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        c.status === 'harvesting' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 animate-pulse' :
+                        c.status === 'completed'  ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' :
+                        'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                      }`}>
+                        {c.status === 'active' ? '● Active' : c.status === 'harvesting' ? '◉ Harvesting' : c.status === 'completed' ? '✓ Done' : c.status}
                       </span>
                     </td>
                   </tr>
@@ -300,10 +331,40 @@ const FarmerProfile = ({ farmer, onBack }: FarmerProfileProps) => {
       <AddCertificateModal
         isOpen={isAddCertOpen}
         onClose={() => setIsAddCertOpen(false)}
-        defaultFarmer={farmer.name}
+        defaultFarmer={farmer.full_name}
         onSubmit={(data) => {
           console.log('New certificate recorded:', data);
           setIsAddCertOpen(false);
+        }}
+      />
+
+      {/* Edit Farmer Modal */}
+      <EditFarmerModal
+        isOpen={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        farmer={farmer}
+        onSaved={(updated) => {
+          setFarmer(updated as Farmer);
+          setIsEditOpen(false);
+        }}
+      />
+
+      {/* Delete / Suspend Modal */}
+      <DeleteFarmerModal
+        isOpen={isDeleteOpen}
+        onClose={() => setIsDeleteOpen(false)}
+        farmer={farmer}
+        onSuspended={(updated) => {
+          setFarmer(updated as Farmer);
+          setIsDeleteOpen(false);
+        }}
+        onReactivated={(updated) => {
+          setFarmer(updated as Farmer);
+          setIsDeleteOpen(false);
+        }}
+        onDeleted={() => {
+          setIsDeleteOpen(false);
+          onBack();
         }}
       />
 

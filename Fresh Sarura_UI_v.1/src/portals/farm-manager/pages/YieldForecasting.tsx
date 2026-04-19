@@ -1,62 +1,66 @@
 import { useState, useEffect } from 'react';
-import { getForecasts, saveForecasts, YieldForecast } from '../../shared/data/mockForecasts';
+import { useFarmManager } from '../../../lib/useFarmManager';
 import {
     Calendar, Scale, Target,
     Leaf, CheckCircle2, History, AlertCircle
 } from 'lucide-react';
+import Toast from '../../shared/component/Toast';
 
 const YieldForecasting = () => {
-    // Mock Data for Active Cycles
-    const ACTIVE_CYCLES = [
-        { id: 1, name: "Avocado - Season A" },
-        { id: 2, name: "Chili - Plot B" },
-        { id: 3, name: "Beans - Sector 4" }
-    ];
-
-    const [history, setHistory] = useState<YieldForecast[]>([]);
-
-    useEffect(() => {
-        setHistory(getForecasts());
-        const handleStorage = () => setHistory(getForecasts());
-        window.addEventListener('forecastsChanged', handleStorage);
-        return () => window.removeEventListener('forecastsChanged', handleStorage);
-    }, []);
+    const { cycles, forecasts, loading, submitYieldForecast, fetchForecasts } = useFarmManager();
+    const activeCycles = cycles.filter((c: any) => c.status !== 'Completed');
 
     // Form State
-    const [selectedCycle, setSelectedCycle] = useState(ACTIVE_CYCLES[0].id);
+    const [selectedCycle, setSelectedCycle] = useState('');
     const [harvestDate, setHarvestDate] = useState('');
     const [quantity, setQuantity] = useState('');
     const [confidence, setConfidence] = useState('Medium');
     const [notes, setNotes] = useState('');
+    const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    // Sync default cycle selection when data loads
+    useEffect(() => {
+        if (activeCycles.length > 0 && !selectedCycle) {
+            setSelectedCycle(activeCycles[0]._id);
+        }
+    }, [activeCycles, selectedCycle]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const cropName = ACTIVE_CYCLES.find(c => c.id === Number(selectedCycle))?.name || 'Unknown';
+        const cycle = activeCycles.find((c: any) => c._id === selectedCycle);
+        if (cycle && new Date(harvestDate) < new Date(cycle.start_date)) {
+            setToast({
+                message: "Invalid Harvest Date",
+                subtitle: `Cannot be earlier than the cycle start date (${new Date(cycle.start_date).toLocaleDateString()}).`
+            });
+            return;
+        }
 
-        const newForecast: YieldForecast = {
-            id: Date.now(),
-            cycleId: Number(selectedCycle),
-            submitted: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            harvestDate: new Date(harvestDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            crop: cropName.split(' - ')[0],
-            prediction: Number(quantity),
-            status: 'Pending',
-            confidence,
-            notes,
-            accuracy: null,
-            variance: null
-        };
-
-        const updated = [newForecast, ...history];
-        setHistory(updated);
-        saveForecasts(updated);
-
-        // Reset Form
-        setHarvestDate('');
-        setQuantity('');
-        setConfidence('Medium');
-        setNotes('');
-        alert('Forecast submitted successfully!');
+        try {
+            await submitYieldForecast({
+                cycleId: String(selectedCycle),
+                harvestDate,
+                predictionKg: Number(quantity),
+                confidence,
+                notes
+            });
+            // Show success, reset form
+            setHarvestDate('');
+            setQuantity('');
+            setConfidence('Medium');
+            setNotes('');
+            setToast({
+                message: "Forecast Submitted",
+                subtitle: "The yield estimates have been sent to the Production Manager."
+            });
+            fetchForecasts();
+        } catch (err: any) {
+            console.error('Forecast submission failed:', err);
+            setToast({
+                message: "Submission Error",
+                subtitle: err.response?.data?.message || err.message || "Failed to submit forecast"
+            });
+        }
     };
 
     return (
@@ -72,43 +76,109 @@ const YieldForecasting = () => {
             </div>
 
             {/* Top Stats Row (The Feedback Loop) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Card 1: Next Harvest */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center">
-                        <Calendar size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Next Harvest Due</p>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white">Oct 15</p>
-                    </div>
-                </div>
+            {(() => {
+                // ── Derived stats from real forecast data ──────────────────
+                const pendingOrVerified = forecasts.filter((f: any) =>
+                    f.harvestDate && (f.status === 'Pending' || f.status === 'Verified')
+                );
 
-                {/* Card 2: Est. Volume */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 flex items-center justify-center">
-                        <Scale size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Est. Volume</p>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white">4,500 kg</p>
-                    </div>
-                </div>
+                // Card 1: soonest upcoming harvest date
+                const nextHarvestDate = pendingOrVerified
+                    .map((f: any) => new Date(f.harvestDate))
+                    .filter((d: Date) => d >= new Date())
+                    .sort((a: Date, b: Date) => a.getTime() - b.getTime())[0];
 
-                {/* Card 3: Accuracy */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-purple-50 dark:bg-purple-900/20 text-purple-600 flex items-center justify-center">
-                        <Target size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Your Accuracy</p>
-                        <div className="flex items-baseline gap-2">
-                            <p className="text-2xl font-bold text-gray-900 dark:text-white">92%</p>
-                            <span className="text-xs text-gray-400">Last 3 forecasts</span>
+                const nextHarvestLabel = nextHarvestDate
+                    ? nextHarvestDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                    : '—';
+
+                // Card 2: sum of predictionKg from latest forecast per active cycle
+                const latestPerCycle: Record<string, any> = {};
+                [...forecasts].sort((a: any, b: any) =>
+                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                ).forEach((f: any) => {
+                    if (!latestPerCycle[f.cycleId]) latestPerCycle[f.cycleId] = f;
+                });
+                const estVolume = Object.values(latestPerCycle).reduce(
+                    (sum: number, f: any) => sum + (f.predictionKg || 0), 0
+                );
+                const estVolumeLabel = estVolume > 0 ? `${estVolume.toLocaleString()} kg` : '—';
+
+                // Card 3: verified forecast count + rate
+                const totalForecasts = forecasts.length;
+                const verifiedForecasts = forecasts.filter((f: any) => f.status === 'Verified');
+                const verifiedCount = verifiedForecasts.length;
+                const verificationRate = totalForecasts > 0
+                    ? Math.round((verifiedCount / totalForecasts) * 100)
+                    : null;
+                const accuracyLabel = verifiedCount > 0 ? `${verifiedCount} Verified` : '—';
+                const accuracySubLabel = verificationRate !== null
+                    ? `${verificationRate}% of ${totalForecasts} forecast${totalForecasts !== 1 ? 's' : ''}`
+                    : 'No forecasts submitted yet';
+
+                return (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Card 1: Next Harvest */}
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center shrink-0">
+                                <Calendar size={24} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Next Harvest Due</p>
+                                {loading ? (
+                                    <div className="h-7 w-20 bg-gray-100 dark:bg-gray-700 rounded animate-pulse mt-1" />
+                                ) : (
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{nextHarvestLabel}</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Card 2: Est. Volume */}
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 flex items-center justify-center shrink-0">
+                                <Scale size={24} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Est. Volume</p>
+                                {loading ? (
+                                    <div className="h-7 w-24 bg-gray-100 dark:bg-gray-700 rounded animate-pulse mt-1" />
+                                ) : (
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{estVolumeLabel}</p>
+                                )}
+                                {!loading && estVolume > 0 && (
+                                    <p className="text-xs text-gray-400 mt-0.5">Across {Object.keys(latestPerCycle).length} active cycle{Object.keys(latestPerCycle).length !== 1 ? 's' : ''}</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Card 3: Accuracy */}
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${
+                                verifiedCount === 0 ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-600' :
+                                (verificationRate ?? 0) >= 60 ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' :
+                                'bg-orange-50 dark:bg-orange-900/20 text-orange-500'
+                            }`}>
+                                <Target size={24} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Your Accuracy</p>
+                                {loading ? (
+                                    <div className="h-7 w-16 bg-gray-100 dark:bg-gray-700 rounded animate-pulse mt-1" />
+                                ) : (
+                                    <div className="flex items-baseline gap-2">
+                                        <p className={`text-2xl font-bold ${
+                                            verifiedCount === 0 ? 'text-gray-400' :
+                                            (verificationRate ?? 0) >= 60 ? 'text-emerald-600' : 'text-orange-500'
+                                        }`}>{accuracyLabel}</p>
+                                        <span className="text-xs text-gray-400">{accuracySubLabel}</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
+                );
+            })()}
+
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
@@ -129,11 +199,11 @@ const YieldForecasting = () => {
                                     </label>
                                     <select
                                         value={selectedCycle}
-                                        onChange={(e) => setSelectedCycle(Number(e.target.value))}
+                                        onChange={(e) => setSelectedCycle(e.target.value)}
                                         className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
                                     >
-                                        {ACTIVE_CYCLES.map(cycle => (
-                                            <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
+                                        {activeCycles.map((cycle: any) => (
+                                            <option key={cycle._id} value={cycle._id}>{cycle.crop_name} — {cycle.season}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -149,6 +219,7 @@ const YieldForecasting = () => {
                                             <input
                                                 type="date"
                                                 required
+                                                min={new Date().toISOString().split('T')[0]}
                                                 value={harvestDate}
                                                 onChange={(e) => setHarvestDate(e.target.value)}
                                                 className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
@@ -231,48 +302,56 @@ const YieldForecasting = () => {
                     </div>
 
                     <div className="space-y-4">
-                        {history.map((record) => (
-                            <div key={record.id} className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
-                                <div className="flex justify-between items-start mb-3">
-                                    <div>
-                                        <h4 className="font-bold text-gray-900 dark:text-white">{record.crop}</h4>
-                                        <p className="text-xs text-gray-500">Submitted: {record.submitted}</p>
-                                    </div>
-                                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border ${record.status === 'Verified'
-                                        ? 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900/30'
-                                        : 'bg-yellow-50 text-yellow-600 border-yellow-100 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-900/30'
-                                        }`}>
-                                        {record.status}
-                                    </span>
-                                </div>
+                        {loading && forecasts.length === 0 ? (
+                            <p className="text-sm text-gray-500 py-4 text-center">Loading forecasts...</p>
+                        ) : forecasts.map((record: any) => {
+                            const cycle = cycles.find((c: any) => c._id === record.cycleId);
+                            const cropName = cycle ? cycle.crop_name : 'Unknown Crop';
 
-                                <div className="grid grid-cols-2 gap-4 text-sm mb-3">
-                                    <div>
-                                        <p className="text-xs text-gray-400">Harvest Date</p>
-                                        <p className="font-medium text-gray-700 dark:text-gray-200">{record.harvestDate}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-xs text-gray-400">Prediction</p>
-                                        <p className="font-medium text-gray-700 dark:text-gray-200">{record.prediction.toLocaleString()} kg</p>
-                                    </div>
-                                </div>
-
-                                {record.status === 'Verified' && (
-                                    <div className={`mt-3 pt-3 border-t border-gray-100 dark:border-gray-600/50 flex items-center justify-between text-xs font-bold ${(record.accuracy || 0) >= 90 ? 'text-emerald-600' : 'text-orange-500'
-                                        }`}>
-                                        <span className="flex items-center gap-1.5">
-                                            {(record.accuracy || 0) >= 90 ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-                                            {record.variance}
+                            return (
+                                <div key={record._id} className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div>
+                                            <h4 className="font-bold text-gray-900 dark:text-white">{cropName}</h4>
+                                            <p className="text-xs text-gray-500">Submitted: {new Date(record.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+                                        </div>
+                                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border ${record.status === 'Verified'
+                                            ? 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900/30'
+                                            : 'bg-yellow-50 text-yellow-600 border-yellow-100 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-900/30'
+                                            }`}>
+                                            {record.status}
                                         </span>
-                                        <span>{record.accuracy}% Accuracy</span>
                                     </div>
-                                )}
-                            </div>
-                        ))}
+
+                                    <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                                        <div>
+                                            <p className="text-xs text-gray-400">Harvest Date</p>
+                                            <p className="font-medium text-gray-700 dark:text-gray-200">{new Date(record.harvestDate).toLocaleDateString()}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs text-gray-400">Prediction</p>
+                                            <p className="font-medium text-gray-700 dark:text-gray-200">{record.predictionKg?.toLocaleString() || 0} kg</p>
+                                        </div>
+                                    </div>
+
+                                    {record.status === 'Verified' && (
+                                        <div className={`mt-3 pt-3 border-t border-gray-100 dark:border-gray-600/50 flex items-center justify-between text-xs font-bold ${(record.accuracy || 0) >= 90 ? 'text-emerald-600' : 'text-orange-500'
+                                            }`}>
+                                            <span className="flex items-center gap-1.5">
+                                                {(record.accuracy || 0) >= 90 ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                                                {record.notes || record.pmReply}
+                                            </span>
+                                            <span>{record.accuracy}% Accuracy</span>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
             </div>
+            {toast && <Toast message={toast.message} subtitle={toast.subtitle} onClose={() => setToast(null)} />}
         </div>
     );
 };

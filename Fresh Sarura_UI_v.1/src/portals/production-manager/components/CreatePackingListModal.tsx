@@ -99,7 +99,7 @@ const CreatePackingListModal: React.FC<CreatePackingListModalProps> = ({ isOpen,
                     />
 
                     {/* Modal card */}
-                    <div className="relative w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+                    <div className="relative w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
 
                         {/* ── Header (always visible) ── */}
                         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-purple-50/50 dark:bg-purple-900/10 flex-shrink-0">
@@ -149,7 +149,7 @@ const CreatePackingListModal: React.FC<CreatePackingListModalProps> = ({ isOpen,
                         ) : (
                             <>
                                 {/* ── Form Content ── */}
-                                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
                                     <form id="packing-list-form" onSubmit={handleSubmit}>
 
                                         {/* 1. Logistics Section */}

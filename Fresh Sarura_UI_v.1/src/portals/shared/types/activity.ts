@@ -3,12 +3,13 @@
 export interface ActivityLineItem {
     id: number;
     activityName: string;
+    category?: string;
     estimatedCostRwf: number;
 }
 
 export interface BudgetRequest {
     id: number;
-    cycleId: number;
+    cycleId: string | number;
     cycleName: string;
     submittedBy: string;
     submittedAt: string;
@@ -36,4 +37,6 @@ export interface Task {
     statusDate?: string;         // Date the status changed, e.g. "Apr 3, 2026"
     pmNote?: string;             // PM's feedback / rejection reason
     fieldNote?: string;          // FM's field notes submitted with report
+    category?: string;           // Labor, Inputs, etc.
+    proofUrl?: string;           // URL of the evidence image (for resubmission)
 }

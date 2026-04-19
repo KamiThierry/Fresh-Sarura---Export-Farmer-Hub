@@ -3,9 +3,12 @@ import QuickActionsGrid from '../components/QuickActionsGrid';
 import LogIntakeModal from '../components/LogIntakeModal';
 import FindBatchModal from '../components/FindBatchModal';
 import ExportTrendsChart from '../components/ExportTrendsChart';
-import QCResultsChart from '../components/QCResultsChart';
+import CropCyclesOverview from '../components/CropCyclesOverview';
 import LossAnalyticsChart from '../components/LossAnalyticsChart';
 import RecentActivityTable from '../components/RecentActivityTable';
+import { usePMContext } from '@/context/PMContext';
+import { useState, useEffect } from 'react';
+import { api } from '@/lib/api';
 
 interface DashboardProps {
     currentIntake: number;
@@ -14,7 +17,8 @@ interface DashboardProps {
     isIntakeOpen: boolean;
     isTraceabilityOpen: boolean;
     onLogIntake: () => void;
-    onQCInspection: () => void;
+    onRegisterFarmer: () => void;
+    onCreateCycle: () => void;
     onFindBatch: () => void;
     onCloseIntake: () => void;
     onIntakeSubmit: (weight: number) => void;
@@ -28,27 +32,58 @@ const Dashboard = ({
     isIntakeOpen,
     isTraceabilityOpen,
     onLogIntake,
-    onQCInspection,
+    onRegisterFarmer,
+    onCreateCycle,
     onFindBatch,
     onCloseIntake,
     onIntakeSubmit,
     onCloseTraceability
 }: DashboardProps) => {
+    const { cycles } = usePMContext();
+    const activeCyclesCount = cycles.filter(c => c.status !== 'completed').length;
+    const [userName, setUserName] = useState<string>('Production Manager');
+
+    useEffect(() => {
+        const fetchUser = async () => {
+            try {
+                // Try getting from localStorage first for instant display
+                const userStr = localStorage.getItem('user');
+                if (userStr) {
+                    const user = JSON.parse(userStr);
+                    if (user.name) setUserName(user.name);
+                }
+
+                // But also fetch from API to be 100% sure it's correct from DB
+                const res = await api.get('/auth/me');
+                if (res.user && res.user.name) {
+                    setUserName(res.user.name);
+                } else if (res.name) {
+                    setUserName(res.name);
+                }
+            } catch (err) {
+                console.error('Failed to fetch user name:', err);
+            }
+        };
+        fetchUser();
+    }, []);
+
     return (
         <div className="p-6">
             {/* Summary Cards */}
             <div className="mb-6">
                 <DashboardStats
                     todaysIntake={`${currentIntake.toLocaleString()} kg`}
-                    qualityGrade={qualityGrade}
+                    activeCyclesCount={activeCyclesCount}
                     scheduledExports={`${(scheduledExports / 1000).toLocaleString()} Tons`}
+                    userName={userName}
                 />
             </div>
 
             {/* Quick Actions Grid */}
             <QuickActionsGrid
                 onLogIntake={onLogIntake}
-                onQCInspection={onQCInspection}
+                onRegisterFarmer={onRegisterFarmer}
+                onCreateCycle={onCreateCycle}
                 onFindBatch={onFindBatch}
             />
 
@@ -71,7 +106,7 @@ const Dashboard = ({
                     <ExportTrendsChart />
                 </div>
                 <div className="col-span-1">
-                    <QCResultsChart />
+                    <CropCyclesOverview />
                 </div>
             </div>
 

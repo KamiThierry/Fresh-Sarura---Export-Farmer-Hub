@@ -8,6 +8,8 @@ interface BudgetActivityRequestModalProps {
     onClose: () => void;
     cycleId: number;
     cycleName: string;
+    cycleStartDate?: string;
+    cycleEndDate?: string;
     submittedBy?: string;
     /** Called with the finalised BudgetRequest on submission */
     onSubmit: (request: BudgetRequest) => void;
@@ -16,6 +18,7 @@ interface BudgetActivityRequestModalProps {
 const emptyLine = (): ActivityLineItem => ({
     id: Date.now() + Math.random(),
     activityName: '',
+    category: '',
     estimatedCostRwf: 0,
 });
 
@@ -24,6 +27,8 @@ const BudgetActivityRequestModal = ({
     onClose,
     cycleId,
     cycleName,
+    cycleStartDate,
+    cycleEndDate,
     submittedBy = 'Farm Manager',
     onSubmit,
 }: BudgetActivityRequestModalProps) => {
@@ -31,6 +36,7 @@ const BudgetActivityRequestModal = ({
     const [globalStartDate, setGlobalStartDate] = useState('');
     const [globalEndDate, setGlobalEndDate] = useState('');
     const [submitted, setSubmitted] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
 
     if (!isOpen) return null;
 
@@ -49,8 +55,9 @@ const BudgetActivityRequestModal = ({
         setLineItems(prev => prev.filter(l => l.id !== id));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setSubmitError(null);
 
         const request: BudgetRequest = {
             id: Date.now(),
@@ -65,18 +72,30 @@ const BudgetActivityRequestModal = ({
             approvalStatus: 'Pending',
         };
 
-        onSubmit(request);
-        setSubmitted(true);
-
-        setTimeout(() => {
-            setSubmitted(false);
-            setLineItems([emptyLine()]);
-            onClose();
-        }, 1800);
+        try {
+            await onSubmit(request);
+            setSubmitted(true);
+            setTimeout(() => {
+                setSubmitted(false);
+                setLineItems([emptyLine()]);
+                onClose();
+            }, 1800);
+        } catch (err: any) {
+            setSubmitError(err.message || 'Failed to submit request.');
+        }
     };
 
-    const isValid = globalStartDate && globalEndDate && lineItems.every(
-        l => l.activityName.trim() && l.estimatedCostRwf > 0
+    const isWithinBounds = (dateStr: string) => {
+        if (!dateStr) return true;
+        if (cycleStartDate && new Date(dateStr) < new Date(cycleStartDate)) return false;
+        if (cycleEndDate && new Date(dateStr) > new Date(cycleEndDate)) return false;
+        return true;
+    };
+
+    const isDateViolation = (globalStartDate && !isWithinBounds(globalStartDate)) || (globalEndDate && !isWithinBounds(globalEndDate));
+
+    const isValid = globalStartDate && globalEndDate && !isDateViolation && lineItems.every(
+        l => l.activityName.trim() && l.category && l.category.trim() && l.estimatedCostRwf > 0
     );
 
     return createPortal(
@@ -85,7 +104,7 @@ const BudgetActivityRequestModal = ({
             <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={onClose} />
 
             {/* Modal */}
-            <div className="relative w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+            <div className="relative w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
 
                 {/* Header */}
                 <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 shrink-0">
@@ -131,8 +150,12 @@ const BudgetActivityRequestModal = ({
                                         type="date"
                                         value={globalStartDate}
                                         onChange={e => setGlobalStartDate(e.target.value)}
+                                        min={cycleStartDate}
+                                        max={cycleEndDate}
                                         required
-                                        className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all"
+                                        className={`w-full px-3 py-2.5 rounded-lg border bg-gray-50 dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all ${
+                                            globalStartDate && !isWithinBounds(globalStartDate) ? 'border-red-500' : 'border-gray-200 dark:border-gray-600'
+                                        }`}
                                     />
                                 </div>
                                 <div>
@@ -143,15 +166,25 @@ const BudgetActivityRequestModal = ({
                                         type="date"
                                         value={globalEndDate}
                                         onChange={e => setGlobalEndDate(e.target.value)}
+                                        min={cycleStartDate}
+                                        max={cycleEndDate}
                                         required
-                                        className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all"
+                                        className={`w-full px-3 py-2.5 rounded-lg border bg-gray-50 dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all ${
+                                            globalEndDate && !isWithinBounds(globalEndDate) ? 'border-red-500' : 'border-gray-200 dark:border-gray-600'
+                                        }`}
                                     />
                                 </div>
                             </div>
+                            {isDateViolation && (
+                                <p className="mt-2 text-[10px] text-red-500 font-bold flex items-center gap-1">
+                                    <AlertCircle size={10} />
+                                    Error: Dates must be between {cycleStartDate ? new Date(cycleStartDate).toLocaleDateString() : 'start'} and {cycleEndDate ? new Date(cycleEndDate).toLocaleDateString() : 'harvest'}.
+                                </p>
+                            )}
                         </div>
 
                         {/* Scrollable line items */}
-                        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-4">
                             <div className="flex items-center justify-between mb-1">
                                 <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Proposed Activities</p>
                                 <p className="text-xs text-gray-400">{lineItems.length} item{lineItems.length !== 1 ? 's' : ''}</p>
@@ -192,21 +225,43 @@ const BudgetActivityRequestModal = ({
                                             />
                                         </div>
 
-                                        {/* Estimated Cost */}
-                                        <div>
-                                            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                                Estimated Cost (Rwf)
-                                            </label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="500"
-                                                value={line.estimatedCostRwf || ''}
-                                                onChange={e => updateLine(line.id, 'estimatedCostRwf', parseInt(e.target.value) || 0)}
-                                                placeholder="0"
-                                                required
-                                                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all"
-                                            />
+                                        {/* Row 2: Category & Estimated Cost */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {/* Category */}
+                                            <div>
+                                                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                                    Category
+                                                </label>
+                                                <select
+                                                    value={line.category || ''}
+                                                    onChange={e => updateLine(line.id, 'category', e.target.value)}
+                                                    required
+                                                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all"
+                                                >
+                                                    <option value="">Select Category...</option>
+                                                    <option value="Seeds & Seedlings">Seeds & Seedlings</option>
+                                                    <option value="Fertilizers">Fertilizers</option>
+                                                    <option value="Chemicals">Chemicals</option>
+                                                    <option value="Labor">Labor</option>
+                                                </select>
+                                            </div>
+
+                                            {/* Estimated Cost */}
+                                            <div>
+                                                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                                    Estimated Cost (Rwf)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="500"
+                                                    value={line.estimatedCostRwf || ''}
+                                                    onChange={e => updateLine(line.id, 'estimatedCostRwf', parseInt(e.target.value) || 0)}
+                                                    placeholder="0"
+                                                    required
+                                                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -235,8 +290,15 @@ const BudgetActivityRequestModal = ({
                                 </span>
                             </div>
 
-                            {/* Validation hint */}
-                            {!isValid && lineItems.some(l => l.activityName) && (
+                            {/* Error messages / Validation hint */}
+                            {submitError && (
+                                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-800 flex items-center gap-2 text-xs text-red-600 dark:text-red-400 font-bold">
+                                    <AlertCircle size={14} />
+                                    {submitError}
+                                </div>
+                            )}
+
+                            {!isValid && lineItems.some(l => l.activityName) && !submitError && (
                                 <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-medium">
                                     <AlertCircle size={13} />
                                     Please complete all fields for every activity before submitting.

@@ -15,12 +15,17 @@ import SettingsPage from './pages/Settings';
 import ClientRequests from './pages/ClientRequests';
 
 import QCInspectionModal from './components/QCInspectionModal';
+import FarmerRegistrationModal from './components/FarmerRegistrationModal';
+import CreateCropCycleModal from './components/CreateCropCycleModal';
+import { PMProvider } from '@/context/PMContext';
 
 const ProductionManagerRoutes = () => {
     const [isIntakeOpen, setIsIntakeOpen] = useState(false);
     const [isQCOpen, setIsQCOpen] = useState(false);
     const [isTraceabilityOpen, setIsTraceabilityOpen] = useState(false);
     const [isPackingListOpen, setIsPackingListOpen] = useState(false);
+    const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
+    const [isCreateCycleOpen, setIsCreateCycleOpen] = useState(false);
 
     const [currentIntake, setCurrentIntake] = useState(2450); // Initial value in kg
     const [qualityGrade, setQualityGrade] = useState("96% Class A");
@@ -55,6 +60,14 @@ const ProductionManagerRoutes = () => {
         setIsPackingListOpen(true);
     };
 
+    const handleRegisterFarmer = () => {
+        setIsRegistrationOpen(true);
+    };
+
+    const handleCreateCycle = () => {
+        setIsCreateCycleOpen(true);
+    };
+
     const handlePackingListSubmit = (data: any) => {
         // Modal manages its own close — success state shows first,
         // then user clicks Close or View Packing List Status.
@@ -63,7 +76,7 @@ const ProductionManagerRoutes = () => {
 
 
     return (
-        <>
+        <PMProvider>
             <Routes>
                 <Route element={<Layout />}>
                     {/* Home/Dashboard Route */}
@@ -77,7 +90,8 @@ const ProductionManagerRoutes = () => {
                                 isIntakeOpen={isIntakeOpen}
                                 isTraceabilityOpen={isTraceabilityOpen}
                                 onLogIntake={handleLogIntake}
-                                onQCInspection={handleQCInspection}
+                                onRegisterFarmer={handleRegisterFarmer}
+                                onCreateCycle={handleCreateCycle}
                                 onFindBatch={handleFindBatch}
                                 onCloseIntake={() => setIsIntakeOpen(false)}
                                 onIntakeSubmit={handleIntakeSubmit}
@@ -117,7 +131,19 @@ const ProductionManagerRoutes = () => {
                 onClose={() => setIsPackingListOpen(false)}
                 onSubmit={handlePackingListSubmit}
             />
-        </>
+
+            <FarmerRegistrationModal
+                isOpen={isRegistrationOpen}
+                onClose={() => setIsRegistrationOpen(false)}
+                onSuccess={() => setIsRegistrationOpen(false)}
+            />
+
+            <CreateCropCycleModal
+                isOpen={isCreateCycleOpen}
+                onClose={() => setIsCreateCycleOpen(false)}
+                onSuccess={() => setIsCreateCycleOpen(false)}
+            />
+        </PMProvider>
     );
 };
 

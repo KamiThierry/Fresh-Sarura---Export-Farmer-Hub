@@ -3,14 +3,16 @@ import { Scale, Thermometer, ShieldCheck, Plane, Sprout } from 'lucide-react';
 
 interface DashboardStatsProps {
   todaysIntake?: string;
-  qualityGrade?: string;
+  activeCyclesCount?: number;
   scheduledExports?: string;
+  userName?: string;
 }
 
 const DashboardStats = ({
   todaysIntake = "2,450 kg",
-  qualityGrade = "96% Class A",
-  scheduledExports = "8 Tons"
+  activeCyclesCount = 0,
+  scheduledExports = "8 Tons",
+  userName = "Manager"
 }: DashboardStatsProps) => {
   const stats = [
     {
@@ -30,12 +32,12 @@ const DashboardStats = ({
       bg: 'bg-blue-50 dark:bg-blue-900/20',
     },
     {
-      icon: ShieldCheck,
-      label: 'Quality Grade',
-      value: qualityGrade,
-      sub: 'Top defect: Bruising',
-      color: 'text-purple-600',
-      bg: 'bg-purple-50 dark:bg-purple-900/20',
+      icon: Sprout,
+      label: 'Active Crop Cycles',
+      value: String(activeCyclesCount),
+      sub: 'Cycle Planning',
+      color: 'text-emerald-600',
+      bg: 'bg-emerald-50 dark:bg-emerald-900/20',
     },
     {
       icon: Plane,
@@ -54,7 +56,7 @@ const DashboardStats = ({
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-2">
             <Sprout className="h-8 w-8" />
-            <h1 className="text-3xl font-bold">Welcome back, Admin</h1>
+            <h1 className="text-3xl font-bold">Welcome back, {userName}</h1>
           </div>
           <p className="text-green-100 text-lg opacity-90">
             Monitor your horticulture export operations and farmer network in real-time

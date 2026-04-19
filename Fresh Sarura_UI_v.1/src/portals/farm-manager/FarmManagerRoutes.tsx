@@ -6,25 +6,28 @@ import YieldForecasting from './pages/YieldForecasting';
 import Performance from './pages/Performance';
 import Settings from './pages/Settings';
 
+// Auth guard — redirects to /login if no token
+const RequireAuth = ({ children }: { children: JSX.Element }) => {
+  const token = localStorage.getItem('token');
+  if (!token) return <Navigate to="/login" replace />;
+  return children;
+};
+
 const FarmManagerRoutes = () => {
-    return (
-        <Routes>
-            <Route element={<Layout />}>
-                <Route path="/" element={<FarmDashboard />} />
-
-                {/* New Requested Routes */}
-                <Route path="crop-planning" element={<CropPlanning />} />
-                <Route path="yield-forecast" element={<YieldForecasting />} />
-                <Route path="performance" element={<Performance />} />
-                <Route path="analytics" element={<div className="p-6">Analytics (Coming Soon)</div>} />
-                <Route path="communication" element={<div className="p-6">Communication (Coming Soon)</div>} />
-                <Route path="settings" element={<Settings />} />
-
-                {/* Catch all */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-        </Routes>
-    );
+  return (
+    <RequireAuth>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/" element={<FarmDashboard />} />
+          <Route path="crop-planning" element={<CropPlanning />} />
+          <Route path="yield-forecast" element={<YieldForecasting />} />
+          <Route path="performance" element={<Performance />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </RequireAuth>
+  );
 };
 
 export default FarmManagerRoutes;

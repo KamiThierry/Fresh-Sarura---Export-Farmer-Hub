@@ -52,7 +52,7 @@ const LogIntakeModal = ({ isOpen, onClose, onSubmit }: LogIntakeModalProps) => {
             />
 
             {/* Modal Container */}
-            <div className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700 max-h-[90vh]">
+            <div className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700 max-h-[85vh]">
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50">
@@ -72,7 +72,7 @@ const LogIntakeModal = ({ isOpen, onClose, onSubmit }: LogIntakeModalProps) => {
                 </div>
 
                 {/* Form Content - Scrollable */}
-                <div className="flex-1 overflow-y-auto p-6">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                     <form id="intake-form" onSubmit={handleSubmit} className="space-y-6">
 
                         {/* Farmer Selection */}

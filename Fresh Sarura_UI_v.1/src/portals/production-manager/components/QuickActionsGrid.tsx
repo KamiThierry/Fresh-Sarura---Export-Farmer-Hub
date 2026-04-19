@@ -1,13 +1,18 @@
-
-import { PlusCircle, Microscope, Search } from 'lucide-react';
+import { PlusCircle, Search, UserPlus, Sprout } from 'lucide-react';
 
 interface QuickActionsGridProps {
   onLogIntake?: () => void;
-  onQCInspection?: () => void;
+  onRegisterFarmer?: () => void;
+  onCreateCycle?: () => void;
   onFindBatch?: () => void;
 }
 
-const QuickActionsGrid = ({ onLogIntake, onQCInspection, onFindBatch }: QuickActionsGridProps) => {
+const QuickActionsGrid = ({ 
+  onLogIntake, 
+  onRegisterFarmer, 
+  onCreateCycle, 
+  onFindBatch 
+}: QuickActionsGridProps) => {
   const actions = [
     {
       icon: PlusCircle,
@@ -20,14 +25,24 @@ const QuickActionsGrid = ({ onLogIntake, onQCInspection, onFindBatch }: QuickAct
       action: onLogIntake,
     },
     {
-      icon: Microscope,
-      title: 'QC Inspection',
-      sub: 'Grade & Sort',
+      icon: UserPlus,
+      title: 'Register Farmer',
+      sub: 'Onboard New Farmer',
       color: 'text-[#1565C0]',
       bgColor: 'bg-[#E3F2FD]',
       borderColor: 'border-[#1565C0]/20',
       hoverColor: 'hover:border-[#1565C0]',
-      action: onQCInspection,
+      action: onRegisterFarmer,
+    },
+    {
+      icon: Sprout,
+      title: 'Create Crop Cycle',
+      sub: 'Plan New Season',
+      color: 'text-emerald-700',
+      bgColor: 'bg-emerald-50',
+      borderColor: 'border-emerald-700/20',
+      hoverColor: 'hover:border-emerald-700',
+      action: onCreateCycle,
     },
     {
       icon: Search,
@@ -42,23 +57,25 @@ const QuickActionsGrid = ({ onLogIntake, onQCInspection, onFindBatch }: QuickAct
   ];
 
   return (
-    <div className="grid grid-cols-3 gap-5 mb-6">
-      {actions.map((action, index) => (
-        <button
-          key={index}
-          onClick={action.action}
-          className={`flex items-center gap-4 p-4 rounded-xl border ${action.borderColor} bg-white dark:bg-gray-800 dark:border-white/10 border-theme shadow-sm transition-all duration-200 ${action.hoverColor} hover:shadow-md text-left group`}
-
-        >
-          <div className={`w-12 h-12 rounded-lg ${action.bgColor} flex items-center justify-center transition-transform group-hover:scale-105`}>
-            <action.icon className={`${action.color}`} size={24} strokeWidth={2} />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-[#222222] dark:text-white">{action.title}</h3>
-            <p className="text-xs text-[#6B7280] dark:text-gray-400 mt-0.5">{action.sub}</p>
-          </div>
-        </button>
-      ))}
+    <div className="mb-6">
+      <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">Quick Actions</h3>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+        {actions.map((action, index) => (
+          <button
+            key={index}
+            onClick={action.action}
+            className={`flex items-center gap-4 p-4 rounded-xl border ${action.borderColor} bg-white dark:bg-gray-800 dark:border-white/10 border-theme shadow-sm transition-all duration-200 ${action.hoverColor} hover:shadow-md text-left group`}
+          >
+            <div className={`w-12 h-12 rounded-lg ${action.bgColor} flex items-center justify-center transition-transform group-hover:scale-105 shrink-0`}>
+              <action.icon className={`${action.color}`} size={24} strokeWidth={2} />
+            </div>
+            <div className="overflow-hidden">
+              <h3 className="text-sm font-bold text-[#222222] dark:text-white truncate">{action.title}</h3>
+              <p className="text-xs text-[#6B7280] dark:text-gray-400 mt-0.5 truncate">{action.sub}</p>
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 };

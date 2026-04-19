@@ -197,7 +197,7 @@ const FMActivityLogModal = ({ cycleName, tasks, onClose, onResubmit }: FMActivit
             />
 
             {/* Modal */}
-            <div className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col max-h-[88vh] overflow-hidden">
+            <div className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col max-h-[85vh] overflow-hidden">
 
                 {/* ── Header ── */}
                 <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/50 shrink-0">
@@ -248,7 +248,7 @@ const FMActivityLogModal = ({ cycleName, tasks, onClose, onResubmit }: FMActivit
                 </div>
 
                 {/* ── Body ── */}
-                <div className="flex-1 overflow-y-auto p-5">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-5">
                     {sorted.length === 0 ? (
                         /* Empty State */
                         <div className="flex flex-col items-center justify-center h-full min-h-[220px] text-center py-8 px-4">
