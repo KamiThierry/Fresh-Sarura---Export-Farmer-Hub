@@ -16,7 +16,7 @@ const FarmDashboard = () => {
     const [isSuppliesModalOpen, setIsSuppliesModalOpen] = useState(false);
     const [timeRange, setTimeRange] = useState(30); // days
 
-    const { dashboard, cycles, loading, submitFieldReport, submitBudgetRequest } = useFarmManager();
+    const { dashboard, cycles, loading, submitFieldReport, submitBudgetRequest, declareHarvest } = useFarmManager();
 
     // Get farmer name from localStorage user object (set at login)
     const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -322,20 +322,9 @@ const FarmDashboard = () => {
             <HarvestReadyModal
                 isOpen={isHarvestModalOpen}
                 onClose={() => setIsHarvestModalOpen(false)}
-                onSubmitConfirm={async (cropText) => {
-                    // Find the cycle being declared
-                    const cycle = activeCycles.find((c: any) =>
-                        c.crop_name?.toLowerCase().includes(cropText.toLowerCase().split(' ')[0])
-                    );
-                    if (cycle) {
-                        // Log as a field report so PM can see it
-                        await submitFieldReport({
-                            cycleId: cycle._id,
-                            description: `Harvest Ready Declaration: ${cropText}`,
-                            actualCostRwf: 0,
-                            notes: `Farm Manager declared harvest ready for ${cropText}`,
-                        });
-                    }
+                cycles={activeCycles}
+                onSubmitConfirm={async (data) => {
+                    await declareHarvest(data);
                 }}
             />
             <RequestSuppliesModal

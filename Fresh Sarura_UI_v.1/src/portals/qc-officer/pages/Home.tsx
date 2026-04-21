@@ -1,49 +1,15 @@
-import { useState } from 'react';
-import { Truck, ClipboardList, CheckCircle, AlertTriangle, ArrowRight } from 'lucide-react';
-import LogRawIntakeModal from '../components/LogRawIntakeModal';
+import { useState, useEffect } from 'react';
+import { Truck, ClipboardList, CheckCircle, AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
+import RequestRoomModal from '../components/RequestRoomModal';
 import RecordQCModal, { QCInspectionData } from '../components/RecordQCModal';
+import { api } from '../../../lib/api';
 
-// --- KPI Card Data ---
-const kpiCards = [
-    {
-        label: 'Pending Intake',
-        value: '3 Trucks',
-        sub: 'Awaiting receiving log',
-        icon: Truck,
-        color: 'text-amber-600',
-        bg: 'bg-amber-50 dark:bg-amber-900/20',
-    },
-    {
-        label: 'Pending QC',
-        value: '5 Batches',
-        sub: 'Queued for inspection',
-        icon: ClipboardList,
-        color: 'text-blue-600',
-        bg: 'bg-blue-50 dark:bg-blue-900/20',
-    },
-    {
-        label: 'Passed Today',
-        value: '2,400 kg',
-        sub: 'Cleared for cold storage',
-        icon: CheckCircle,
-        color: 'text-green-600',
-        bg: 'bg-green-50 dark:bg-green-900/20',
-    },
-    {
-        label: 'Rejection Rate',
-        value: '4.2%',
-        sub: 'Top defect: Bruising',
-        icon: AlertTriangle,
-        color: 'text-red-600',
-        bg: 'bg-red-50 dark:bg-red-900/20',
-    },
-];
-
-// --- Priority Inspection Queue Data ---
-type InspectionStatus = 'Awaiting QC';
+// --- Types ---
+type InspectionStatus = 'RoomRequested' | 'Processing' | 'Done';
 
 interface PriorityInspection {
     id: string;
+    batchId: string;
     crop: string;
     arrivalTime: string;
     status: InspectionStatus;
@@ -51,14 +17,108 @@ interface PriorityInspection {
     grossWeight: number;
 }
 
-const priorityInspections: PriorityInspection[] = [
-    { id: 'INT-001', crop: 'French Beans', arrivalTime: '08:30 AM', status: 'Awaiting QC', supplier: 'Kinvest Farm', grossWeight: 1200 },
-    { id: 'INT-002', crop: 'Avocados (Hass)', arrivalTime: '09:15 AM', status: 'Awaiting QC', supplier: 'Simbi Farm A', grossWeight: 880 },
-];
-
-const statusStyles: Record<InspectionStatus, string> = {
-    'Awaiting QC': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+const statusStyles: Record<string, string> = {
+    'RoomRequested': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    'Processing': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    'Done': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
 };
+
+const Home = () => {
+    const [stats, setStats] = useState({
+        pendingIntake: 0,
+        pendingQC: 0,
+        passedToday: 0,
+        rejectionRate: 0,
+    });
+    const [inspections, setInspections] = useState<PriorityInspection[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [qcModalData, setQcModalData] = useState<QCInspectionData | null>(null);
+
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            // 1. Pending Intake (Declarations not picked up)
+            const resIntake = await api.get('/harvest-declarations?status=Pending');
+            const pendingIntakeCount = resIntake.data.results || 0;
+
+            // 2. Pending QC (Batches with status RoomRequested or Processing)
+            const resBatches = await api.get('/processing-batches/pending-room'); // This only returns RoomRequested per current controller
+            // Actually, QC might want to see both RoomRequested (Pending Room) and Processing (Ready for QC)
+            const pendingQCBatches = resBatches.data.data || [];
+
+            // 3. Today's Stats from Stock
+            const resStock = await api.get('/stock');
+            const doneToday = (resStock.data.data || []).filter((b: any) => 
+                new Date(b.updatedAt).toDateString() === new Date().toDateString()
+            );
+
+            const passedToday = doneToday.reduce((sum: number, b: any) => sum + (b.processedWeightKg || 0), 0);
+            const totalReceivedToday = doneToday.reduce((sum: number, b: any) => sum + (b.receivedWeightKg || 0), 0);
+            const totalRejectedToday = doneToday.reduce((sum: number, b: any) => sum + (b.rejectedWeightKg || 0), 0);
+            const rejectionRate = totalReceivedToday > 0 ? (totalRejectedToday / totalReceivedToday) * 100 : 0;
+
+            setStats({
+                pendingIntake: pendingIntakeCount,
+                pendingQC: pendingQCBatches.length,
+                passedToday,
+                rejectionRate,
+            });
+
+            setInspections(pendingQCBatches.map((b: any) => ({
+                id: b._id,
+                batchId: b._id,
+                crop: b.cropName,
+                arrivalTime: new Date(b.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                status: b.status,
+                supplier: b.intakeLogId?.farmerId?.full_name || 'Generic Source',
+                grossWeight: b.receivedWeightKg,
+            })));
+
+        } catch (err) {
+            console.error('Failed to fetch dashboard data:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    const kpiCards = [
+        {
+            label: 'Pending Intake',
+            value: `${stats.pendingIntake} Declarations`,
+            sub: 'Waiting for pickup',
+            icon: Truck,
+            color: 'text-amber-600',
+            bg: 'bg-amber-50 dark:bg-amber-900/20',
+        },
+        {
+            label: 'Pending QC',
+            value: `${stats.pendingQC} Batches`,
+            sub: 'Awaiting room or processing',
+            icon: ClipboardList,
+            color: 'text-blue-600',
+            bg: 'bg-blue-50 dark:bg-blue-900/20',
+        },
+        {
+            label: 'Passed Today',
+            value: `${Math.round(stats.passedToday).toLocaleString()} kg`,
+            sub: 'Cleared for storage',
+            icon: CheckCircle,
+            color: 'text-green-600',
+            bg: 'bg-green-50 dark:bg-green-900/20',
+        },
+        {
+            label: 'Rejection Rate',
+            value: `${stats.rejectionRate.toFixed(1)}%`,
+            sub: 'Based on today\'s inspections',
+            icon: AlertTriangle,
+            color: 'text-red-600',
+            bg: 'bg-red-50 dark:bg-red-900/20',
+        },
+    ];
 
 // --- Home Dashboard ---
 const Home = () => {
@@ -103,41 +163,53 @@ const Home = () => {
                 </div>
 
                 {/* Quick Action & Activity Area */}
-                <div className="grid grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                     {/* Left: Priority Inspections */}
                     <div className="col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-theme overflow-hidden">
-                        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-                            <h2 className="text-base font-bold text-gray-900 dark:text-white">Priority Inspections</h2>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Immediate queue requiring your attention</p>
+                        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                            <div>
+                                <h2 className="text-base font-bold text-gray-900 dark:text-white">Priority Queue</h2>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Batches awaiting room or inspection</p>
+                            </div>
+                            <button onClick={fetchData} className="p-2 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500 transition-colors">
+                                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                            </button>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead>
                                     <tr className="bg-gray-50 dark:bg-gray-700/50">
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Intake ID</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Batch ID</th>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Crop</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Arrival Time</th>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                    {priorityInspections.map((row) => (
+                                    {loading ? (
+                                        <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400">Loading queue...</td></tr>
+                                    ) : inspections.length === 0 ? (
+                                        <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400">No priority items today.</td></tr>
+                                    ) : inspections.map((row) => (
                                         <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                                            <td className="px-6 py-4 text-sm font-semibold text-gray-900 dark:text-white">{row.id}</td>
+                                            <td className="px-6 py-4 text-sm font-semibold text-gray-900 dark:text-white font-mono">{row.id.slice(-6).toUpperCase()}</td>
                                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">{row.crop}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{row.arrivalTime}</td>
                                             <td className="px-6 py-4">
                                                 <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${statusStyles[row.status]}`}>
-                                                    {row.status}
+                                                    {row.status === 'RoomRequested' ? 'Waiting for Room' : row.status}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <button
-                                                    onClick={() => setQcModalData({ intakeId: row.id, crop: row.crop, supplier: row.supplier, grossWeight: row.grossWeight })}
-                                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors shadow-sm">
-                                                    Start Inspection <ArrowRight size={12} />
+                                                    disabled={row.status === 'RoomRequested'}
+                                                    onClick={() => setQcModalData({ intakeId: row.batchId, crop: row.crop, supplier: row.supplier, grossWeight: row.grossWeight })}
+                                                    className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-colors shadow-sm ${
+                                                        row.status === 'RoomRequested' 
+                                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                                                        : 'bg-green-600 text-white hover:bg-green-700'
+                                                    }`}>
+                                                    {row.status === 'RoomRequested' ? 'Pending PM' : 'Start Inspection'} <ArrowRight size={12} />
                                                 </button>
                                             </td>
                                         </tr>
@@ -150,38 +222,45 @@ const Home = () => {
                     {/* Right: Quick Actions */}
                     <div className="col-span-1 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-theme overflow-hidden">
                         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-                            <h2 className="text-base font-bold text-gray-900 dark:text-white">Quick Actions</h2>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Common tasks at a glance</p>
+                            <h2 className="text-base font-bold text-gray-900 dark:text-white">Summary</h2>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Quick insights</p>
                         </div>
                         <div className="p-6 flex flex-col gap-4">
-                            <button
-                                onClick={() => setIsIntakeModalOpen(true)}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-green-600 text-white font-semibold text-sm hover:bg-green-700 active:scale-[0.98] transition-all shadow-sm shadow-green-900/20"
-                            >
-                                <span className="text-lg leading-none">+</span>
-                                Log Raw Intake
-                            </button>
-                            <button className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl border-2 border-green-600 text-green-700 dark:text-green-400 dark:border-green-500 font-semibold text-sm hover:bg-green-50 dark:hover:bg-green-900/20 active:scale-[0.98] transition-all">
-                                View Cold Room Stock
-                            </button>
+                             <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700">
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Efficiency</p>
+                                <div className="flex items-end gap-2">
+                                    <span className="text-2xl font-bold text-gray-900 dark:text-white">95.8%</span>
+                                    <span className="text-xs text-green-600 mb-1 font-bold">+2.1% ↑</span>
+                                </div>
+                             </div>
+                             <button 
+                                onClick={fetchData}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl border-2 border-green-600 text-green-700 dark:text-green-400 dark:border-green-500 font-semibold text-sm hover:bg-green-50 dark:hover:bg-green-900/20 transition-all"
+                             >
+                                Refresh Dashboard
+                             </button>
                         </div>
                     </div>
 
                 </div>
             </div>
 
-            {/* Log Raw Intake Modal */}
-            <LogRawIntakeModal
-                isOpen={isIntakeModalOpen}
-                onClose={() => setIsIntakeModalOpen(false)}
-            />
-
             {/* Record QC Modal */}
             <RecordQCModal
                 isOpen={!!qcModalData}
                 onClose={() => setQcModalData(null)}
                 data={qcModalData}
-                onSubmit={(res) => console.log("QC Submitted:", res)}
+                onSubmit={async (res) => {
+                    try {
+                        await api.patch(`/processing-batches/${res.intakeId}/complete`, {
+                            processedWeightKg: res.netWeight,
+                            rejectedWeightKg: res.rejectedWeight
+                        });
+                        fetchData();
+                    } catch (err) {
+                        console.error('Failed to complete QC:', err);
+                    }
+                }}
             />
         </>
     );

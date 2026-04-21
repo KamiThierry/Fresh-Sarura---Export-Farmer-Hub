@@ -5,6 +5,7 @@ interface DashboardStatsProps {
   todaysIntake?: string;
   activeCyclesCount?: number;
   scheduledExports?: string;
+  pendingRoomRequestsCount?: number;
   userName?: string;
 }
 
@@ -12,6 +13,7 @@ const DashboardStats = ({
   todaysIntake = "2,450 kg",
   activeCyclesCount = 0,
   scheduledExports = "8 Tons",
+  pendingRoomRequestsCount = 0,
   userName = "Manager"
 }: DashboardStatsProps) => {
   const stats = [
@@ -27,9 +29,12 @@ const DashboardStats = ({
       icon: Thermometer,
       label: 'Cold Room Stock',
       value: '12.5 Tons',
-      sub: '4 Tons expiring soon',
-      color: 'text-blue-600',
-      bg: 'bg-blue-50 dark:bg-blue-900/20',
+      sub: pendingRoomRequestsCount > 0 
+        ? `${pendingRoomRequestsCount} Room Requests Pending` 
+        : '4 Tons expiring soon',
+      color: pendingRoomRequestsCount > 0 ? 'text-red-600 font-bold' : 'text-blue-600',
+      bg: pendingRoomRequestsCount > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-blue-50 dark:bg-blue-900/20',
+      badge: pendingRoomRequestsCount > 0 ? pendingRoomRequestsCount : null
     },
     {
       icon: Sprout,
@@ -87,8 +92,15 @@ const DashboardStats = ({
                 </h3>
               </div>
               <div className={`p-3 rounded-xl ${stat.bg}`}>
-                <stat.icon className={`${stat.color} dark:text-gray-100`} size={24} />
+               <stat.icon className={`${stat.color} dark:text-gray-100`} size={24} />
               </div>
+              {'badge' in stat && stat.badge && (
+                <div className="absolute top-0 right-0 -mt-1 -mr-1">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-lg animate-bounce">
+                    {stat.badge}
+                  </span>
+                </div>
+              )}
             </div>
 
             <p className={`text-sm font-medium ${stat.color} dark:text-gray-300`}>

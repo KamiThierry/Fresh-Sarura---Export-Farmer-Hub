@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
-import { Sprout, Plus, AlertTriangle, ChevronRight, BarChart2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Sprout, Plus, AlertTriangle, ChevronRight, BarChart2, AlertCircle, CheckCircle2, Thermometer } from 'lucide-react';
 import CreateCropCycleModal from '../components/CreateCropCycleModal';
 import CropCycleDetailModal from '../components/CropCycleDetailModal';
 import BudgetRejectionModal from '../components/BudgetRejectionModal';
+import AssignRoomModal from '../components/AssignRoomModal';
 import Toast from '../../shared/component/Toast';
 import { usePMContext } from '@/context/PMContext';
 
@@ -21,16 +22,22 @@ const CropPlanning = () => {
     const [overdraftWarning, setOverdraftWarning] = useState<any>(null); // { requestId, details }
     const [initialAdjust, setInitialAdjust] = useState(false);
 
+    // Room Request Modal State
+    const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
+    const [selectedBatch, setSelectedBatch] = useState<any>(null);
+
     const { 
         cycles, 
         pendingRequests, 
         pendingForecasts,
         pendingReports,
+        pendingRoomRequests,
         loading, 
         refreshCycles, 
         refreshPendingRequests,
         refreshPendingForecasts,
-        refreshPendingReports 
+        refreshPendingReports,
+        refreshPendingRoomRequests
     } = usePMContext();
     
     // Split cycles into active/harvesting and completed
@@ -127,7 +134,8 @@ const CropPlanning = () => {
                 const unreadRequests = pendingRequests.filter((r: any) => !r.isReadByPM);
                 const unreadForecasts = pendingForecasts.filter((f: any) => !f.isReadByPM);
                 const unreadReports = pendingReports.filter((r: any) => !r.isReadByPM);
-                const hasActions = unreadRequests.length > 0 || unreadForecasts.length > 0 || unreadReports.length > 0;
+                const showRoomRequests = pendingRoomRequests.length > 0;
+                const hasActions = unreadRequests.length > 0 || unreadForecasts.length > 0 || unreadReports.length > 0 || showRoomRequests;
 
                 if (!hasActions) return null;
 
@@ -266,6 +274,42 @@ const CropPlanning = () => {
                                     </div>
                                 );
                             })}
+
+                            {/* Room Assignment Alerts */}
+                            {pendingRoomRequests.map((batch) => (
+                                <div 
+                                    key={batch._id} 
+                                    className="bg-white dark:bg-gray-800 rounded-2xl p-6 border-l-4 border-emerald-400 shadow-sm relative overflow-hidden cursor-pointer hover:shadow-md transition-shadow group/card"
+                                    onClick={() => {
+                                        setSelectedBatch(batch);
+                                        setIsRoomModalOpen(true);
+                                    }}
+                                >
+                                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover/card:opacity-10 transition-opacity">
+                                        <Thermometer size={80} />
+                                    </div>
+
+                                    <div className="relative z-10 flex justify-between items-center">
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400">
+                                                    Inventory Handover
+                                                </span>
+                                                <span className="text-xs text-gray-400">• Cold Room Request</span>
+                                            </div>
+                                            <h2 className="text-base font-bold text-gray-900 dark:text-white">
+                                                Assign Storage: {batch.cropName} ({batch.receivedWeightKg?.toLocaleString()} kg)
+                                            </h2>
+                                            <p className="text-gray-600 dark:text-gray-300 mt-1 text-sm">
+                                                Requested by {batch.requestedBy?.name || 'Processing Team'} • {new Date(batch.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </p>
+                                        </div>
+                                        <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm">
+                                            Assign Room
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 );
@@ -388,6 +432,23 @@ const CropPlanning = () => {
                     } else {
                         setOverdraftWarning(null);
                     }
+                }}
+            />
+
+            {/* Modal 4: Assign Cold Room */}
+            <AssignRoomModal
+                isOpen={isRoomModalOpen}
+                onClose={() => {
+                    setIsRoomModalOpen(false);
+                    setSelectedBatch(null);
+                }}
+                batch={selectedBatch}
+                onSuccess={() => {
+                    refreshPendingRoomRequests();
+                    setToast({ 
+                        message: 'Room Assigned!', 
+                        subtitle: `${selectedBatch?.cropName} batch is now storage-tracked.` 
+                    });
                 }}
             />
         </div>

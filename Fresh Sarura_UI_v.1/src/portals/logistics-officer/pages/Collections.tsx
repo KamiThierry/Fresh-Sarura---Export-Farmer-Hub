@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Truck, MapPin, Search, Filter, CheckCircle2, AlertTriangle, ArrowRight, Plane, Package, Phone, X as XIcon, X, UserCircle, Map as MapIcon } from 'lucide-react';
+import { Truck, MapPin, Filter, CheckCircle2, AlertTriangle, ArrowRight, Plane, Package, Phone, X as XIcon, X, UserCircle, Map as MapIcon, Loader2 } from 'lucide-react';
 import RoutePreviewMap from '../components/RoutePreviewMap';
+import LogPickupModal from '../components/LogPickupModal';
+import { api } from '../../../lib/api';
 
 
-const HARVEST_DEMAND = [
-    { id: '1', farm: 'Simbi Farm A', crop: 'Avocado (Hass)', weight: 2000, status: 'Harvested 4h ago', urgency: 'low', lat: -2.333, lng: 29.650 },
-    { id: '2', farm: 'Simbi Farm B', crop: 'Avocado (Fuerte)', weight: 1500, status: 'Harvested 48h ago', urgency: 'high', lat: -2.350, lng: 29.660 },
-    { id: '3', farm: 'Kigali Urban Farm', crop: 'Chili (Bird\u2019s Eye)', weight: 500, status: 'Harvested 2h ago', urgency: 'low', lat: -1.970, lng: 30.100 },
-];
+// Mock data remaining for Fleet and Airport Transfers
+// HARVEST_DEMAND is now fetched from the API
 
 const FLEET_SUPPLY = [
     { id: 'T1', driver: 'John Mugisha', truck: 'RAC 123 A', type: '5 Ton', capacity: 5000, currentLoad: 0, status: 'Available', lat: -1.950, lng: 30.060 },
@@ -27,15 +26,58 @@ const Collections = () => {
     const assignAction = searchParams.get('action');
     const assignFarm = searchParams.get('farm');
 
+    const [harvestDeclarations, setHarvestDeclarations] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
     const [dispatchMode, setDispatchMode] = useState<'farm' | 'airport'>('farm');
     const [selectedFarms, setSelectedFarms] = useState<string[]>([]);
     const [selectedTruck, setSelectedTruck] = useState<string | null>(null);
     const [dispatched, setDispatched] = useState(false);
+
+    // Modal State for Log Pickup
+    const [isPickupModalOpen, setIsPickupModalOpen] = useState(false);
+    const [selectedForPickup, setSelectedForPickup] = useState<any>(null);
+
     const [regionFilter, setRegionFilter] = useState('All Regions');
     const [vehicleFilter, setVehicleFilter] = useState('All Vehicles');
 
+    const fetchDeclarations = async () => {
+        try {
+            setLoading(true);
+            const res = await api.get('/harvest-declarations?status=Pending');
+            setHarvestDeclarations(res.data);
+            setError(null);
+        } catch (err: any) {
+            console.error('Failed to fetch harvest declarations:', err);
+            setError(err.message || 'Failed to load dispatch queue');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchDeclarations();
+    }, []);
+
+    // Map real declarations to the internal UI structure
+    const mappedDemand = harvestDeclarations.map(d => {
+        const hoursAgo = Math.floor((new Date().getTime() - new Date(d.createdAt).getTime()) / (1000 * 60 * 60));
+        return {
+            id: d._id,
+            farm: d.farmName || (d.farmerId?.full_name || 'Unknown Farm'),
+            crop: d.cropName,
+            weight: d.estimatedWeightKg,
+            status: hoursAgo === 0 ? 'Harvested just now' : `Harvested ${hoursAgo}h ago`,
+            urgency: hoursAgo > 24 ? 'high' : 'low',
+            // Defaulting coords as they are not in the declaration model yet
+            lat: d.lat || -2.333 + (Math.random() * 0.1),
+            lng: d.lng || 29.650 + (Math.random() * 0.1),
+        };
+    });
+
     // Filter Logic
-    const filteredDemand = HARVEST_DEMAND.filter(item => regionFilter === 'All Regions' || item.farm.includes(regionFilter));
+    const filteredDemand = mappedDemand.filter(item => regionFilter === 'All Regions' || item.farm.includes(regionFilter));
     const filteredTransfers = AIRPORT_TRANSFERS.filter(item => regionFilter === 'All Regions' || item.farm.includes(regionFilter));
     const filteredFleet = FLEET_SUPPLY.filter(item => vehicleFilter === 'All Vehicles' || item.status === vehicleFilter);
 
@@ -61,7 +103,7 @@ const Collections = () => {
 
     const totalWeight = selectedFarms.reduce((sum, id) => {
         const item = dispatchMode === 'farm'
-            ? HARVEST_DEMAND.find(f => f.id === id)
+            ? mappedDemand.find(f => f.id === id)
             : AIRPORT_TRANSFERS.find(a => a.id === id);
         return sum + (item?.weight || 0);
     }, 0);
@@ -69,9 +111,6 @@ const Collections = () => {
     const selectedTruckData = FLEET_SUPPLY.find(t => t.id === selectedTruck);
     const isOverweight = selectedTruckData ? totalWeight > selectedTruckData.capacity : false;
     const canDispatch = selectedFarms.length > 0 && selectedTruck && !isOverweight;
-
-    // Mock distance calculation
-    const routeDistance = selectedFarms.length > 0 && selectedTruck ? Math.floor(Math.random() * 50) + 10 : 0;
 
     const handleDispatch = () => {
         setDispatched(true);
@@ -219,79 +258,102 @@ const Collections = () => {
                                     </button>
                                 </div>
                             </div>
-                            <span className="bg-gray-200 dark:bg-gray-700 text-xs px-2 py-0.5 rounded-full text-gray-700 dark:text-gray-300">
-                                {dispatchMode === 'farm' ? filteredDemand.length : filteredTransfers.length}
-                            </span>
                         </div>
-
-                        <div className="space-y-3 overflow-y-auto pr-2 flex-1">
-                            {dispatchMode === 'farm' ? (
-                                filteredDemand.map(farm => (
-                                    <div
-                                        key={farm.id}
-                                        onClick={() => toggleFarmSelection(farm.id)}
-                                        className={`bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border-2 cursor-pointer transition-all hover:shadow-md
-                                            ${selectedFarms.includes(farm.id) ? 'border-green-500 ring-1 ring-green-500' : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'}`}
-                                    >
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex items-start gap-3">
-                                                <div className={`mt-1 w-5 h-5 rounded border flex items-center justify-center transition-colors
-                                                    ${selectedFarms.includes(farm.id) ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
-                                                    {selectedFarms.includes(farm.id) && <CheckCircle2 size={14} className="text-white" />}
-                                                </div>
-                                                <div>
-                                                    <h3 className="font-bold text-gray-900 dark:text-white">{farm.farm}</h3>
-                                                    <p className="text-sm text-gray-500">{farm.crop}</p>
-                                                    <div className="flex items-center gap-2 mt-2">
-                                                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                                                            {(farm.weight).toLocaleString()} kg
-                                                        </span>
-                                                        <span className={`text-xs px-2 py-1 rounded flex items-center gap-1
-                                                            ${farm.urgency === 'high' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                                                            {farm.urgency === 'high' && <AlertTriangle size={10} />}
-                                                            {farm.status}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
+                        <div className="space-y-3 overflow-y-auto pr-2 flex-1 min-h-[200px]">
+                            {loading ? (
+                                <div className="flex flex-col items-center justify-center h-full gap-2 py-10">
+                                    <Loader2 className="animate-spin text-green-500" size={24} />
+                                    <p className="text-xs text-gray-500 font-medium">Loading dispatch queue...</p>
+                                </div>
+                            ) : error ? (
+                                <div className="flex flex-col items-center justify-center h-full gap-2 py-10 px-4 text-center">
+                                    <AlertTriangle className="text-red-500" size={24} />
+                                    <p className="text-xs text-red-600 font-bold">{error}</p>
+                                    <button onClick={fetchDeclarations} className="text-[10px] text-blue-500 underline">Try again</button>
+                                </div>
+                            ) : filteredDemand.length === 0 && dispatchMode === 'farm' ? (
+                                <div className="flex flex-col items-center justify-center h-full py-10 px-4 text-center">
+                                    <span className="text-2xl mb-2">🚛</span>
+                                    <p className="text-xs text-gray-500 font-medium">No pending harvest collections in this region.</p>
+                                </div>
                             ) : (
-                                filteredTransfers.map(transfer => (
-                                    <div
-                                        key={transfer.id}
-                                        onClick={() => toggleFarmSelection(transfer.id)}
-                                        className={`bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border-2 cursor-pointer transition-all hover:shadow-md
-                                            ${selectedFarms.includes(transfer.id) ? 'border-blue-500 ring-1 ring-blue-500' : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'}`}
-                                    >
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex items-start gap-3">
-                                                <div className={`mt-1 w-5 h-5 rounded border flex items-center justify-center transition-colors
-                                                    ${selectedFarms.includes(transfer.id) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
-                                                    {selectedFarms.includes(transfer.id) && <CheckCircle2 size={14} className="text-white" />}
+                                dispatchMode === 'farm' ? (
+                                    filteredDemand.map(farm => (
+                                        <div
+                                            key={farm.id}
+                                            onClick={() => toggleFarmSelection(farm.id)}
+                                            className={`bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border-2 cursor-pointer transition-all hover:shadow-md
+                                            ${selectedFarms.includes(farm.id) ? 'border-green-500 ring-1 ring-green-500' : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'}`}
+                                        >
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex items-start gap-3">
+                                                    <div className={`mt-1 w-5 h-5 rounded border flex items-center justify-center transition-colors
+                                                    ${selectedFarms.includes(farm.id) ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
+                                                        {selectedFarms.includes(farm.id) && <CheckCircle2 size={14} className="text-white" />}
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-bold text-gray-900 dark:text-white">{farm.farm}</h3>
+                                                        <p className="text-sm text-gray-500">{farm.crop}</p>
+                                                        <div className="flex items-center gap-2 mt-2">
+                                                            <span className="text-xs font-bold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                                                                {(farm.weight).toLocaleString()} kg
+                                                            </span>
+                                                            <span className={`text-xs px-2 py-1 rounded flex items-center gap-1
+                                                            ${farm.urgency === 'high' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                                                {farm.urgency === 'high' && <AlertTriangle size={10} />}
+                                                                {farm.status}
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                                        <Plane size={16} className="text-blue-500" />
-                                                        {transfer.destination}
-                                                    </h3>
-                                                    <p className="text-sm text-gray-500 mt-1">Flight {transfer.flight} • AWB: {transfer.awb}</p>
-                                                    <div className="flex items-center gap-2 mt-2">
-                                                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                                                            {(transfer.weight).toLocaleString()} kg • {transfer.skids} Skids
-                                                        </span>
-                                                        <span className={`text-xs px-2 py-1 rounded flex items-center gap-1
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedForPickup(farm);
+                                                        setIsPickupModalOpen(true);
+                                                    }}
+                                                    className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-[11px] font-bold rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm border border-blue-100 dark:border-blue-900/30"
+                                                >
+                                                    Log Pickup
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    filteredTransfers.map(transfer => (
+                                        <div
+                                            key={transfer.id}
+                                            onClick={() => toggleFarmSelection(transfer.id)}
+                                            className={`bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border-2 cursor-pointer transition-all hover:shadow-md
+                                            ${selectedFarms.includes(transfer.id) ? 'border-blue-500 ring-1 ring-blue-500' : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'}`}
+                                        >
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex items-start gap-3">
+                                                    <div className={`mt-1 w-5 h-5 rounded border flex items-center justify-center transition-colors
+                                                    ${selectedFarms.includes(transfer.id) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
+                                                        {selectedFarms.includes(transfer.id) && <CheckCircle2 size={14} className="text-white" />}
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                                            <Plane size={16} className="text-blue-500" />
+                                                            {transfer.destination}
+                                                        </h3>
+                                                        <p className="text-sm text-gray-500 mt-1">Flight {transfer.flight} • AWB: {transfer.awb}</p>
+                                                        <div className="flex items-center gap-2 mt-2">
+                                                            <span className="text-xs font-bold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                                                                {(transfer.weight).toLocaleString()} kg • {transfer.skids} Skids
+                                                            </span>
+                                                            <span className={`text-xs px-2 py-1 rounded flex items-center gap-1
                                                             ${transfer.urgency === 'high' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                            {transfer.status}
-                                                        </span>
+                                                                {transfer.status}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))
-                            )}
+                                    ))
+                            ))}
                         </div>
                     </div>
 
@@ -406,7 +468,9 @@ const Collections = () => {
 
                         <div className="mt-auto pt-4 border-t border-gray-100 dark:border-gray-700">
                             <p className="text-[11px] uppercase tracking-wider text-gray-400 mb-0.5">Active Zones</p>
-                            <p className="text-2xl font-bold text-gray-900 dark:text-white">{HARVEST_DEMAND.length}</p>
+                            <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                                {dispatchMode === 'farm' ? filteredDemand.length : filteredTransfers.length}
+                            </p>
                         </div>
                     </div>
 
@@ -493,6 +557,16 @@ const Collections = () => {
                     </button>
                 </div>
             </div>
+
+            <LogPickupModal
+                isOpen={isPickupModalOpen}
+                onClose={() => {
+                    setIsPickupModalOpen(false);
+                    setSelectedForPickup(null);
+                }}
+                declaration={selectedForPickup}
+                onSuccess={fetchDeclarations}
+            />
 
         </div>
     );

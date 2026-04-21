@@ -5,35 +5,56 @@ import { X, Truck, CheckCircle2 } from 'lucide-react';
 interface HarvestReadyModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSubmitConfirm?: (crop: string) => void;
+    cycles: any[];
+    /** Called with the declaration payload on confirm */
+    onSubmitConfirm?: (data: {
+        cycleId: string;
+        estimatedWeightKg: number;
+        cropName: string;
+        notes?: string;
+    }) => Promise<void>;
 }
 
-const CROP_CYCLES = [
-    'Avocado (Hass) — Block A',
-    'Avocado (Fuerte) — Block B',
-    'French Beans — Block C',
-    'Chili (Bird Eye) — Block D',
-    'Chili (Bird Eye) — Block E',
-];
-
-const HarvestReadyModal = ({ isOpen, onClose, onSubmitConfirm }: HarvestReadyModalProps) => {
-    const [cropCycle, setCropCycle] = useState(CROP_CYCLES[0]);
+const HarvestReadyModal = ({ isOpen, onClose, cycles, onSubmitConfirm }: HarvestReadyModalProps) => {
+    const [selectedCycleId, setSelectedCycleId] = useState('');
     const [volume, setVolume] = useState('');
     const [notes, setNotes] = useState('');
     const [submitted, setSubmitted] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Default to first cycle if available
+    if (isOpen && cycles.length > 0 && !selectedCycleId) {
+        setSelectedCycleId(cycles[0]._id);
+    }
 
     if (!isOpen) return null;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setSubmitted(true);
-        setTimeout(() => {
-            setSubmitted(false);
-            if (onSubmitConfirm) onSubmitConfirm(cropCycle);
-            setVolume('');
-            setNotes('');
-            onClose();
-        }, 1800);
+        const cycle = cycles.find(c => c._id === selectedCycleId);
+        if (!cycle || !onSubmitConfirm) return;
+
+        setIsSubmitting(true);
+        try {
+            await onSubmitConfirm({
+                cycleId: cycle._id,
+                estimatedWeightKg: Number(volume),
+                cropName: cycle.crop_name,
+                notes,
+            });
+
+            setSubmitted(true);
+            setTimeout(() => {
+                setSubmitted(false);
+                setVolume('');
+                setNotes('');
+                onClose();
+            }, 1800);
+        } catch (err) {
+            console.error('Failed to declare harvest:', err);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return createPortal(
@@ -79,12 +100,15 @@ const HarvestReadyModal = ({ isOpen, onClose, onSubmitConfirm }: HarvestReadyMod
                                     Crop Cycle
                                 </label>
                                 <select
-                                    value={cropCycle}
-                                    onChange={e => setCropCycle(e.target.value)}
-                                    className="w-full px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-400/30 focus:border-green-400 transition-all"
+                                    value={selectedCycleId}
+                                    onChange={e => setSelectedCycleId(e.target.value)}
+                                    className="w-full px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-400/30 focus:border-green-400 transition-all font-medium"
                                 >
-                                    {CROP_CYCLES.map(c => (
-                                        <option key={c} value={c}>{c}</option>
+                                    {!selectedCycleId && <option value="">Select Cycle...</option>}
+                                    {cycles.map(c => (
+                                        <option key={c._id} value={c._id}>
+                                            {c.crop_name} — {c.block_name || c.season}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
@@ -131,10 +155,15 @@ const HarvestReadyModal = ({ isOpen, onClose, onSubmitConfirm }: HarvestReadyMod
                             </button>
                             <button
                                 type="submit"
-                                className="px-5 py-2 rounded-xl text-sm font-bold bg-green-600 hover:bg-green-700 text-white shadow-sm transition-colors flex items-center gap-2"
+                                disabled={isSubmitting || !selectedCycleId || !volume}
+                                className={`px-5 py-2 rounded-xl text-sm font-bold shadow-sm transition-colors flex items-center gap-2 ${
+                                    isSubmitting || !selectedCycleId || !volume
+                                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                                    : 'bg-green-600 hover:bg-green-700 text-white active:scale-[0.98]'
+                                }`}
                             >
                                 <Truck size={15} />
-                                Submit Request
+                                {isSubmitting ? 'Submitting...' : 'Submit Request'}
                             </button>
                         </div>
                     </form>

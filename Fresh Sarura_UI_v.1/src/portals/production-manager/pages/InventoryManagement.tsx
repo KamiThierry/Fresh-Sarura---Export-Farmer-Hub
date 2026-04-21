@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Search, Filter, Download, Plus, MoreHorizontal,
     Package, DollarSign, Layers,
     Leaf, ArrowRight, Clock,
-    ChevronDown, FileSpreadsheet, FileText
+    ChevronDown, FileSpreadsheet, FileText, RefreshCw
 } from 'lucide-react';
 import LogIntakeModal from '../components/LogIntakeModal';
 import QCSortingModal from '../components/QCSortingModal';
@@ -11,10 +11,13 @@ import CreateExportBatchModal from '../components/CreateExportBatchModal';
 import BatchDetailModal from '../components/BatchDetailModal';
 import Pagination from '../../shared/component/Pagination';
 import MoveToColdRoomModal, { ApprovedIntake } from '../components/MoveToColdRoomModal';
+import { api } from '../../../lib/api';
 
 const InventoryManagement = () => {
-    // Tab State: 'intake' | 'inventory' | 'export'
+    // Tab State: 'intake' | 'active_inventory' | 'export_batches' | 'recent_activity'
     const [activeTab, setActiveTab] = useState('active_inventory');
+    const [loading, setLoading] = useState(true);
+    const [stock, setStock] = useState<any[]>([]);
 
     // Modal States
     const [isIntakeOpen, setIsIntakeOpen] = useState(false);
@@ -36,98 +39,56 @@ const InventoryManagement = () => {
     // Global search
     const [searchTerm, setSearchTerm] = useState<string>('');
     // Pagination
-    const [intakePage, setIntakePage] = useState(1);
     const [inventoryPage, setInventoryPage] = useState(1);
-    const [exportPage, setExportPage] = useState(1);
-    const [activityPage, setActivityPage] = useState(1);
-    const itemsPerPage = 3;
+    const itemsPerPage = 5;
+
+    const fetchStock = async () => {
+        setLoading(true);
+        try {
+            const res = await api.get('/stock');
+            setStock(res.data.data || []);
+        } catch (err) {
+            console.error('Failed to fetch stock:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchStock();
+    }, []);
 
     // --- DERIVED / FILTERED DATA ---
 
-    // Tab 1: Intake (Receiving)
-    const intakeItems = [
-        { id: 'INT-2026-001', arrival: 'Today, 08:30 AM', farmer: 'Kinvest Farm', produce: 'Avocados', weight: '1,200 kg', status: 'Pending QC' },
-        { id: 'INT-2026-002', arrival: 'Today, 10:15 AM', farmer: 'Jean Claude', produce: 'French Beans', weight: '350 kg', status: 'Pending QC' },
-        { id: 'INT-2026-003', arrival: 'Yesterday, 04:00 PM', farmer: 'Cooperative A', produce: 'Chili', weight: '400 kg', status: 'Approved' },
-    ];
-
     // Tab 2: Inventory (Stock)
-    const [inventoryItems, setInventoryItems] = useState([
-        { id: 'STK-AVO-26', produce: 'Avocados (Hass)', grade: 'A', weight: '4,200 kg', location: 'Cold Room A', temp: '4.2°C', status: 'Available', daysInStorage: 3, shelfLifeDays: 18 },
-        { id: 'STK-AVO-27', produce: 'Avocados (Hass)', grade: 'A', weight: '1,500 kg', location: 'Cold Room B', temp: '4.5°C', status: 'Reserved', daysInStorage: 9, shelfLifeDays: 18 },
-        { id: 'STK-CHI-12', produce: 'Bird Eye Chili', grade: 'A', weight: '600 kg', location: 'Ambient', temp: '18°C', status: 'Available', daysInStorage: 2, shelfLifeDays: 10 },
-        { id: 'STK-MAN-05', produce: 'Mangoes (Apple)', grade: 'A', weight: '2,100 kg', location: 'Cold Room A', temp: '5.0°C', status: 'Allocated', daysInStorage: 6, shelfLifeDays: 7 },
-    ]);
+    const inventoryItems = stock.map(item => ({
+        id: item._id,
+        produce: item.cropName,
+        grade: 'A', // Assuming grade A for now, could be derived
+        weight: `${(item.processedWeightKg - item.rejectedWeightKg).toLocaleString()} kg`,
+        weightNum: item.processedWeightKg - item.rejectedWeightKg,
+        location: item.assignedRoom || 'Cold Room',
+        temp: '4.5°C',
+        status: 'Available',
+        daysInStorage: Math.floor((Date.now() - new Date(item.updatedAt).getTime()) / (1000 * 60 * 60 * 24)),
+        shelfLifeDays: 14
+    }));
 
-    // New: Approved Intakes waiting to be moved to storage
-    const [approvedIntakes, setApprovedIntakes] = useState<ApprovedIntake[]>([
-        { intakeId: 'INT-2026-003', farmer: 'Cooperative A', crop: 'Bird Eye Chili', netWeight: 380, grade: 'Grade A (Export)' },
-        { intakeId: 'INT-2026-004', farmer: 'Jean Claude', crop: 'French Beans', netWeight: 320, grade: 'Grade B (Local Market)' },
-    ]);
-
-    // Tab 3: Export Batches
-    const exportBatches = [
-        { id: 'B-2026-001', client: 'Nature Pride', dest: 'Rotterdam, NL', composition: 'Avocado (Grade A) - 1.2T', date: 'Jan 29', status: 'Planned' },
-        { id: 'B-2026-002', client: 'Carrefour UAE', dest: 'Dubai, UAE', composition: 'Mangoes - 800kg', date: 'Feb 02', status: 'Packing' },
-    ];
-
-    // Tab 4: Recent Activity
-    const activityItems = [
-        { id: 'ACT-001', time: '10:45 AM', type: 'Stock Adjustment', description: 'Removed spoiled avocados from Cold Room A', impact: '- 12kg', impactType: 'negative', user: 'John (Manager)' },
-        { id: 'ACT-002', time: '10:30 AM', type: 'QC Inspection', description: 'Graded Intake #INT-2026-001', impact: '+ 1,200kg Stock', impactType: 'positive', user: 'Sarah M. (QC)' },
-        { id: 'ACT-003', time: '09:15 AM', type: 'Intake Logged', description: 'Received Raw Beans from Kinvest', impact: '+ 1,250kg Raw', impactType: 'positive', user: 'Gate Clerk' },
-        { id: 'ACT-004', time: 'Yesterday', type: 'Export Batch', description: 'Allocated stock to Order #ORD-005', impact: '- 500kg Stock', impactType: 'negative', user: 'System (Auto)' },
-    ];
-
-    // Weight parser helper
-    const parseKg = (w: string) => parseFloat(w.replace(/,/g, '').replace(' kg', ''));
-
-    const lowerSearch = searchTerm.toLowerCase();
-
-    // Filtered inventory for stock tab
-    const filteredInventory = inventoryItems.filter(i => {
-        const matchesProduce = produceFilter === 'all' || i.produce === produceFilter;
-        const matchesSearch = !searchTerm || i.id.toLowerCase().includes(lowerSearch) || i.produce.toLowerCase().includes(lowerSearch) || i.location.toLowerCase().includes(lowerSearch);
-        return matchesProduce && matchesSearch;
-    });
-
-    // Filtered intake for today's intake (respects same produce filter)
-    const filteredIntake = intakeItems.filter(i => {
-        const matchesProduce = produceFilter === 'all' || i.produce === produceFilter;
-        const matchesSearch = !searchTerm || i.id.toLowerCase().includes(lowerSearch) || i.farmer.toLowerCase().includes(lowerSearch) || i.produce.toLowerCase().includes(lowerSearch);
-        return matchesProduce && matchesSearch;
-    });
-
-    const filteredExportBatches = exportBatches.filter(b => {
-        const matchesProduce = produceFilter === 'all' || b.composition.toLowerCase().includes(produceFilter.toLowerCase().replace(' (hass)', '').replace(' apple)', '').replace('bird eye ', ''));
-        const matchesSearch = !searchTerm || b.id.toLowerCase().includes(lowerSearch) || b.client.toLowerCase().includes(lowerSearch) || b.dest.toLowerCase().includes(lowerSearch) || b.composition.toLowerCase().includes(lowerSearch);
-        return matchesProduce && matchesSearch;
-    });
-
-    const filteredActivity = activityItems.filter(a => {
-        const matchesSearch = !searchTerm || a.type.toLowerCase().includes(lowerSearch) || a.description.toLowerCase().includes(lowerSearch) || a.user.toLowerCase().includes(lowerSearch);
-        return matchesSearch;
-    });
-
-    // Stats — reactive to produceFilter and searchTerm
-    const totalStockKg = filteredInventory.reduce((sum, i) => sum + parseKg(i.weight), 0);
+    // Stats
+    const totalStockKg = inventoryItems.reduce((sum, i) => sum + i.weightNum, 0);
     const totalStockTons = (totalStockKg / 1000).toFixed(1);
-    const intakeTodayKg = filteredIntake
-        .filter(i => i.arrival.startsWith('Today'))
-        .reduce((sum, i) => sum + parseKg(i.weight), 0);
-    // Simple mock price per kg per produce
-    const PRICE_PER_KG: Record<string, number> = { 'Avocados (Hass)': 2.5, 'Bird Eye Chili': 3.0, 'Mangoes (Apple)': 1.8 };
-    const totalValue = filteredInventory.reduce((sum, i) => {
-        const price = PRICE_PER_KG[i.produce] ?? 2.0;
-        return sum + parseKg(i.weight) * price;
-    }, 0);
-    const activeExports = filteredExportBatches.length;
+    const intakeTodayKg = stock
+        .filter(i => new Date(i.createdAt).toDateString() === new Date().toDateString())
+        .reduce((sum, i) => sum + i.receivedWeightKg, 0);
+    
+    // Mock value calculation
+    const totalValue = totalStockKg * 2.5; 
 
     const summaryStats = [
         { label: 'Total Stock', value: `${totalStockTons} Tons`, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
         { label: 'Raw Intake (Today)', value: `${intakeTodayKg.toLocaleString()} kg`, icon: Leaf, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
-        { label: 'Value in Stock', value: `$${Math.round(totalValue / 100) * 100 < 1000 ? Math.round(totalValue) : (totalValue / 1000).toFixed(1) + 'K'}`, icon: DollarSign, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
-        { label: 'Active Exports', value: `${activeExports} Batches`, icon: Layers, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
+        { label: 'Value in Stock', value: `$${(totalValue / 1000).toFixed(1)}K`, icon: DollarSign, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
+        { label: 'Active Exports', value: `0 Batches`, icon: Layers, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
     ];
 
     // --- HANDLERS ---
