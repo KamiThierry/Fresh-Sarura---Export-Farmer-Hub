@@ -42,7 +42,7 @@ const Dashboard = ({
 }: DashboardProps) => {
     const { cycles, pendingRoomRequests } = usePMContext();
     const activeCyclesCount = cycles.filter(c => c.status !== 'completed').length;
-    const pendingRoomRequestsCount = pendingRoomRequests.length;
+    const pendingRoomRequestsCount = (pendingRoomRequests || []).length;
     const [userName, setUserName] = useState<string>('Production Manager');
 
     useEffect(() => {
@@ -73,6 +73,7 @@ const Dashboard = ({
         <div className="p-6">
             {/* Summary Cards */}
             <div className="mb-6">
+                <DashboardStats
                     todaysIntake={`${currentIntake.toLocaleString()} kg`}
                     activeCyclesCount={activeCyclesCount}
                     scheduledExports={`${(scheduledExports / 1000).toLocaleString()} Tons`}

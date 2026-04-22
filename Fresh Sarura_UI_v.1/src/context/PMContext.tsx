@@ -120,6 +120,7 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       pendingRequests,
       pendingForecasts,
       pendingReports,
+      pendingRoomRequests,
       loading,
       error,
       refreshCycles,

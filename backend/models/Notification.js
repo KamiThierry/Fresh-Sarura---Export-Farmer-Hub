@@ -12,7 +12,12 @@ const notificationSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['BUDGET_REQUEST', 'BUDGET_APPROVED', 'BUDGET_REJECTED', 'REPORT_FLAGGED', 'FORECAST_VERIFIED', 'NEW_CYCLE', 'YIELD_FORECAST', 'FIELD_REPORT'],
+        enum: [
+            'BUDGET_REQUEST', 'BUDGET_APPROVED', 'BUDGET_REJECTED', 
+            'REPORT_FLAGGED', 'FORECAST_VERIFIED', 'NEW_CYCLE', 
+            'YIELD_FORECAST', 'FIELD_REPORT',
+            'HARVEST_DECLARED', 'HARVEST_PICKED_UP', 'ROOM_REQUESTED', 'ROOM_ASSIGNED', 'QC_COMPLETED'
+        ],
         required: true
     },
     title: {
@@ -22,6 +27,14 @@ const notificationSchema = new mongoose.Schema({
     message: {
         type: String,
         required: true
+    },
+    refId: {
+        type: mongoose.Schema.Types.ObjectId,
+        required: false
+    },
+    refModel: {
+        type: String,
+        required: false
     },
     link: {
         type: String // e.g. /pm/crop-planning or /fm/crop-planning

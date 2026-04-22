@@ -1,4 +1,5 @@
 import Notification from '../models/Notification.js';
+import User from '../models/User.js';
 
 // GET /api/v1/notifications
 export const getNotifications = async (req, res) => {
@@ -67,5 +68,23 @@ export const createNotification = async ({ recipient, sender, type, title, messa
         return notification;
     } catch (err) {
         console.error('Failed to create notification:', err);
+    }
+};
+// Helper function to notify all users of a specific role
+export const notifyByRole = async (role, notificationData) => {
+    try {
+        const users = await User.find({ role, isActive: true });
+        const notifications = users.map(user => ({
+            ...notificationData,
+            recipient: user._id,
+        }));
+        
+        if (notifications.length > 0) {
+            await Notification.insertMany(notifications);
+        }
+        
+        return notifications;
+    } catch (err) {
+        console.error(`Failed to notify role ${role}:`, err);
     }
 };

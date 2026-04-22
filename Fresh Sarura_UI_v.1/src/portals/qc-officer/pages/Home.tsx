@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Truck, ClipboardList, CheckCircle, AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
-import RequestRoomModal from '../components/RequestRoomModal';
 import RecordQCModal, { QCInspectionData } from '../components/RecordQCModal';
 import { api } from '../../../lib/api';
 
@@ -39,7 +38,7 @@ const Home = () => {
         try {
             // 1. Pending Intake (Declarations not picked up)
             const resIntake = await api.get('/harvest-declarations?status=Pending');
-            const pendingIntakeCount = resIntake.data.results || 0;
+            const pendingIntakeCount = resIntake.results || 0;
 
             // 2. Pending QC (Batches with status RoomRequested or Processing)
             const resBatches = await api.get('/processing-batches/pending-room'); // This only returns RoomRequested per current controller
@@ -120,10 +119,6 @@ const Home = () => {
         },
     ];
 
-// --- Home Dashboard ---
-const Home = () => {
-    const [isIntakeModalOpen, setIsIntakeModalOpen] = useState(false);
-    const [qcModalData, setQcModalData] = useState<QCInspectionData | null>(null);
 
     return (
         <>

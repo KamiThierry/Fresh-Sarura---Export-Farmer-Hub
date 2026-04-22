@@ -4,7 +4,7 @@ import { X, FileWarning, Clock, Truck, Eye, Upload, ArrowRight, Bell, CheckCircl
 
 interface Notification {
     _id: string;
-    type: 'BUDGET_REQUEST' | 'BUDGET_APPROVED' | 'BUDGET_REJECTED' | 'REPORT_FLAGGED' | 'FORECAST_VERIFIED' | 'NEW_CYCLE' | 'YIELD_FORECAST' | 'FIELD_REPORT';
+    type: 'BUDGET_REQUEST' | 'BUDGET_APPROVED' | 'BUDGET_REJECTED' | 'REPORT_FLAGGED' | 'FORECAST_VERIFIED' | 'NEW_CYCLE' | 'YIELD_FORECAST' | 'FIELD_REPORT' | 'HARVEST_DECLARED' | 'HARVEST_PICKED_UP' | 'ROOM_REQUESTED' | 'ROOM_ASSIGNED' | 'QC_COMPLETED';
     title: string;
     message: string;
     link?: string;
@@ -77,6 +77,41 @@ const typeConfig = {
         action: 'Review',
         actionIcon: Eye,
         btnColor: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+    },
+    HARVEST_DECLARED: {
+        icon: Truck,
+        iconColor: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20',
+        action: 'Assign Pickup',
+        actionIcon: Clock,
+        btnColor: 'bg-blue-600 hover:bg-blue-700 text-white',
+    },
+    HARVEST_PICKED_UP: {
+        icon: Truck,
+        iconColor: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20',
+        action: 'Prep Intake',
+        actionIcon: ArrowRight,
+        btnColor: 'bg-amber-600 hover:bg-amber-700 text-white',
+    },
+    ROOM_REQUESTED: {
+        icon: Bell,
+        iconColor: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20',
+        action: 'Assign Room',
+        actionIcon: ArrowRight,
+        btnColor: 'bg-purple-600 hover:bg-purple-700 text-white',
+    },
+    ROOM_ASSIGNED: {
+        icon: CheckCircle2,
+        iconColor: 'text-green-600 bg-green-50 dark:bg-green-900/20',
+        action: 'Start QC',
+        actionIcon: TrendingUp,
+        btnColor: 'bg-green-600 hover:bg-green-700 text-white',
+    },
+    QC_COMPLETED: {
+        icon: TrendingUp,
+        iconColor: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20',
+        action: 'View Stock',
+        actionIcon: Eye,
+        btnColor: 'bg-blue-600 hover:bg-blue-700 text-white',
     }
 };
 

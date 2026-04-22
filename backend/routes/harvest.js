@@ -10,7 +10,7 @@ const router = express.Router();
 router.use(protect);
 
 router.post('/', restrictTo('farm_manager'), declareHarvest);
-router.get('/', restrictTo('logistics_officer', 'production_manager', 'admin'), getHarvestDeclarations);
-router.patch('/:id/pickup', restrictTo('logistics_officer'), logPickup);
+router.get('/', restrictTo('logistic_officer', 'production_manager', 'quality_officer', 'admin'), getHarvestDeclarations);
+router.patch('/:id/pickup', restrictTo('logistic_officer'), logPickup);
 
 export default router;

@@ -3,6 +3,7 @@ import IntakeLog from '../models/IntakeLog.js';
 import ProcessingBatch from '../models/ProcessingBatch.js';
 import CropCycle from '../models/CropCycle.js';
 import Notification from '../models/Notification.js';
+import { notifyByRole } from './notificationController.js';
 
 // ── HARVEST DECLARATIONS ──────────────────────────────────────────────────────
 
@@ -26,10 +27,19 @@ export const declareHarvest = async (req, res) => {
             notes,
         });
 
-        // Notify all logistics_officer users
-        await Notification.create({
-            recipientRole: 'logistics_officer',
-            type: 'harvest_declared',
+        // Notify all logistic_officer users
+        await notifyByRole('logistic_officer', {
+            type: 'HARVEST_DECLARED',
+            title: 'New Harvest Declared',
+            message: `Harvest declared: ${cropName} — est. ${estimatedWeightKg} kg. Ready for pickup.`,
+            refId: declaration._id,
+            refModel: 'HarvestDeclaration',
+        });
+
+        // Notify all quality_officer users
+        await notifyByRole('quality_officer', {
+            type: 'HARVEST_DECLARED',
+            title: 'New Harvest Declared',
             message: `Harvest declared: ${cropName} — est. ${estimatedWeightKg} kg. Ready for pickup.`,
             refId: declaration._id,
             refModel: 'HarvestDeclaration',
@@ -84,18 +94,18 @@ export const logPickup = async (req, res) => {
         await declaration.save();
 
         // Notify all qc_officer users
-        await Notification.create({
-            recipientRole: 'qc_officer',
-            type: 'produce_arriving',
+        await notifyByRole('quality_officer', {
+            type: 'HARVEST_PICKED_UP',
+            title: 'Produce Arriving',
             message: `Produce arriving: ${declaration.cropName} — ${pickedUpWeightKg} kg picked up. Intake log ready.`,
             refId: intakeLog._id,
             refModel: 'IntakeLog',
         });
 
         // Notify all logistics_officer users
-        await Notification.create({
-            recipientRole: 'logistics_officer',
-            type: 'produce_arriving',
+        await notifyByRole('logistic_officer', {
+            type: 'HARVEST_PICKED_UP',
+            title: 'Produce Arriving',
             message: `Produce arriving: ${declaration.cropName} — ${pickedUpWeightKg} kg picked up. Intake log ready.`,
             refId: intakeLog._id,
             refModel: 'IntakeLog',
@@ -127,9 +137,9 @@ export const requestRoom = async (req, res) => {
         });
 
         // Notify all production_manager users
-        await Notification.create({
-            recipientRole: 'production_manager',
-            type: 'room_requested',
+        await notifyByRole('production_manager', {
+            type: 'ROOM_REQUESTED',
+            title: 'Processing Room Requested',
             message: `QC requests a processing room for ${cropName || 'produce'} — ${receivedWeightKg} kg received.`,
             refId: batch._id,
             refModel: 'ProcessingBatch',
@@ -168,9 +178,9 @@ export const assignRoom = async (req, res) => {
         if (!batch) return res.status(404).json({ status: 'error', message: 'Batch not found.' });
 
         // Notify all qc_officer users
-        await Notification.create({
-            recipientRole: 'qc_officer',
-            type: 'room_assigned',
+        await notifyByRole('quality_officer', {
+            type: 'ROOM_ASSIGNED',
+            title: 'Processing Room Assigned',
             message: `Room ${assignedRoom} assigned for your processing batch. You can now begin.`,
             refId: batch._id,
             refModel: 'ProcessingBatch',
@@ -197,9 +207,9 @@ export const completeBatch = async (req, res) => {
         if (!batch) return res.status(404).json({ status: 'error', message: 'Batch not found.' });
 
         // Notify all production_manager users
-        await Notification.create({
-            recipientRole: 'production_manager',
-            type: 'batch_completed',
+        await notifyByRole('production_manager', {
+            type: 'QC_COMPLETED',
+            title: 'QC/Processing Completed',
             message: `Processing complete: ${batch.cropName} — ${processedWeightKg} kg processed, ${rejectedWeightKg} kg rejected. Stock updated.`,
             refId: batch._id,
             refModel: 'ProcessingBatch',
