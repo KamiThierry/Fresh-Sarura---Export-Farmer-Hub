@@ -9,7 +9,8 @@ import {
     BarChart3,
     FileCheck,
     Settings,
-    LogOut
+    LogOut,
+    DoorOpen
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -26,6 +27,7 @@ const Sidebar = () => {
                 { path: '/pm/farmers', icon: Users, label: 'Farmer Management' },
                 { path: '/pm/crop-planning', icon: Sprout, label: 'Crop Planning' },
                 { path: '/pm/inventory', icon: Package, label: 'Inventory & Batches' },
+                { path: '/pm/rooms', icon: DoorOpen, label: 'Room Management' },
                 { path: '/pm/quality-control', icon: ShieldCheck, label: 'Quality Control (QC)' },
                 { path: '/pm/communication', icon: MessageSquare, label: 'Client Requests' },
             ]

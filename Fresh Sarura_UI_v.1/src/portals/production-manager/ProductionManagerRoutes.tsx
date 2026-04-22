@@ -13,6 +13,7 @@ import Traceability from './pages/Traceability';
 import AnalyticsReporting from './pages/AnalyticsReporting';
 import SettingsPage from './pages/Settings';
 import ClientRequests from './pages/ClientRequests';
+import RoomManagement from './pages/RoomManagement';
 
 import QCInspectionModal from './components/QCInspectionModal';
 import FarmerRegistrationModal from './components/FarmerRegistrationModal';
@@ -29,7 +30,7 @@ const ProductionManagerRoutes = () => {
 
     const [currentIntake, setCurrentIntake] = useState(2450); // Initial value in kg
     const [qualityGrade, setQualityGrade] = useState("96% Class A");
-    const [scheduledExports, setScheduledExports] = useState(8000); // 8000 kg = 8 Tons
+    const scheduledExports = 8000; // 8000 kg = 8 Tons
 
     const handleLogIntake = () => {
         setIsIntakeOpen(true);
@@ -112,6 +113,7 @@ const ProductionManagerRoutes = () => {
 
                     {/* Client Orders & Requests */}
                     <Route path="/communication" element={<ClientRequests />} />
+                    <Route path="/rooms" element={<RoomManagement />} />
 
                     {/* Catch all - redirect to home */}
                     <Route path="*" element={<Navigate to="/" replace />} />
@@ -135,13 +137,13 @@ const ProductionManagerRoutes = () => {
             <FarmerRegistrationModal
                 isOpen={isRegistrationOpen}
                 onClose={() => setIsRegistrationOpen(false)}
-                onSuccess={() => setIsRegistrationOpen(false)}
+                onFarmerAdded={() => setIsRegistrationOpen(false)}
             />
 
             <CreateCropCycleModal
                 isOpen={isCreateCycleOpen}
                 onClose={() => setIsCreateCycleOpen(false)}
-                onSuccess={() => setIsCreateCycleOpen(false)}
+                onSubmit={() => setIsCreateCycleOpen(false)}
             />
         </PMProvider>
     );

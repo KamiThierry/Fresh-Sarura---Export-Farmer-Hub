@@ -23,7 +23,9 @@ const ColdRoom = () => {
         setLoading(true);
         try {
             const res = await api.get('/stock');
-            const data = (res.data.data || []).map((b: any) => ({
+            // Backend returns { status: 'success', results: X, data: [...] }
+            // api.get returns the body direktly.
+            const data = (res.data || []).map((b: any) => ({
                 id: b._id,
                 crop: b.cropName,
                 batchId: b._id,
@@ -64,23 +66,27 @@ const ColdRoom = () => {
             </div>
 
             {/* KPI Mini Row */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border-theme shadow-sm flex items-start gap-4">
-                    <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20"><Package size={22} className="text-blue-600" /></div>
-                    <div><p className="text-sm text-gray-500 dark:text-gray-400">Total Batches</p><p className="text-2xl font-bold text-gray-900 dark:text-white mt-0.5">{stock.length}</p></div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border-theme shadow-sm flex items-start gap-4">
-                    <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/20"><CheckCircle size={22} className="text-green-600" /></div>
-                    <div><p className="text-sm text-gray-500 dark:text-gray-400">Total Net Stock</p><p className="text-2xl font-bold text-gray-900 dark:text-white mt-0.5">{Math.round(totalWeight).toLocaleString()} kg</p></div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border-theme shadow-sm flex items-start gap-4">
-                    <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20"><Clock size={22} className="text-amber-600" /></div>
-                    <div><p className="text-sm text-gray-500 dark:text-gray-400">Inventory Density</p><p className="text-2xl font-bold text-amber-600 mt-0.5">High</p></div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border-theme shadow-sm flex items-start gap-4">
-                    <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20"><AlertTriangle size={22} className="text-red-600" /></div>
-                    <div><p className="text-sm text-gray-500 dark:text-gray-400">Loss / Rejections</p><p className="text-2xl font-bold text-red-600 mt-0.5">{Math.round(stock.reduce((a, b) => a + b.rejected, 0)).toLocaleString()} kg</p></div>
-                </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                {[
+                    { label: 'Total Batches', value: stock.length, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+                    { label: 'Total Net Stock', value: `${Math.round(totalWeight).toLocaleString()} kg`, icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
+                    { label: 'Inventory Density', value: 'High', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
+                    { label: 'Loss / Rejections', value: `${Math.round(stock.reduce((a, b) => a + b.rejected, 0)).toLocaleString()} kg`, icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20' },
+                ].map((stat, i) => (
+                    <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{stat.label}</p>
+                                <div className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">
+                                    {stat.value}
+                                </div>
+                            </div>
+                            <div className={`p-3 rounded-lg ${stat.bg}`}>
+                                <stat.icon className={stat.color} size={24} />
+                            </div>
+                        </div>
+                    </div>
+                ))}
             </div>
 
             {/* Filters */}

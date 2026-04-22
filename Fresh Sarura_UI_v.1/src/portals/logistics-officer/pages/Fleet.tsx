@@ -107,39 +107,29 @@ const Fleet = () => {
             </div>
 
             {/* Top Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between">
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Vehicles</p>
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{vehicleStats.total}</h3>
-                        <p className="text-xs text-emerald-600 mt-1 font-medium">{vehicleStats.active} Active • {vehicleStats.maintenance} Maintenance</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[
+                    { label: 'Total Vehicles', value: vehicleStats.total, icon: Truck, color: 'text-indigo-600', bg: 'bg-indigo-50 dark:bg-indigo-900/20', sub: `${vehicleStats.active} Active • ${vehicleStats.maintenance} Maintenance` },
+                    { label: 'Active Drivers', value: driverStats.total, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20', sub: `${driverStats.onShift} On Shift` },
+                    { label: 'Maintenance Alerts', value: `${maintenanceAlerts} Due`, icon: Wrench, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20', sub: 'Check immediately' },
+                ].map((stat, i) => (
+                    <div key={i} className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{stat.label}</p>
+                                <div className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">
+                                    {stat.value}
+                                </div>
+                                <p className={`text-xs mt-1 font-medium ${stat.color === 'text-amber-600' ? 'text-amber-600' : stat.color === 'text-blue-600' ? 'text-blue-600' : 'text-emerald-600'}`}>
+                                    {stat.sub}
+                                </p>
+                            </div>
+                            <div className={`p-3 rounded-lg ${stat.bg} ${stat.color}`}>
+                                <stat.icon size={24} />
+                            </div>
+                        </div>
                     </div>
-                    <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/20 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                        <Truck size={24} />
-                    </div>
-                </div>
-
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between">
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Active Drivers</p>
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{driverStats.total}</h3>
-                        <p className="text-xs text-blue-600 mt-1 font-medium">{driverStats.onShift} On Shift</p>
-                    </div>
-                    <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400">
-                        <Users size={24} />
-                    </div>
-                </div>
-
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between">
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Maintenance Alerts</p>
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{maintenanceAlerts} Due</h3>
-                        <p className="text-xs text-amber-600 mt-1 font-medium">Check immediately</p>
-                    </div>
-                    <div className="w-12 h-12 bg-amber-50 dark:bg-amber-900/20 rounded-full flex items-center justify-center text-amber-600 dark:text-amber-400">
-                        <Wrench size={24} />
-                    </div>
-                </div>
+                ))}
             </div>
 
             {/* Main Workspace */}

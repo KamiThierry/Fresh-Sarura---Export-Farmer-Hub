@@ -4,6 +4,7 @@ const schema = new mongoose.Schema({
     cycleId: { type: mongoose.Schema.Types.ObjectId, ref: 'CropCycle', required: true },
     requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     assignedRoom: { type: String },
+    assignedRoomId: { type: mongoose.Schema.Types.ObjectId, ref: 'Room' },
     assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     receivedWeightKg: { type: Number },
     processedWeightKg: { type: Number },

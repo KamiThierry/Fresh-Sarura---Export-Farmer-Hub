@@ -69,6 +69,17 @@ export const useFarmManager = () => {
     return res;
   };
 
+  const declareHarvest = async (data: {
+    cycleId: string;
+    estimatedWeightKg: number;
+    cropName: string;
+    notes?: string;
+  }) => {
+    const res = await api.post('/harvest-declarations', data);
+    await fetchCycles();
+    return res;
+  };
+
   const submitFieldReport = async (data: {
     cycleId: string;
     description: string;
@@ -107,18 +118,6 @@ export const useFarmManager = () => {
     return res;
   };
 
-  const declareHarvest = async (data: {
-    cycleId: string;
-    estimatedWeightKg: number;
-    cropName: string;
-    farmName?: string;
-    notes?: string;
-  }) => {
-    const res = await api.post('/harvest-declarations', data);
-    await fetchDashboard();
-    await fetchCycles();
-    return res;
-  };
 
   const updateProfile = async (data: { name: string; phone: string; email?: string; preferences?: any }) => {
     const res = await api.patch('/auth/me', data);

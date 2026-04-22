@@ -1,7 +1,15 @@
-import { NavLink } from 'react-router-dom';
-import { Home, Truck, Plane, Users, FileText, Settings, LogOut } from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { Home, Truck, PackageCheck, Plane, Users, FileText, Settings, LogOut } from 'lucide-react';
 
 const Sidebar = () => {
+    const navigate = useNavigate();
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
+    };
+
     const navGroups = [
         {
             title: 'Main',
@@ -12,6 +20,7 @@ const Sidebar = () => {
         {
             title: 'Operations',
             items: [
+                { path: '/logistics/pickups', icon: PackageCheck, label: 'Pending Pickups' },
                 { path: '/logistics/collections', icon: Truck, label: 'Collection Routes' },
                 { path: '/logistics/shipments', icon: Plane, label: 'Export Shipments' },
                 { path: '/logistics/fleet', icon: Users, label: 'Fleet & Drivers' },
@@ -88,7 +97,10 @@ const Sidebar = () => {
                                     <span className="font-medium text-sm">{item.label}</span>
                                 </NavLink>
                             ))}
-                            <button className="w-full flex items-center gap-3 px-3 py-2 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/10 rounded-lg transition-colors mt-1">
+                            <button 
+                                onClick={handleLogout}
+                                className="w-full flex items-center gap-3 px-3 py-2 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/10 rounded-lg transition-colors mt-1"
+                            >
                                 <LogOut size={18} />
                                 <span className="font-medium text-sm">Sign Out</span>
                             </button>

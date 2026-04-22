@@ -1,7 +1,15 @@
-import { NavLink } from 'react-router-dom';
-import { Home, Truck, ClipboardList, Thermometer, Settings, LogOut } from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { Home, Truck, FlaskConical, ClipboardList, Thermometer, Settings, LogOut } from 'lucide-react';
 
 const Sidebar = () => {
+    const navigate = useNavigate();
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
+    };
+
     const navGroups = [
         {
             title: 'Main',
@@ -13,6 +21,7 @@ const Sidebar = () => {
             title: 'Operations',
             items: [
                 { path: '/qc/intake', icon: Truck, label: 'Intake (Receiving)' },
+                { path: '/qc/processing', icon: FlaskConical, label: 'Processing' },
                 { path: '/qc/inspection', icon: ClipboardList, label: 'Inspection & Sorting' },
                 { path: '/qc/cold-room', icon: Thermometer, label: 'Cold Room (Stock)' },
             ]
@@ -21,7 +30,6 @@ const Sidebar = () => {
             title: 'System',
             items: [
                 { path: '/qc/settings', icon: Settings, label: 'Settings' },
-                { path: '/qc/logout', icon: LogOut, label: 'Sign Out' },
             ]
         }
     ];
@@ -89,6 +97,13 @@ const Sidebar = () => {
                                     <span className="font-medium text-sm">{item.label}</span>
                                 </NavLink>
                             ))}
+                            <button 
+                                onClick={handleLogout}
+                                className="w-full flex items-center gap-3 px-3 py-2 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/10 rounded-lg transition-colors mt-1"
+                            >
+                                <LogOut size={18} />
+                                <span className="font-medium text-sm">Sign Out</span>
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -34,49 +34,57 @@ const Dashboard = () => {
             {/* Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Weekly Volume */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between">
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Weekly Volume</p>
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">18.5 <span className="text-lg text-gray-500">Tons</span></h3>
-                    </div>
-                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-full text-blue-600">
-                        <Scale size={24} />
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Weekly Volume</p>
+                            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">18.5 <span className="text-lg font-normal text-gray-500">Tons</span></h3>
+                        </div>
+                        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600">
+                            <Scale size={24} />
+                        </div>
                     </div>
                 </div>
 
                 {/* Active Collections */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between">
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Active Collections</p>
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">4 Trucks</h3>
-                        <p className="text-xs text-green-600 font-medium">En Route</p>
-                    </div>
-                    <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-full text-green-600">
-                        <Truck size={24} />
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Active Collections</p>
+                            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">4 Trucks</h3>
+                            <p className="text-xs text-green-600 font-medium mt-1">En Route</p>
+                        </div>
+                        <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg text-green-600">
+                            <Truck size={24} />
+                        </div>
                     </div>
                 </div>
 
                 {/* Export Shipments */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between">
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Export Shipments</p>
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">3 Departed</h3>
-                        <p className="text-xs text-orange-600 font-medium">2 Pending</p>
-                    </div>
-                    <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-full text-purple-600">
-                        <Plane size={24} />
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Export Shipments</p>
+                            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">3 Departed</h3>
+                            <p className="text-xs text-orange-600 font-medium mt-1">2 Pending</p>
+                        </div>
+                        <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-purple-600">
+                            <Plane size={24} />
+                        </div>
                     </div>
                 </div>
 
                 {/* Pending Docs */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between">
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Pending Docs</p>
-                        <h3 className="text-2xl font-bold text-amber-600 dark:text-amber-500 mt-1">5 Invoices</h3>
-                        <p className="text-xs text-amber-600 font-medium">Action Required</p>
-                    </div>
-                    <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-full text-amber-600">
-                        <FileWarning size={24} />
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Pending Docs</p>
+                            <h3 className="text-2xl font-bold text-amber-600 dark:text-amber-500 mt-1">5 Invoices</h3>
+                            <p className="text-xs text-amber-600 font-medium mt-1">Action Required</p>
+                        </div>
+                        <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-amber-600">
+                            <FileWarning size={24} />
+                        </div>
                     </div>
                 </div>
             </div>

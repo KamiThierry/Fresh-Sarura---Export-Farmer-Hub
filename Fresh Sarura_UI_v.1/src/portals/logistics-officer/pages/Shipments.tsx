@@ -92,33 +92,25 @@ const Shipments = () => {
 
             {/* Stats Row */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center justify-between">
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 mb-1">Weekly Volume</p>
-                        <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{weeklyVolumeKg.toLocaleString()} <span className="text-lg text-gray-400 font-normal">kg</span></h3>
+                {[
+                    { label: 'Weekly Volume', value: `${weeklyVolumeKg.toLocaleString()} kg`, icon: Package, color: 'text-emerald-600', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
+                    { label: 'Active Shipments', value: `${activeCount} Active`, icon: Plane, color: 'text-blue-600', bg: 'bg-blue-100 dark:bg-blue-900/30' },
+                    { label: 'Pending Docs', value: `${pendingDocsCount} To Review`, icon: FileText, color: 'text-amber-600', bg: 'bg-amber-100 dark:bg-amber-900/30' },
+                ].map((stat, i) => (
+                    <div key={i} className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{stat.label}</p>
+                                <div className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">
+                                    {stat.value}
+                                </div>
+                            </div>
+                            <div className={`p-3 rounded-lg ${stat.bg} ${stat.color}`}>
+                                <stat.icon size={24} />
+                            </div>
+                        </div>
                     </div>
-                    <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600">
-                        <Package size={24} />
-                    </div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center justify-between">
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 mb-1">Active Shipments</p>
-                        <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{activeCount} <span className="text-lg text-gray-400 font-normal">Active</span></h3>
-                    </div>
-                    <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600">
-                        <Plane size={24} />
-                    </div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center justify-between">
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 mb-1">Pending Docs</p>
-                        <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{pendingDocsCount} <span className="text-lg text-gray-400 font-normal">To Review</span></h3>
-                    </div>
-                    <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600">
-                        <FileText size={24} />
-                    </div>
-                </div>
+                ))}
             </div>
 
             {/* Toolbar */}

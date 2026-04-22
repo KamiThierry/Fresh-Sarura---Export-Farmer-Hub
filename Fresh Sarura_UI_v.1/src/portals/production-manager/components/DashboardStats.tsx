@@ -74,38 +74,35 @@ const DashboardStats = ({
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {stats.map((stat, index) => (
           <div
             key={index}
-            className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between border-theme"
-
-
+            className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow relative overflow-hidden"
           >
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <p className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-1 line-clamp-2 min-h-[1.5em]">
+            <div className="flex justify-between items-start">
+              <div className="min-w-0 pr-2">
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
                   {stat.label}
                 </p>
-                <h3 className="text-3xl font-bold text-gray-900 dark:text-white">
+                <div className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">
                   {stat.value}
-                </h3>
-              </div>
-              <div className={`p-3 rounded-xl ${stat.bg}`}>
-               <stat.icon className={`${stat.color} dark:text-gray-100`} size={24} />
-              </div>
-              {'badge' in stat && stat.badge && (
-                <div className="absolute top-0 right-0 -mt-1 -mr-1">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-lg animate-bounce">
-                    {stat.badge}
-                  </span>
                 </div>
-              )}
+                {stat.sub && (
+                  <p className="text-[11px] text-gray-400 mt-1 line-clamp-1">{stat.sub}</p>
+                )}
+              </div>
+              <div className={`p-3 rounded-lg flex-shrink-0 ${stat.bg}`}>
+               <stat.icon className={`${stat.color}`} size={24} />
+              </div>
             </div>
-
-            <p className={`text-sm font-medium ${stat.color} dark:text-gray-300`}>
-              {stat.sub}
-            </p>
+            {'badge' in stat && stat.badge && (
+              <div className="absolute top-0 right-0 -mt-1 -mr-1">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-lg animate-bounce">
+                  {stat.badge}
+                </span>
+              </div>
+            )}
           </div>
         ))}
       </div>

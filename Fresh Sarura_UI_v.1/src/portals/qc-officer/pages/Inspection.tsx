@@ -72,12 +72,16 @@ const Inspection = () => {
             </div>
 
             {/* KPI Mini Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                 {kpi.map((k, i) => (
-                    <div key={i} className={`${k.bg} rounded-xl p-3 flex flex-col gap-1`}>
-                        <k.icon size={16} className={k.color} />
-                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{k.label}</p>
-                        <p className={`text-lg font-bold ${k.color}`}>{k.value}</p>
+                    <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-between">
+                        <div className="flex justify-between items-start mb-2">
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">{k.label}</p>
+                            <div className={`p-1.5 rounded-lg ${k.bg}`}>
+                                <k.icon size={14} className={k.color} />
+                            </div>
+                        </div>
+                        <p className={`text-xl font-bold ${k.color}`}>{k.value}</p>
                     </div>
                 ))}
             </div>

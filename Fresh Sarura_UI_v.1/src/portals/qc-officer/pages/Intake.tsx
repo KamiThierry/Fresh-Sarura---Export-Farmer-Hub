@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Truck, ClipboardList, AlertCircle, CheckCircle, Clock, ChevronDown, ChevronUp, Layers, RefreshCw } from 'lucide-react';
 import RequestRoomModal from '../components/RequestRoomModal';
 import { api } from '../../../lib/api';
@@ -37,7 +37,7 @@ const Intake = () => {
         setLoading(true);
         try {
             const res = await api.get('/harvest-declarations?status=PickedUp');
-            const data = (res.data.data || []).map((d: any) => ({
+            const data = (res.data || []).map((d: any) => ({
                 id: d._id,
                 intakeLogId: d.intakeLogId,
                 crop: d.cropName,
@@ -91,12 +91,20 @@ const Intake = () => {
                 </div>
 
                 {/* Stats Row */}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                     {statsSummary.map((s, i) => (
-                        <div key={i} className={`${s.bg} rounded-xl p-3 flex flex-col gap-1`}>
-                            <s.icon size={16} className={s.color} />
-                            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{s.label}</p>
-                            <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                        <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{s.label}</p>
+                                    <div className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">
+                                        {s.value}
+                                    </div>
+                                </div>
+                                <div className={`p-3 rounded-lg ${s.bg}`}>
+                                    <s.icon size={24} className={s.color} />
+                                </div>
+                            </div>
                         </div>
                     ))}
                 </div>

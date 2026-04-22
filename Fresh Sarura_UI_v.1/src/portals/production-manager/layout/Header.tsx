@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Leaf, Search, Bell, LogOut, Loader2 } from 'lucide-react';
+import { DoorOpen, Search, Bell, LogOut, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import NotificationsModal from '../../shared/component/NotificationsModal';
@@ -18,6 +18,7 @@ const Header = () => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const [notifications, setNotifications] = useState<any[]>([]);
+    const [pendingRooms, setPendingRooms] = useState(0);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
 
@@ -35,6 +36,13 @@ const Header = () => {
         } catch (err) {
             console.error('Failed to fetch notifications:', err);
         }
+    };
+
+    const fetchPendingRooms = async () => {
+        try {
+            const res = await api.get('/processing-batches/pending-room');
+            setPendingRooms(res.data?.results || res.results || 0);
+        } catch { /* silent */ }
     };
 
     const handleMarkAsRead = async (id: string) => {
@@ -60,7 +68,11 @@ const Header = () => {
 
     useEffect(() => {
         fetchNotifications();
-        const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
+        fetchPendingRooms();
+        const interval = setInterval(() => {
+            fetchNotifications();
+            fetchPendingRooms();
+        }, 30000); // Poll every 30s
         return () => clearInterval(interval);
     }, []);
 
@@ -165,6 +177,20 @@ const Header = () => {
             {/* Right Side Controls */}
             <div className="flex items-center gap-3">
                 <ThemeToggle />
+                
+                {/* Room Requests Button */}
+                <button
+                    onClick={() => navigate('/pm/rooms')}
+                    className="relative p-2.5 rounded-xl bg-white/80 hover:bg-purple-600 hover:text-white transition-all shadow-sm dark:bg-gray-700/50 dark:text-gray-200 dark:hover:bg-purple-500"
+                    title="Room Requests"
+                >
+                    <DoorOpen size={18} />
+                    {pendingRooms > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center bg-purple-600 rounded-full text-[10px] font-bold text-white ring-2 ring-white dark:ring-gray-800">
+                            {pendingRooms}
+                        </span>
+                    )}
+                </button>
 
                 {/* Notification Icon */}
                 <button 

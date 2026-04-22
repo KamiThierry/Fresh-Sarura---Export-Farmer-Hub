@@ -30,6 +30,8 @@ const InventoryManagement = () => {
     const [selectedIntakeId, setSelectedIntakeId] = useState('');
     const [selectedBatch, setSelectedBatch] = useState<any>(null);
     const [selectedApprovedIntake, setSelectedApprovedIntake] = useState<ApprovedIntake | null>(null);
+    const [intakes, setIntakes] = useState<any[]>([]);
+    const [approvedIntakes, setApprovedIntakes] = useState<any[]>([]);
 
     // Action Menu State
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -38,15 +40,21 @@ const InventoryManagement = () => {
     const [produceFilter, setProduceFilter] = useState<string>('all');
     // Global search
     const [searchTerm, setSearchTerm] = useState<string>('');
+    
     // Pagination
     const [inventoryPage, setInventoryPage] = useState(1);
+    const [intakePage, setIntakePage] = useState(1);
+    const [exportPage, setExportPage] = useState(1);
+    const [activityPage, setActivityPage] = useState(1);
     const itemsPerPage = 5;
 
     const fetchStock = async () => {
         setLoading(true);
         try {
             const res = await api.get('/stock');
-            setStock(res.data.data || []);
+            // Support both { data: [...] } and directly [...]
+            const data = res.data?.data || res.data || res || [];
+            setStock(Array.isArray(data) ? data : []);
         } catch (err) {
             console.error('Failed to fetch stock:', err);
         } finally {
@@ -54,8 +62,28 @@ const InventoryManagement = () => {
         }
     };
 
+    const fetchIntakes = async () => {
+        try {
+            // Fetch picked up harvests awaiting room/QC results
+            const res = await api.get('/harvest-declarations?status=PickedUp');
+            const data = (res.data || res || []).map((d: any) => ({
+                id: d._id,
+                arrival: new Date(d.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                farmer: d.farmerId?.full_name || d.farmName || 'Unknown',
+                produce: d.cropName,
+                weight: `${d.pickedUpWeightKg || d.estimatedWeightKg} kg`,
+                weightNum: d.pickedUpWeightKg || d.estimatedWeightKg,
+                status: 'Pending QC'
+            }));
+            setIntakes(data);
+        } catch (err) {
+            console.error('Failed to fetch intakes:', err);
+        }
+    };
+
     useEffect(() => {
         fetchStock();
+        fetchIntakes();
     }, []);
 
     // --- DERIVED / FILTERED DATA ---
@@ -65,14 +93,39 @@ const InventoryManagement = () => {
         id: item._id,
         produce: item.cropName,
         grade: 'A', // Assuming grade A for now, could be derived
-        weight: `${(item.processedWeightKg - item.rejectedWeightKg).toLocaleString()} kg`,
-        weightNum: item.processedWeightKg - item.rejectedWeightKg,
+        weight: `${(item.processedWeightKg).toLocaleString()} kg`,
+        weightNum: item.processedWeightKg,
         location: item.assignedRoom || 'Cold Room',
         temp: '4.5°C',
         status: 'Available',
         daysInStorage: Math.floor((Date.now() - new Date(item.updatedAt).getTime()) / (1000 * 60 * 60 * 24)),
         shelfLifeDays: 14
     }));
+
+    // Filtered Lists
+    const filteredIntake = intakes.filter(i => 
+        i.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        i.farmer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        i.produce.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const filteredInventory = inventoryItems.filter(i => {
+        const matchesSearch = i.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             i.produce.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesFilter = produceFilter === 'all' || i.produce === produceFilter;
+        return matchesSearch && matchesFilter;
+    });
+
+    const filteredExportBatches = [
+        { id: 'EB-2024-001', client: 'Global Fruits SA', dest: 'Brussels, BE', composition: 'French Beans (900kg), Avocados (400kg)', date: '2024-05-24', status: 'In Progress' },
+        { id: 'EB-2024-004', client: 'Euro-Imports Ltd', dest: 'London, UK', composition: 'Avocados (Hass) - 1.2 Tons', date: '2024-05-26', status: 'In Progress' },
+    ].filter(b => b.id.toLowerCase().includes(searchTerm.toLowerCase()) || b.client.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const filteredActivity = [
+        { id: 1, time: '10:45 AM', type: 'Intake Logged', description: 'Received 450kg French Beans from Cooperative A', impact: '+450kg', impactType: 'positive', user: 'Logistics Officer' },
+        { id: 2, time: '09:30 AM', type: 'QC Inspection', description: 'Batch #INT-458 passed Grade A inspection', impact: '180kg Certified', impactType: 'positive', user: 'QC Officer' },
+        { id: 3, time: 'Yesterday', type: 'Stock Adjustment', description: '12kg Avocado discarded due to spoilage', impact: '-12kg', impactType: 'negative', user: 'Packhouse Mgr' },
+    ].filter(a => a.description.toLowerCase().includes(searchTerm.toLowerCase()));
 
     // Stats
     const totalStockKg = inventoryItems.reduce((sum, i) => sum + i.weightNum, 0);
@@ -104,20 +157,10 @@ const InventoryManagement = () => {
         // Remove from approved queue
         setApprovedIntakes(prev => prev.filter(i => i.intakeId !== selectedApprovedIntake.intakeId));
 
-        // Add to inventory
-        const newStockItem = {
-            id: `STK-${selectedApprovedIntake.crop.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 90) + 10}`,
-            produce: selectedApprovedIntake.crop,
-            grade: selectedApprovedIntake.grade.includes('A') ? 'A' : 'B',
-            weight: `${selectedApprovedIntake.netWeight.toLocaleString()} kg`,
-            location,
-            temp,
-            status: 'Available',
-            daysInStorage: 0,
-            shelfLifeDays: selectedApprovedIntake.crop.includes('Avocado') ? 18 : 10, // Mock shelf life
-        };
-
-        setInventoryItems(prev => [newStockItem, ...prev]);
+        // In a real app, we'd call the API here. 
+        // For now, let's just refresh the stock from backend
+        fetchStock();
+        setSelectedApprovedIntake(null);
     };
 
     return (
@@ -200,7 +243,7 @@ const InventoryManagement = () => {
                         <div className="flex justify-between items-start">
                             <div>
                                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{stat.label}</p>
-                                <div className={`text-2xl font-bold mt-1 ${stat.color.replace('text-', 'text-gray-900 dark:text-white ')}`}>
+                                <div className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">
                                     {stat.value}
                                 </div>
                             </div>

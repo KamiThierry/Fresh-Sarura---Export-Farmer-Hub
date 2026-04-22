@@ -3,6 +3,7 @@ import IntakeLog from '../models/IntakeLog.js';
 import ProcessingBatch from '../models/ProcessingBatch.js';
 import CropCycle from '../models/CropCycle.js';
 import Notification from '../models/Notification.js';
+import Room from '../models/Room.js';
 import { notifyByRole } from './notificationController.js';
 
 // ── HARVEST DECLARATIONS ──────────────────────────────────────────────────────
@@ -93,7 +94,7 @@ export const logPickup = async (req, res) => {
         declaration.intakeLogId = intakeLog._id;
         await declaration.save();
 
-        // Notify all qc_officer users
+        // Notify all quality_officer users
         await notifyByRole('quality_officer', {
             type: 'HARVEST_PICKED_UP',
             title: 'Produce Arriving',
@@ -102,7 +103,7 @@ export const logPickup = async (req, res) => {
             refModel: 'IntakeLog',
         });
 
-        // Notify all logistics_officer users
+        // Notify all logistic_officer users
         await notifyByRole('logistic_officer', {
             type: 'HARVEST_PICKED_UP',
             title: 'Produce Arriving',
@@ -152,6 +153,17 @@ export const requestRoom = async (req, res) => {
 };
 
 // GET /api/v1/processing-batches/pending-room  ← PM sees room requests
+export const getMyBatches = async (req, res) => {
+    try {
+        const batches = await ProcessingBatch.find({ requestedBy: req.user._id })
+            .populate('intakeLogId', 'pickedUpWeightKg arrivedAt truckId')
+            .sort({ createdAt: -1 });
+        res.json({ status: 'success', results: batches.length, data: batches });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
 export const getPendingRoomRequests = async (req, res) => {
     try {
         const batches = await ProcessingBatch.find({ status: 'RoomRequested' })
@@ -167,23 +179,33 @@ export const getPendingRoomRequests = async (req, res) => {
 // PATCH /api/v1/processing-batches/:id/assign-room  ← PM assigns room
 export const assignRoom = async (req, res) => {
     try {
-        const { assignedRoom } = req.body;
-        if (!assignedRoom) return res.status(400).json({ status: 'error', message: 'assignedRoom required.' });
+        const { roomId } = req.body;
+        if (!roomId) return res.status(400).json({ status: 'error', message: 'roomId is required.' });
 
+        const room = await Room.findById(roomId);
+        if (!room) return res.status(404).json({ status: 'error', message: 'Room not found.' });
+        if (room.status !== 'Available') {
+            return res.status(400).json({ status: 'error', message: `Room is currently ${room.status}.` });
+        }
+
+        // Update batch
         const batch = await ProcessingBatch.findByIdAndUpdate(
             req.params.id,
-            { assignedRoom, assignedBy: req.user._id, status: 'Processing' },
+            { assignedRoom: room.name, assignedRoomId: roomId, assignedBy: req.user._id, status: 'Processing' },
             { new: true }
         );
         if (!batch) return res.status(404).json({ status: 'error', message: 'Batch not found.' });
 
-        // Notify all qc_officer users
+        // Flip room to In Use
+        await Room.findByIdAndUpdate(roomId, { status: 'In Use' });
+
+        // Notify QC
         await notifyByRole('quality_officer', {
+            sender: req.user._id,
             type: 'ROOM_ASSIGNED',
             title: 'Processing Room Assigned',
-            message: `Room ${assignedRoom} assigned for your processing batch. You can now begin.`,
-            refId: batch._id,
-            refModel: 'ProcessingBatch',
+            message: `Room "${room.name}" assigned for your processing batch. You can now begin.`,
+            link: '/qc/processing',
         });
 
         res.json({ status: 'success', message: 'Room assigned.', data: batch });
@@ -205,6 +227,11 @@ export const completeBatch = async (req, res) => {
             { new: true }
         );
         if (!batch) return res.status(404).json({ status: 'error', message: 'Batch not found.' });
+
+        // Flip room back to Available
+        if (batch.assignedRoomId) {
+            await Room.findByIdAndUpdate(batch.assignedRoomId, { status: 'Available' });
+        }
 
         // Notify all production_manager users
         await notifyByRole('production_manager', {

@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './layout/Layout';
 import Dashboard from './pages/Dashboard';
+import PendingPickups from './pages/PendingPickups';
 import Collections from './pages/Collections';
 import Shipments from './pages/Shipments';
 import Fleet from './pages/Fleet';
@@ -13,6 +14,7 @@ const LogisticsRoutes = () => {
             <Route element={<Layout />}>
                 <Route path="/" element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<Dashboard />} />
+                <Route path="pickups" element={<PendingPickups />} />
                 <Route path="collections" element={<Collections />} />
                 <Route path="shipments" element={<Shipments />} />
                 <Route path="fleet" element={<Fleet />} />

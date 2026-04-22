@@ -4,6 +4,6 @@ import { getStock } from '../controllers/harvestController.js';
 
 const router = express.Router();
 router.use(protect);
-router.get('/', restrictTo('production_manager', 'qc_officer', 'admin'), getStock);
+router.get('/', restrictTo('production_manager', 'quality_officer', 'admin'), getStock);
 
 export default router;

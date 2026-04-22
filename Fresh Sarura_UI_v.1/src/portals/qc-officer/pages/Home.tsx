@@ -40,14 +40,13 @@ const Home = () => {
             const resIntake = await api.get('/harvest-declarations?status=Pending');
             const pendingIntakeCount = resIntake.results || 0;
 
-            // 2. Pending QC (Batches with status RoomRequested or Processing)
-            const resBatches = await api.get('/processing-batches/pending-room'); // This only returns RoomRequested per current controller
-            // Actually, QC might want to see both RoomRequested (Pending Room) and Processing (Ready for QC)
-            const pendingQCBatches = resBatches.data.data || [];
+            // 2. Pending QC (My Batches)
+            const resBatches = await api.get('/processing-batches/my');
+            const pendingQCBatches = (resBatches.data || []).filter((b: any) => b.status !== 'Done');
 
             // 3. Today's Stats from Stock
             const resStock = await api.get('/stock');
-            const doneToday = (resStock.data.data || []).filter((b: any) => 
+            const doneToday = (resStock.data || []).filter((b: any) => 
                 new Date(b.updatedAt).toDateString() === new Date().toDateString()
             );
 
@@ -137,22 +136,24 @@ const Home = () => {
                 </div>
 
                 {/* KPI Ribbon */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     {kpiCards.map((card, index) => (
                         <div
                             key={index}
-                            className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow border-theme flex flex-col justify-between"
+                            className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow"
                         >
-                            <div className="flex justify-between items-start mb-4">
+                            <div className="flex justify-between items-start">
                                 <div>
-                                    <p className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-1">{card.label}</p>
-                                    <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{card.value}</h3>
+                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{card.label}</p>
+                                    <div className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">
+                                        {card.value}
+                                    </div>
+                                    <p className="text-[11px] text-gray-400 mt-1">{card.sub}</p>
                                 </div>
-                                <div className={`p-3 rounded-xl ${card.bg}`}>
-                                    <card.icon className={`${card.color}`} size={24} />
+                                <div className={`p-3 rounded-lg ${card.bg}`}>
+                                    <card.icon className={card.color} size={24} />
                                 </div>
                             </div>
-                            <p className={`text-sm font-medium ${card.color} dark:text-gray-300`}>{card.sub}</p>
                         </div>
                     ))}
                 </div>
