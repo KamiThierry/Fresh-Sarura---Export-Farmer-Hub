@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { User, Bell, Shield, Globe, Moon, Save, Smartphone } from 'lucide-react';
+import Toast from '../../shared/component/Toast';
 
 const Settings = () => {
     const [profile, setProfile] = useState({ name: 'QC Inspector', phone: '+250 788 000 100' });
@@ -17,6 +18,7 @@ const Settings = () => {
         push: true,
         sms: false,
     });
+    const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
 
     return (
         <div className="p-6 space-y-6">
@@ -63,7 +65,10 @@ const Settings = () => {
                             QC Officer – Packhouse Floor
                         </span>
                         <button
-                            onClick={() => setIsEditing(false)}
+                            onClick={() => {
+                                setIsEditing(false);
+                                setToast({ message: 'Profile Updated', subtitle: 'Your settings have been saved successfully.' });
+                            }}
                             disabled={!isEditing}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${isEditing
                                 ? 'bg-green-600 text-white hover:bg-green-700 shadow-md'
@@ -186,6 +191,14 @@ const Settings = () => {
                 </div>
                 <button className="mt-4 text-sm font-bold text-indigo-600 hover:text-indigo-500 hover:underline">Change Password</button>
             </div>
+
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    subtitle={toast.subtitle}
+                    onClose={() => setToast(null)}
+                />
+            )}
         </div>
     );
 };

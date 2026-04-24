@@ -149,7 +149,7 @@ const Logistics = ({ onCreatePackingList }: LogisticsProps) => {
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {summaryStats.map((stat, index) => (
                     <div key={index} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                         <div className="flex justify-between items-start">

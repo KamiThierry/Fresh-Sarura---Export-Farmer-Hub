@@ -1,21 +1,36 @@
 import { useState } from 'react';
-import { Leaf, Search, Bell } from 'lucide-react';
+import { Search, Bell, LogOut } from 'lucide-react';
+import logo from '@/assets/sarura_logo_nav.png';
 import ThemeToggle from '../../shared/component/ThemeToggle';
 import NotificationsModal from '../components/NotificationsModal';
+import { useNavigate } from 'react-router-dom';
 
 const Header = () => {
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+    const navigate = useNavigate();
+
+    // Real user from localStorage
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : { name: 'User', role: 'Staff' };
+
+    const formatRole = (role: string) => {
+        return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
+    };
 
     return (
         <>
             <header className="fixed top-[10px] left-[10px] right-[10px] h-16 bg-white/80 dark:bg-gray-800/90 backdrop-blur-md border border-gray-200 dark:border-gray-700 z-40 px-6 flex items-center justify-between transition-colors duration-300 rounded-2xl shadow-sm">
                 <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center shadow-lg shadow-green-900/20">
-                        <Leaf className="text-white" size={18} strokeWidth={2.5} />
-                    </div>
+                    <img src={logo} alt="Fresh Sarura" className="h-10 w-auto" />
                     <div>
                         <h1 className="text-base font-bold text-green-700 dark:text-green-500 tracking-tight">Fresh Sarura</h1>
-                        <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400">Export & Farmer Hub</p>
+                        <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400">Export &amp; Farmer Hub</p>
                     </div>
                 </div>
 
@@ -47,12 +62,24 @@ const Header = () => {
                     {/* User Avatar & Profile */}
                     <div className="flex items-center gap-3 pl-2 border-l border-gray-200 dark:border-gray-700">
                         <div className="text-right hidden md:block">
-                            <p className="text-sm font-semibold text-[#222222] dark:text-white">Logistics Officer</p>
-                            <p className="text-xs text-[#6B7280] dark:text-gray-400">HQ - Operations</p>
+                            <p className="text-sm font-semibold text-[#222222] dark:text-white">{user.name}</p>
+                            <p className="text-xs text-[#6B7280] dark:text-gray-400">{formatRole(user.role)}</p>
                         </div>
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center text-white text-sm font-semibold shadow-md">
-                            LO
-                        </div>
+                        <button
+                            onClick={() => navigate('/logistics/settings')}
+                            className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center text-white text-sm font-semibold shadow-md active:scale-95 transition-all"
+                            title="My Profile & Settings"
+                        >
+                            {user.name.charAt(0).toUpperCase()}
+                        </button>
+                        {/* Separate logout button */}
+                        <button
+                            onClick={handleLogout}
+                            title="Sign out"
+                            className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                        >
+                            <LogOut size={16} />
+                        </button>
                     </div>
                 </div>
             </header>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Leaf, Search, Bell } from 'lucide-react';
+import { Search, Bell } from 'lucide-react';
+import logo from '@/assets/sarura_logo_nav.png';
 import ThemeToggle from '../../shared/component/ThemeToggle';
 import NotificationsModal from '../components/NotificationsModal';
 
@@ -12,12 +13,10 @@ const Header = () => {
 
                 {/* Brand */}
                 <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center shadow-lg shadow-green-900/20">
-                        <Leaf className="text-white" size={18} strokeWidth={2.5} />
-                    </div>
+                    <img src={logo} alt="Fresh Sarura" className="h-10 w-auto" />
                     <div>
                         <h1 className="text-base font-bold text-green-700 dark:text-green-400 tracking-tight">Fresh Sarura</h1>
-                        <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400">Export & Farmer Hub</p>
+                        <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400">Export &amp; Farmer Hub</p>
                     </div>
                 </div>
 

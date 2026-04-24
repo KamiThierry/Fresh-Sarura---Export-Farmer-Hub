@@ -6,7 +6,7 @@ const Layout = () => {
     return (
         <div className="relative h-screen bg-[#F4F7FA] dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans overflow-hidden transition-colors duration-300">
             {/* Background Texture */}
-            <div className="absolute inset-0 bg-gradient-to-br from-[#F4F7FA] via-[#E3F2FD] to-[#F4F7FA] dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 opacity-40 pointer-events-none"></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-[#F4F7FA] via-[#E8F5E9] to-[#F4F7FA] dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 opacity-40 pointer-events-none"></div>
 
             <Sidebar />
             <Header />

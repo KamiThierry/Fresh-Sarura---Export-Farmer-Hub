@@ -88,21 +88,28 @@ const AnalyticsReporting = () => {
 
     // --- Components ---
 
-    const KPICard = ({ title, value, sub, icon: Icon, color, trend }: any) => (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-start justify-between">
-            <div>
-                <p className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-1">{title}</p>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{value}</h3>
-                <div className={`flex items-center text-xs font-semibold ${trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
-                    {trend === 'up' ? <TrendingUp size={14} className="mr-1" /> : <TrendingDown size={14} className="mr-1" />}
-                    {sub}
+    const KPICard = ({ title, value, sub, icon: Icon, color, trend }: any) => {
+        // Extract text color and background color from the provided color string (e.g. "text-green-600 bg-green-50")
+        const colorClasses = color.split(' ');
+        const textColor = colorClasses.find((c: string) => c.startsWith('text-')) || 'text-gray-900';
+        const bgColor = colorClasses.find((c: string) => c.startsWith('bg-')) || 'bg-gray-50';
+
+        return (
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-start justify-between">
+                <div>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-1">{title}</p>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{value}</h3>
+                    <div className={`flex items-center text-xs font-semibold ${trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
+                        {trend === 'up' ? <TrendingUp size={14} className="mr-1" /> : <TrendingDown size={14} className="mr-1" />}
+                        {sub}
+                    </div>
+                </div>
+                <div className={`p-3 rounded-lg ${bgColor}`}>
+                    <Icon size={24} className={textColor} />
                 </div>
             </div>
-            <div className={`p-3 rounded-lg ${color} bg-opacity-10`}>
-                <Icon size={24} className={color.replace('bg-', 'text-')} />
-            </div>
-        </div>
-    );
+        );
+    };
 
     return (
         <div className="space-y-6 pb-20">

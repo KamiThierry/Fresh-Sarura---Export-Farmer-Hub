@@ -1,8 +1,13 @@
-import { useState } from 'react';
 import { User, Bell, Settings as SettingsIcon, Radio, Save, Shield, Mail, Smartphone, Plane, Truck, Activity, Key, Globe, CheckCircle, AlertTriangle } from 'lucide-react';
+import Toast from '../../shared/component/Toast';
 
 const Settings = () => {
     const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'defaults' | 'integrations'>('profile');
+    const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
+
+    const handleSaveNotification = (msg: string, sub: string) => {
+        setToast({ message: msg, subtitle: sub });
+    };
 
     return (
         <div className="space-y-6 pb-20 md:pb-0 relative animate-fade-in">
@@ -46,21 +51,27 @@ const Settings = () => {
                 <div className="md:col-span-3">
                     <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
 
-                        {activeTab === 'profile' && <ProfilePanel />}
-                        {activeTab === 'notifications' && <NotificationsPanel />}
-                        {activeTab === 'defaults' && <DefaultsPanel />}
-                        {activeTab === 'integrations' && <IntegrationsPanel />}
-
+                        {activeTab === 'profile' && <ProfilePanel onSave={() => handleSaveNotification('Profile Updated', 'Your changes have been saved successfully.')} />}
+                        {activeTab === 'notifications' && <NotificationsPanel onSave={() => handleSaveNotification('Preferences Saved', 'Notification settings updated.')} />}
+                        {activeTab === 'defaults' && <DefaultsPanel onSave={() => handleSaveNotification('Defaults Saved', 'Operational system defaults updated.')} />}
                     </div>
                 </div>
 
             </div>
+
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    subtitle={toast.subtitle}
+                    onClose={() => setToast(null)}
+                />
+            )}
         </div>
     );
 };
 
 // Panel A: Profile & Security
-const ProfilePanel = () => {
+const ProfilePanel = ({ onSave }: { onSave: () => void }) => {
     return (
         <div className="space-y-8 animate-fade-in">
             {/* Personal Info */}
@@ -119,7 +130,10 @@ const ProfilePanel = () => {
 
             {/* Action */}
             <div className="flex justify-end pt-4">
-                <button className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 transition-all hover:scale-105 active:scale-95">
+                <button 
+                    onClick={onSave}
+                    className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 transition-all hover:scale-105 active:scale-95"
+                >
                     <Save size={18} />
                     Save Changes
                 </button>
@@ -129,7 +143,7 @@ const ProfilePanel = () => {
 };
 
 // Panel B: Notifications
-const NotificationsPanel = () => {
+const NotificationsPanel = ({ onSave }: { onSave: () => void }) => {
     return (
         <div className="space-y-6 animate-fade-in">
             <div>
@@ -173,7 +187,10 @@ const NotificationsPanel = () => {
             </div>
 
             <div className="flex justify-end pt-6 border-t border-gray-100 dark:border-gray-700">
-                <button className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 transition-all hover:scale-105 active:scale-95">
+                <button 
+                    onClick={onSave}
+                    className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 transition-all hover:scale-105 active:scale-95"
+                >
                     <Save size={18} />
                     Save Preferences
                 </button>
@@ -199,7 +216,7 @@ const NotificationRow = ({ title, desc, app, email, sms }: { title: string, desc
 );
 
 // Panel C: Operational Defaults
-const DefaultsPanel = () => {
+const DefaultsPanel = ({ onSave }: { onSave: () => void }) => {
     return (
         <div className="space-y-8 animate-fade-in">
             <div>
@@ -248,7 +265,10 @@ const DefaultsPanel = () => {
             </div>
 
             <div className="flex justify-end pt-6 border-t border-gray-100 dark:border-gray-700">
-                <button className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 transition-all hover:scale-105 active:scale-95">
+                <button 
+                    onClick={onSave}
+                    className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 transition-all hover:scale-105 active:scale-95"
+                >
                     <Save size={18} />
                     Save Defaults
                 </button>

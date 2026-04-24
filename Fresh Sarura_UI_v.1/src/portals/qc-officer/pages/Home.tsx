@@ -23,6 +23,9 @@ const statusStyles: Record<string, string> = {
 };
 
 const Home = () => {
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : { name: 'QC Inspector' };
+
     const [stats, setStats] = useState({
         pendingIntake: 0,
         pendingQC: 0,
@@ -126,7 +129,7 @@ const Home = () => {
                 {/* Welcome Banner */}
                 <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-green-700 to-green-600 p-8 text-white shadow-lg">
                     <div className="relative z-10">
-                        <h1 className="text-3xl font-bold mb-1">Welcome back, QC Inspector.</h1>
+                        <h1 className="text-3xl font-bold mb-1">Welcome back, {user.name.split(' ')[0]}.</h1>
                         <p className="text-green-100 text-base opacity-90">
                             Monitor today's intake, pending inspections, and packhouse floor status.
                         </p>

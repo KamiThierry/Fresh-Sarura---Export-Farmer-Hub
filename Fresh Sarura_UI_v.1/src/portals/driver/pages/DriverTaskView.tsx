@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { MapPin, Phone, Truck, CheckCircle2, Navigation, Package, Key } from 'lucide-react';
 import { useParams } from 'react-router-dom';
+import logo from '@/assets/sarura_logo_nav.png';
 
 type TaskStep = 'en-route' | 'at-farm' | 'completed';
 
@@ -27,13 +28,17 @@ const DriverTaskView = () => {
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
             {/* Header / Top Bar */}
-            <div className="bg-white p-4 shadow-sm border-b sticky top-0 z-10">
-                <div className="flex items-center justify-between">
-                    <h1 className="text-lg font-bold text-gray-900">Driver Lite</h1>
-                    <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded text-gray-600">
-                        Task #{taskId || '1024'}
-                    </span>
+            <div className="bg-white p-4 shadow-sm border-b sticky top-0 z-10 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <img src={logo} alt="Fresh Sarura" className="h-8 w-auto" />
+                    <div>
+                        <h1 className="text-sm font-bold text-green-700 leading-tight">Fresh Sarura</h1>
+                        <p className="text-[8px] font-medium text-gray-500 uppercase tracking-wider">Driver Lite</p>
+                    </div>
                 </div>
+                <span className="text-[10px] font-mono bg-gray-100 px-2 py-1 rounded text-gray-600">
+                    Task #{taskId || '1024'}
+                </span>
             </div>
 
             <main className="flex-1 p-4 max-w-md mx-auto w-full flex flex-col">

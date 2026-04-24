@@ -4,6 +4,7 @@ import { Truck, MapPin, Filter, CheckCircle2, AlertTriangle, ArrowRight, Plane, 
 import RoutePreviewMap from '../components/RoutePreviewMap';
 import LogPickupModal from '../components/LogPickupModal';
 import { api } from '../../../lib/api';
+import Toast from '../../shared/component/Toast';
 
 
 // Mock data remaining for Fleet and Airport Transfers
@@ -38,6 +39,7 @@ const Collections = () => {
     // Modal State for Log Pickup
     const [isPickupModalOpen, setIsPickupModalOpen] = useState(false);
     const [selectedForPickup, setSelectedForPickup] = useState<any>(null);
+    const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
 
     const [regionFilter, setRegionFilter] = useState('All Regions');
     const [vehicleFilter, setVehicleFilter] = useState('All Vehicles');
@@ -117,7 +119,10 @@ const Collections = () => {
         setTimeout(() => {
             setDispatched(false);
             handleDiscard();
-            alert(`Dispatch Link sent to ${selectedTruckData?.driver}`);
+            setToast({
+                message: 'Dispatch Successful',
+                subtitle: `Dispatch Link sent to ${selectedTruckData?.driver}.`
+            });
         }, 2000);
     };
 
@@ -565,9 +570,22 @@ const Collections = () => {
                     setSelectedForPickup(null);
                 }}
                 declaration={selectedForPickup}
-                onSuccess={fetchDeclarations}
+                onSuccess={() => {
+                    setToast({
+                        message: 'Pickup Logged',
+                        subtitle: `The harvest from ${selectedForPickup?.farm} has been marked as collected.`
+                    });
+                    fetchDeclarations();
+                }}
             />
 
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    subtitle={toast.subtitle}
+                    onClose={() => setToast(null)}
+                />
+            )}
         </div>
     );
 };

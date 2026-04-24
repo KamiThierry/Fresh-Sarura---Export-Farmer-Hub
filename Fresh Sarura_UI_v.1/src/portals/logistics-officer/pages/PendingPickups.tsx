@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Truck, PackageCheck, Clock, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 import { api } from '../../../lib/api';
 import LogPickupModal from '../components/LogPickupModal';
+import Toast from '../../shared/component/Toast';
 
 type Declaration = {
   _id: string;
@@ -26,6 +27,7 @@ const PendingPickups = () => {
   const [filter, setFilter] = useState<'All' | 'Pending' | 'PickedUp'>('All');
   const [selectedDeclaration, setSelectedDeclaration] = useState<Declaration | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
 
   const fetchDeclarations = useCallback(async () => {
     setLoading(true);
@@ -192,8 +194,23 @@ const PendingPickups = () => {
           crop: selectedDeclaration.cropName,
           weight: selectedDeclaration.estimatedWeightKg,
         } : null}
-        onSuccess={fetchDeclarations}
+        onSuccess={() => {
+          setIsModalOpen(false);
+          setToast({
+            message: 'Pickup Logged',
+            subtitle: `The harvest from ${selectedDeclaration?.farmName || selectedDeclaration?.farmerId?.full_name} has been marked as collected.`
+          });
+          fetchDeclarations();
+        }}
       />
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          subtitle={toast.subtitle}
+          onClose={() => setToast(null)}
+        />
+      )}
     </>
   );
 };

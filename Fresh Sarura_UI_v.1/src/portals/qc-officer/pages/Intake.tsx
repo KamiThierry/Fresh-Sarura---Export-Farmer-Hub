@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Truck, ClipboardList, AlertCircle, CheckCircle, Clock, ChevronDown, ChevronUp, Layers, RefreshCw } from 'lucide-react';
 import RequestRoomModal from '../components/RequestRoomModal';
 import { api } from '../../../lib/api';
+import Toast from '../../shared/component/Toast';
 
 // --- Types ---
 type IntakeStatus = 'Awaiting QC' | 'In Progress' | 'Completed' | 'Rejected';
@@ -32,6 +33,7 @@ const Intake = () => {
     const [filterStatus, setFilterStatus] = useState<IntakeStatus | 'All'>('All');
     const [expandedRow, setExpandedRow] = useState<string | null>(null);
     const [selectedIntake, setSelectedIntake] = useState<IntakeRecord | null>(null);
+    const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
 
     const fetchIntakes = async () => {
         setLoading(true);
@@ -195,8 +197,22 @@ const Intake = () => {
                     cropName: selectedIntake.crop,
                     pickedUpWeightKg: selectedIntake.weightNum
                 } : null}
-                onSuccess={fetchIntakes}
+                onSuccess={() => {
+                    fetchIntakes();
+                    setToast({
+                        message: 'Room Requested',
+                        subtitle: `A processing room request for ${selectedIntake?.crop} has been sent.`
+                    });
+                }}
             />
+
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    subtitle={toast.subtitle}
+                    onClose={() => setToast(null)}
+                />
+            )}
         </>
     );
 };

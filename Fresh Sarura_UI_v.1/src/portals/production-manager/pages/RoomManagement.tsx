@@ -90,15 +90,24 @@ const RoomManagement = () => {
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {[
-                        { label: 'Available', value: available, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
-                        { label: 'In Use',    value: inUse,     color: 'text-blue-600',  bg: 'bg-blue-50  dark:bg-blue-900/20'  },
-                        { label: 'Maintenance', value: maintenance, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
+                        { label: 'Available', value: available, icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
+                        { label: 'In Use',    value: inUse,     icon: FlaskConical, color: 'text-blue-600',  bg: 'bg-blue-50  dark:bg-blue-900/20'  },
+                        { label: 'Maintenance', value: maintenance, icon: Wrench, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
                     ].map((s, i) => (
-                        <div key={i} className={`${s.bg} rounded-xl p-4`}>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{s.label}</p>
-                            <p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p>
+                        <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{s.label}</p>
+                                    <div className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">
+                                        {s.value}
+                                    </div>
+                                </div>
+                                <div className={`p-3 rounded-lg ${s.bg}`}>
+                                    <s.icon className={s.color} size={24} />
+                                </div>
+                            </div>
                         </div>
                     ))}
                 </div>

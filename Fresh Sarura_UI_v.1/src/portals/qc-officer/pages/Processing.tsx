@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { FlaskConical, PackageCheck, Loader2, RefreshCw, ClipboardCheck, ArrowRight } from 'lucide-react';
 import { api } from '../../../lib/api';
 import LogProcessingResultsModal from '../components/LogProcessingResultsModal';
+import Toast from '../../shared/component/Toast';
 
 type IntakeLog = {
   _id: string;
@@ -35,6 +36,7 @@ const Processing = () => {
   const [requestingRoomId, setRequestingRoomId] = useState<string | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<ProcessingBatch | null>(null);
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
+  const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -83,9 +85,17 @@ const Processing = () => {
         receivedWeightKg: intakeLog.pickedUpWeightKg,
         cropName: intakeLog.harvestDeclarationId.cropName,
       });
+      setToast({
+        message: 'Room Requested',
+        subtitle: `A request for ${intakeLog.harvestDeclarationId.cropName} has been sent to the PM.`
+      });
       await fetchData();
     } catch (err) {
       console.error('Failed to request room:', err);
+      setToast({
+        message: 'Request Failed',
+        subtitle: 'Could not send room request. Please try again.'
+      });
     } finally {
       setRequestingRoomId(null);
     }
@@ -267,8 +277,23 @@ const Processing = () => {
         isOpen={isResultsModalOpen}
         onClose={() => setIsResultsModalOpen(false)}
         batch={selectedBatch}
-        onSuccess={() => { setIsResultsModalOpen(false); fetchData(); }}
+        onSuccess={() => { 
+          setIsResultsModalOpen(false); 
+          setToast({
+            message: 'Results Logged',
+            subtitle: `Final weights for ${selectedBatch?.cropName} have been recorded.`
+          });
+          fetchData(); 
+        }}
       />
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          subtitle={toast.subtitle}
+          onClose={() => setToast(null)}
+        />
+      )}
     </>
   );
 };

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ClipboardList, CheckCircle, XCircle, Clock, AlertTriangle, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
 import RecordQCModal, { QCInspectionData } from '../components/RecordQCModal';
+import Toast from '../../shared/component/Toast';
 
 type QCStatus = 'Pending' | 'Pass' | 'Fail' | 'Under Review';
 
@@ -52,6 +53,7 @@ const Inspection = () => {
     const [filterStatus, setFilterStatus] = useState<QCStatus | 'All'>('All');
     const [expandedRow, setExpandedRow] = useState<string | null>(null);
     const [qcModalData, setQcModalData] = useState<QCInspectionData | null>(null);
+    const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
 
     const filtered = mockInspections.filter(r => {
         const matchSearch = r.id.toLowerCase().includes(search.toLowerCase()) ||
@@ -188,8 +190,23 @@ const Inspection = () => {
                 isOpen={!!qcModalData}
                 onClose={() => setQcModalData(null)}
                 data={qcModalData}
-                onSubmit={(res) => console.log("QC Submitted:", res)}
+                onSubmit={(res) => {
+                    console.log("QC Submitted:", res);
+                    setQcModalData(null);
+                    setToast({
+                        message: 'QC Recorded',
+                        subtitle: `Inspection for ${qcModalData?.crop} has been saved.`
+                    });
+                }}
             />
+
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    subtitle={toast.subtitle}
+                    onClose={() => setToast(null)}
+                />
+            )}
         </div>
     );
 };
