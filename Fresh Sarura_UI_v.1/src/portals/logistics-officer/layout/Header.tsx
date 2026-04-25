@@ -1,17 +1,55 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Bell, LogOut } from 'lucide-react';
-import logo from '@/assets/sarura_logo_nav.png';
+import logo from '../../../assets/sarura_logo_nav.png';
 import ThemeToggle from '../../shared/component/ThemeToggle';
-import NotificationsModal from '../components/NotificationsModal';
+import NotificationsModal from '../../shared/component/NotificationsModal';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../../../lib/api';
 
 const Header = () => {
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+    const [notifications, setNotifications] = useState<any[]>([]);
     const navigate = useNavigate();
 
     // Real user from localStorage
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : { name: 'User', role: 'Staff' };
+
+    const fetchNotifications = async () => {
+        try {
+            const res = await api.get('/notifications');
+            setNotifications(res.data || []);
+        } catch (err) {
+            console.error('Failed to fetch notifications:', err);
+        }
+    };
+
+    useEffect(() => {
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
+        return () => clearInterval(interval);
+    }, []);
+
+    const handleMarkAsRead = async (id: string) => {
+        try {
+            await api.patch(`/notifications/${id}/read`, {});
+            fetchNotifications();
+        } catch (err) { console.error(err); }
+    };
+
+    const handleMarkAllAsRead = async () => {
+        try {
+            await api.patch('/notifications/read-all', {});
+            fetchNotifications();
+        } catch (err) { console.error(err); }
+    };
+
+    const handleClearAll = async () => {
+        try {
+            await api.delete('/notifications');
+            fetchNotifications();
+        } catch (err) { console.error(err); }
+    };
 
     const formatRole = (role: string) => {
         return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -22,6 +60,8 @@ const Header = () => {
         localStorage.removeItem('user');
         navigate('/login');
     };
+
+    const unreadCount = notifications.filter(n => !n.isRead).length;
 
     return (
         <>
@@ -53,10 +93,18 @@ const Header = () => {
                     {/* Notification Bell */}
                     <button
                         onClick={() => setIsNotificationsOpen(true)}
-                        className="relative p-2.5 rounded-xl bg-white/80 hover:bg-blue-500 hover:text-white transition-all shadow-sm dark:bg-gray-700/50 dark:text-gray-200 dark:hover:bg-blue-600"
+                        className={`relative p-2.5 rounded-xl transition-all shadow-sm ${
+                            unreadCount > 0 
+                                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' 
+                                : 'bg-white/80 dark:bg-gray-700/50 text-gray-500 dark:text-gray-200 hover:bg-blue-500 hover:text-white'
+                        }`}
                     >
                         <Bell size={18} />
-                        <span className="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full ring-2 ring-white dark:ring-gray-800"></span>
+                        {unreadCount > 0 && (
+                            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center bg-blue-600 rounded-full text-[10px] font-bold text-white ring-2 ring-white dark:ring-gray-800">
+                                {unreadCount}
+                            </span>
+                        )}
                     </button>
 
                     {/* User Avatar & Profile */}
@@ -87,6 +135,10 @@ const Header = () => {
             <NotificationsModal
                 isOpen={isNotificationsOpen}
                 onClose={() => setIsNotificationsOpen(false)}
+                notifications={notifications}
+                onMarkAsRead={handleMarkAsRead}
+                onMarkAllAsRead={handleMarkAllAsRead}
+                onClearAll={handleClearAll}
             />
         </>
     );

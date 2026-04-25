@@ -32,6 +32,8 @@ const InventoryManagement = () => {
     const [selectedApprovedIntake, setSelectedApprovedIntake] = useState<ApprovedIntake | null>(null);
     const [intakes, setIntakes] = useState<any[]>([]);
     const [approvedIntakes, setApprovedIntakes] = useState<any[]>([]);
+    const [exportBatches, setExportBatches] = useState<any[]>([]);
+    const [shipments, setShipments] = useState<any[]>([]);
 
     // Action Menu State
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -81,25 +83,47 @@ const InventoryManagement = () => {
         }
     };
 
+    const fetchExportBatches = async () => {
+        try {
+            const res = await api.get('/export-batches');
+            // Backend returns { status: 'success', data: [...] }
+            setExportBatches(res.data?.data || res.data || []);
+        } catch (err) {
+            console.error('Failed to fetch export batches:', err);
+        }
+    };
+
+    const fetchShipments = async () => {
+        try {
+            const res = await api.get('/shipments');
+            setShipments(res.data?.data || res.data || []);
+        } catch (err) {
+            console.error('Failed to fetch shipments:', err);
+        }
+    };
+
     useEffect(() => {
         fetchStock();
         fetchIntakes();
+        fetchExportBatches();
+        fetchShipments();
     }, []);
 
     // --- DERIVED / FILTERED DATA ---
 
     // Tab 2: Inventory (Stock)
     const inventoryItems = stock.map(item => ({
-        id: item._id,
+        id: item.stockId || item._id,  // use stockId if available
+        rawId: item._id,               // keep _id for passing to modal
         produce: item.cropName,
-        grade: 'A', // Assuming grade A for now, could be derived
-        weight: `${(item.processedWeightKg).toLocaleString()} kg`,
-        weightNum: item.processedWeightKg,
-        location: item.assignedRoom || 'Cold Room',
+        grade: 'A',
+        weight: `${(item.processedWeightKg || 0).toLocaleString()} kg`,
+        weightNum: item.processedWeightKg || 0,
+        location: item.assignedRoom || 'Processing Room',
         temp: '4.5°C',
         status: 'Available',
         daysInStorage: Math.floor((Date.now() - new Date(item.updatedAt).getTime()) / (1000 * 60 * 60 * 24)),
-        shelfLifeDays: 14
+        shelfLifeDays: 14,
     }));
 
     // Filtered Lists
@@ -116,10 +140,12 @@ const InventoryManagement = () => {
         return matchesSearch && matchesFilter;
     });
 
-    const filteredExportBatches = [
-        { id: 'EB-2024-001', client: 'Global Fruits SA', dest: 'Brussels, BE', composition: 'French Beans (900kg), Avocados (400kg)', date: '2024-05-24', status: 'In Progress' },
-        { id: 'EB-2024-004', client: 'Euro-Imports Ltd', dest: 'London, UK', composition: 'Avocados (Hass) - 1.2 Tons', date: '2024-05-26', status: 'In Progress' },
-    ].filter(b => b.id.toLowerCase().includes(searchTerm.toLowerCase()) || b.client.toLowerCase().includes(searchTerm.toLowerCase()));
+    const filteredExportBatches = exportBatches
+        .filter(b =>
+            b.batchId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            b.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            b.cropName?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
 
     const filteredActivity = [
         { id: 1, time: '10:45 AM', type: 'Intake Logged', description: 'Received 450kg French Beans from Cooperative A', impact: '+450kg', impactType: 'positive', user: 'Logistics Officer' },
@@ -132,7 +158,7 @@ const InventoryManagement = () => {
     const totalStockTons = (totalStockKg / 1000).toFixed(1);
     const intakeTodayKg = stock
         .filter(i => new Date(i.createdAt).toDateString() === new Date().toDateString())
-        .reduce((sum, i) => sum + i.receivedWeightKg, 0);
+        .reduce((sum, i) => sum + (i.receivedWeightKg || 0), 0);
     
     // Mock value calculation
     const totalValue = totalStockKg * 2.5; 
@@ -141,8 +167,17 @@ const InventoryManagement = () => {
         { label: 'Total Stock', value: `${totalStockTons} Tons`, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
         { label: 'Raw Intake (Today)', value: `${intakeTodayKg.toLocaleString()} kg`, icon: Leaf, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
         { label: 'Value in Stock', value: `$${(totalValue / 1000).toFixed(1)}K`, icon: DollarSign, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
-        { label: 'Active Exports', value: `0 Batches`, icon: Layers, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
+        { label: 'Active Exports', value: `${exportBatches.filter(b => b.status !== 'Shipped').length} Batches`, icon: Layers, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
     ];
+
+    // Helpers
+    const getShipmentForBatch = (batchId: string) => {
+        return shipments.find(s =>
+            s.exportBatches?.some((b: any) =>
+                (b._id || b) === batchId
+            )
+        );
+    };
 
     // --- HANDLERS ---
 
@@ -553,33 +588,58 @@ const InventoryManagement = () => {
                                     <th className="px-6 py-4">Client / Destination</th>
                                     <th className="px-6 py-4">Composition</th>
                                     <th className="px-6 py-4">Shipment Date</th>
+                                    <th className="px-6 py-4">Shipment</th>
                                     <th className="px-6 py-4">Status</th>
                                     <th className="px-6 py-4 text-right">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                                 {filteredExportBatches.slice((exportPage - 1) * itemsPerPage, exportPage * itemsPerPage).map((item) => (
-                                    <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                        <td className="px-6 py-4 font-mono text-sm font-bold text-gray-700 dark:text-gray-300">{item.id}</td>
+                                    <tr key={item._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                        <td className="px-6 py-4 font-mono text-sm font-bold text-gray-700 dark:text-gray-300">{item.batchId}</td>
                                         <td className="px-6 py-4">
                                             <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-gray-900 dark:text-white">{item.client}</span>
-                                                <span className="text-xs text-gray-500">{item.dest}</span>
+                                                <span className="text-sm font-bold text-gray-900 dark:text-white">{item.clientName}</span>
+                                                <span className="text-xs text-gray-500">{item.destination}</span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{item.composition}</td>
-                                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{item.date}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
+                                            {item.cropName} — {item.boxCount} boxes ({item.allocatedWeightKg?.toLocaleString()} kg)
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
+                                            {item.targetShipmentDate ? new Date(item.targetShipmentDate).toLocaleDateString() : '—'}
+                                        </td>
                                         <td className="px-6 py-4">
-                                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-                                                {item.status}
+                                            {(() => {
+                                                const shipment = getShipmentForBatch(item._id);
+                                                if (!shipment) return <span className="text-xs text-gray-400 italic">Not assigned</span>;
+                                                const statusColor = shipment.status === 'Dispatched'
+                                                    ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                    : 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+                                                return (
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                                                            {shipment.plNumber}
+                                                        </span>
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold w-fit ${statusColor}`}>
+                                                            {shipment.status === 'Dispatched' ? '✈ Dispatched' : '📋 Scheduled'}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                                                item.status === 'ReadyForExport' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                                                item.status === 'Shipped' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                                                'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                                            }`}>
+                                                {item.status === 'ReadyForExport' ? 'Ready for Export' : item.status}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <button
-                                                onClick={() => {
-                                                    setSelectedBatch(item);
-                                                    setIsBatchModalOpen(true);
-                                                }}
+                                                onClick={() => { setSelectedBatch(item); setIsBatchModalOpen(true); }}
                                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 text-xs font-semibold rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
                                             >
                                                 Manage Batch
@@ -682,9 +742,11 @@ const InventoryManagement = () => {
             <CreateExportBatchModal
                 isOpen={isExportBatchOpen}
                 onClose={() => setIsExportBatchOpen(false)}
+                stock={stock}  // pass real stock
                 onSuccess={() => {
-                    // Logic to create batch from Inventory
-                    setActiveTab('export_batches'); // Switch to exports tab
+                    setIsExportBatchOpen(false);
+                    fetchExportBatches();
+                    setActiveTab('export_batches');
                 }}
             />
 
@@ -696,6 +758,7 @@ const InventoryManagement = () => {
                     setTimeout(() => setSelectedBatch(null), 200);
                 }}
                 batch={selectedBatch}
+                onStatusChange={() => { fetchExportBatches(); }}
             />
 
             {/* Modal 5: Move To Cold Room */}

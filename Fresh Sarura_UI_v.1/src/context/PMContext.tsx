@@ -5,6 +5,7 @@ import { CropCycle, Farmer, BudgetRequest } from '@/types';
 interface PMContextType {
   cycles: CropCycle[];
   farmers: Farmer[];
+  shipments: any[];
   pendingRequests: BudgetRequest[];
   pendingForecasts: any[];
   pendingReports: any[];
@@ -13,6 +14,7 @@ interface PMContextType {
   error: string | null;
   refreshCycles: () => Promise<void>;
   refreshFarmers: () => Promise<void>;
+  refreshShipments: () => Promise<void>;
   refreshPendingRequests: () => Promise<void>;
   refreshPendingForecasts: () => Promise<void>;
   refreshPendingReports: () => Promise<void>;
@@ -25,6 +27,7 @@ const PMContext = createContext<PMContextType | undefined>(undefined);
 export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [cycles, setCycles] = useState<CropCycle[]>([]);
   const [farmers, setFarmers] = useState<Farmer[]>([]);
+  const [shipments, setShipments] = useState<any[]>([]);
   const [pendingRequests, setPendingRequests] = useState<BudgetRequest[]>([]);
   const [pendingForecasts, setPendingForecasts] = useState<any[]>([]);
   const [pendingReports, setPendingReports] = useState<any[]>([]);
@@ -53,6 +56,16 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     } catch (err: any) {
       console.error('PMContext: Failed to fetch farmers', err);
       setError(err.message);
+    }
+  }, []);
+
+  const refreshShipments = useCallback(async () => {
+    try {
+        const res = await api.get('/shipments');
+        const data = res.data?.data ?? res?.data ?? res ?? [];
+        setShipments(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+        console.error('PMContext: Failed to fetch shipments', err);
     }
   }, []);
 
@@ -104,10 +117,11 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       refreshPendingRequests(),
       refreshPendingForecasts(),
       refreshPendingReports(),
-      refreshPendingRoomRequests()
+      refreshPendingRoomRequests(),
+      refreshShipments(),
     ]);
     setLoading(false);
-  }, [refreshCycles, refreshFarmers, refreshPendingRequests, refreshPendingForecasts, refreshPendingReports, refreshPendingRoomRequests]);
+  }, [refreshCycles, refreshFarmers, refreshPendingRequests, refreshPendingForecasts, refreshPendingReports, refreshPendingRoomRequests, refreshShipments]);
 
   useEffect(() => {
     refreshAll();
@@ -117,6 +131,7 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     <PMContext.Provider value={{
       cycles,
       farmers,
+      shipments,
       pendingRequests,
       pendingForecasts,
       pendingReports,
@@ -125,6 +140,7 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       error,
       refreshCycles,
       refreshFarmers,
+      refreshShipments,
       refreshPendingRequests,
       refreshPendingForecasts,
       refreshPendingReports,
@@ -143,13 +159,3 @@ export const usePMContext = () => {
   }
   return context;
 };
-
-/*
-Refactoring Tasks:
-- [x] Create `PMContext.tsx` for global state management
-- [x] Update `ProductionManagerRoutes.tsx` with the new Provider
-- [x] Enhance `api.ts` for robust response mapping (Handled in Context)
-- [x] Refactor `CropPlanning.tsx` to use `usePMContext`
-- [x] Refactor `FarmerManagement.tsx` to use `usePMContext`
-- [x] Verify navigation stability and data persistence
-*/

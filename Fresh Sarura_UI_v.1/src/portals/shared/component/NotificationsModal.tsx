@@ -1,10 +1,10 @@
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { X, FileWarning, Clock, Truck, Eye, Upload, ArrowRight, Bell, CheckCircle2, AlertCircle, TrendingUp, Leaf } from 'lucide-react';
+import { X, FileWarning, Clock, Truck, Eye, Upload, ArrowRight, Bell, CheckCircle2, AlertCircle, TrendingUp, Leaf, Package, Plane } from 'lucide-react';
 
 interface Notification {
     _id: string;
-    type: 'BUDGET_REQUEST' | 'BUDGET_APPROVED' | 'BUDGET_REJECTED' | 'REPORT_FLAGGED' | 'FORECAST_VERIFIED' | 'NEW_CYCLE' | 'YIELD_FORECAST' | 'FIELD_REPORT' | 'HARVEST_DECLARED' | 'HARVEST_PICKED_UP' | 'ROOM_REQUESTED' | 'ROOM_ASSIGNED' | 'QC_COMPLETED';
+    type: 'BUDGET_REQUEST' | 'BUDGET_APPROVED' | 'BUDGET_REJECTED' | 'REPORT_FLAGGED' | 'FORECAST_VERIFIED' | 'NEW_CYCLE' | 'YIELD_FORECAST' | 'FIELD_REPORT' | 'HARVEST_DECLARED' | 'HARVEST_PICKED_UP' | 'ROOM_REQUESTED' | 'ROOM_ASSIGNED' | 'QC_COMPLETED' | 'EXPORT_READY' | 'SHIPMENT_SCHEDULED' | 'SHIPMENT_DISPATCHED';
     title: string;
     message: string;
     link?: string;
@@ -112,6 +112,27 @@ const typeConfig = {
         action: 'View Stock',
         actionIcon: Eye,
         btnColor: 'bg-blue-600 hover:bg-blue-700 text-white',
+    },
+    EXPORT_READY: {
+        icon: Package,
+        iconColor: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20',
+        action: 'Build Shipment',
+        actionIcon: Plane,
+        btnColor: 'bg-purple-600 hover:bg-purple-700 text-white',
+    },
+    SHIPMENT_SCHEDULED: {
+        icon: Clock,
+        iconColor: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20',
+        action: 'View Shipment',
+        actionIcon: Eye,
+        btnColor: 'bg-blue-600 hover:bg-blue-700 text-white',
+    },
+    SHIPMENT_DISPATCHED: {
+        icon: Plane,
+        iconColor: 'text-green-600 bg-green-50 dark:bg-green-900/20',
+        action: 'Track Flight',
+        actionIcon: TrendingUp,
+        btnColor: 'bg-green-600 hover:bg-green-700 text-white',
     }
 };
 

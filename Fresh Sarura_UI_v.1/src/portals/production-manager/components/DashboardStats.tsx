@@ -7,6 +7,7 @@ interface DashboardStatsProps {
   scheduledExports?: string;
   pendingRoomRequestsCount?: number;
   userName?: string;
+  scheduledShipments?: any[];
 }
 
 const DashboardStats = ({
@@ -14,7 +15,8 @@ const DashboardStats = ({
   activeCyclesCount = 0,
   scheduledExports = "8 Tons",
   pendingRoomRequestsCount = 0,
-  userName = "Manager"
+  userName = "Manager",
+  scheduledShipments = [],
 }: DashboardStatsProps) => {
   const stats = [
     {
@@ -47,8 +49,12 @@ const DashboardStats = ({
     {
       icon: Plane,
       label: 'Scheduled to Fly',
-      value: scheduledExports,
-      sub: 'Flight EK123 @ 10 PM',
+      value: scheduledShipments.length > 0
+        ? `${scheduledShipments.reduce((sum: number, s: any) => sum + (s.totalWeightKg || 0), 0) / 1000} Tons`
+        : scheduledExports,
+      sub: scheduledShipments.length > 0
+        ? `${scheduledShipments[0].flightNumber} → ${scheduledShipments[0].destination}`
+        : 'No flights scheduled',
       color: 'text-orange-600',
       bg: 'bg-orange-50 dark:bg-orange-900/20',
     },
