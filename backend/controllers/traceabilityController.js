@@ -8,108 +8,161 @@ import Farmer from '../models/Farmer.js';
 
 export const getTraceabilityData = async (req, res) => {
     try {
-        const { id } = req.params; // Can be ExportBatch.batchId or ProcessingBatch.stockId
+        const { id } = req.params;
+        let exportBatch = null;
+        let processingBatch = null;
 
-        let exportBatch = await ExportBatch.findOne({ batchId: id });
-        let processingBatch;
-
-        if (exportBatch) {
+        if (id.startsWith('EB-')) {
+            exportBatch = await ExportBatch.findOne({ batchId: id });
+            if (!exportBatch) {
+                return res.status(404).json({
+                    status: 'fail',
+                    message: `Export batch "${id}" not found.`
+                });
+            }
+            // Try direct link
             processingBatch = await ProcessingBatch.findById(exportBatch.processingBatchId);
-        } else {
+            // Fallback: find via cycleId if direct link is broken
+            if (!processingBatch && exportBatch.cycleId) {
+                processingBatch = await ProcessingBatch.findOne({
+                    cycleId: exportBatch.cycleId,
+                    status: 'Done'
+                });
+            }
+
+        } else if (id.startsWith('STK-')) {
             processingBatch = await ProcessingBatch.findOne({ stockId: id });
             if (!processingBatch) {
-                // Try searching by _id as fallback
-                processingBatch = await ProcessingBatch.findById(id).catch(() => null);
+                return res.status(404).json({
+                    status: 'fail',
+                    message: `Stock batch "${id}" not found.`
+                });
             }
-        }
+            exportBatch = await ExportBatch.findOne({
+                $or: [
+                    { processingBatchId: processingBatch._id },
+                    { cycleId: processingBatch.cycleId }
+                ]
+            });
 
-        if (!processingBatch) {
-            return res.status(404).json({ status: 'fail', message: `Batch ${id} not found. Please check the ID and try again.` });
-        }
-
-        // Trace Backwards
-        const intake = await IntakeLog.findById(processingBatch.intakeLogId);
-        const cycle = await CropCycle.findById(processingBatch.cycleId).populate('farmer_id');
-        const harvest = intake ? await HarvestDeclaration.findById(intake.harvestDeclarationId) : null;
-        const farmer = cycle?.farmer_id;
-
-        // Trace Forwards (if we started from ProcessingBatch, find ExportBatches)
-        if (!exportBatch) {
-            exportBatch = await ExportBatch.findOne({ processingBatchId: processingBatch._id });
-        }
-
-        const realShipment = exportBatch ? await Shipment.findOne({ exportBatches: exportBatch._id }) : null;
-
-        // Formulate Response Nodes
-        const nodes = [];
-
-        // 1. Source Node
-        if (farmer || harvest) {
-            nodes.push({
-                id: 'source',
-                title: `Origin: ${farmer?.farm_name || 'Sarura Partner Farm'}`,
-                type: 'source',
-                details: [
-                    { label: "Farmer", value: farmer?.full_name || "Unknown Farmer" },
-                    { label: "Harvest Date", value: harvest?.harvestDate ? new Date(harvest.harvestDate).toLocaleDateString() : "N/A" },
-                    { label: "Location", value: `${farmer?.district || ''}, ${farmer?.sector || ''}`.trim() || 'Rwanda' },
-                ],
-                badges: [
-                    { label: "Compliance Status", value: farmer?.status || 'Active' }
-                ],
-                action: { label: "View Farmer Profile", link: `/pm/farmers` }
+        } else {
+            return res.status(400).json({
+                status: 'fail',
+                message: `Invalid ID format. Use EB-XXXXXX or STK-XXXXXX.`
             });
         }
 
-        // 2. Intake Node
+        // Trace backwards
+        const intake = processingBatch
+            ? await IntakeLog.findById(processingBatch.intakeLogId)
+            : null;
+
+        const harvest = intake
+            ? await HarvestDeclaration.findById(intake.harvestDeclarationId)
+            : null;
+
+        const cycleId = processingBatch?.cycleId || exportBatch?.cycleId;
+        const cycle = cycleId ? await CropCycle.findById(cycleId) : null;
+        const farmer = cycle?.farmer_id
+            ? await Farmer.findById(cycle.farmer_id)
+            : null;
+
+        // Trace forwards
+        const shipment = exportBatch
+            ? await Shipment.findOne({ exportBatches: exportBatch._id })
+            : null;
+
+        const nodes = [];
+
+        // Node 1 — Farm origin
+        nodes.push({
+            id: 'source',
+            type: 'source',
+            title: `Origin: ${harvest?.farmName || farmer?.cooperative_name || farmer?.full_name || 'Sarura Partner Farm'}`,
+            details: [
+                { label: 'Farmer',      value: farmer?.full_name || 'N/A' },
+                { label: 'Crop',        value: harvest?.cropName || cycle?.crop_name || exportBatch?.cropName || 'N/A' },
+                { label: 'Declared',    value: harvest?.createdAt ? new Date(harvest.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A' },
+                { label: 'Location',    value: [farmer?.district, farmer?.sector].filter(Boolean).join(', ') || 'Rwanda' },
+                { label: 'Est. Weight', value: harvest?.estimatedWeightKg ? `${harvest.estimatedWeightKg} kg` : 'N/A' },
+            ],
+            badges: [{ label: 'Farmer Status', value: farmer?.status || 'Active' }],
+            action: { label: 'View Farmer Profile', link: '/pm/farmers' }
+        });
+
+        // Node 2 — Intake
         if (intake) {
             nodes.push({
                 id: 'intake',
-                title: `Intake & QC Check`,
                 type: 'intake',
+                title: 'Field Pickup & Intake',
                 details: [
-                    { label: "Received", value: intake.arrivedAt ? new Date(intake.arrivedAt).toLocaleString() : "N/A" },
-                    { label: "QC Status", value: "Passed (Grade A)", highlight: "text-green-600 font-bold" },
-                    { label: "Truck ID", value: intake.truckId || "FLEET-001" },
+                    { label: 'Arrived At',       value: intake.arrivedAt ? new Date(intake.arrivedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'N/A' },
+                    { label: 'Picked Up Weight', value: `${intake.pickedUpWeightKg} kg` },
+                    { label: 'Truck',            value: intake.truckId || 'N/A' },
                 ],
                 action: null
             });
         }
 
-        // 3. Processing Node
-        nodes.push({
-            id: 'stock',
-            title: `Processed Stock: ${processingBatch.stockId || 'Pending'}`,
-            type: 'stock',
-            details: [
-                { label: "Storage", value: processingBatch.assignedRoom || "Cold Room A" },
-                { label: "Processed Weight", value: `${processingBatch.processed_weight_kg || processingBatch.processedWeightKg || 0} kg` },
-                { label: "Produce", value: processingBatch.cropName || "N/A" },
-            ],
-            action: null
-        });
+        // Node 3 — Packhouse
+        if (processingBatch) {
+            nodes.push({
+                id: 'stock',
+                type: 'stock',
+                title: `Packhouse: ${processingBatch.stockId || 'Processing Complete'}`,
+                details: [
+                    { label: 'Room',      value: processingBatch.assignedRoom || 'N/A' },
+                    { label: 'Received',  value: processingBatch.receivedWeightKg ? `${processingBatch.receivedWeightKg} kg` : 'N/A' },
+                    { label: 'Processed', value: processingBatch.processedWeightKg ? `${processingBatch.processedWeightKg} kg` : 'N/A' },
+                    { label: 'Rejected',  value: processingBatch.rejectedWeightKg != null ? `${processingBatch.rejectedWeightKg} kg` : '0 kg' },
+                    { label: 'Status',    value: processingBatch.status, highlight: processingBatch.status === 'Done' ? 'text-green-600 font-bold' : '' },
+                ],
+                action: null
+            });
+        }
 
-        // 4. Export Node
+        // Node 4 — Export batch
         if (exportBatch) {
             nodes.push({
                 id: 'export',
-                title: `Export Ready: ${exportBatch.batchId}`,
                 type: 'export',
+                title: `Export Batch: ${exportBatch.batchId}`,
                 details: [
-                    { label: "Client", value: exportBatch.clientName },
-                    { label: "Destination", value: exportBatch.destination },
-                    { label: "Cargo", value: `${exportBatch.boxCount} boxes (${exportBatch.allocatedWeightKg} kg)` },
+                    { label: 'Client',      value: exportBatch.clientName },
+                    { label: 'Destination', value: exportBatch.destination },
+                    { label: 'Weight',      value: `${exportBatch.allocatedWeightKg} kg` },
+                    { label: 'Boxes',       value: String(exportBatch.boxCount) },
+                    { label: 'Grade',       value: exportBatch.gradeLabel || 'Grade A' },
+                    { label: 'Status',      value: exportBatch.status, highlight: exportBatch.status === 'Shipped' ? 'text-green-600 font-bold' : '' },
                 ],
-                action: realShipment ? { label: `Shipment: ${realShipment.status}`, link: `/pm/shipments` } : null
+                action: shipment
+                    ? { label: `Shipment ${shipment.plNumber} — ${shipment.status}`, link: '/pm/inventory' }
+                    : null
+            });
+        }
+
+        // Node 5 — Shipment
+        if (shipment) {
+            nodes.push({
+                id: 'shipment',
+                type: 'shipment',
+                title: `Shipment: ${shipment.plNumber}`,
+                details: [
+                    { label: 'Flight',       value: shipment.flightNumber },
+                    { label: 'Destination',  value: shipment.destination },
+                    { label: 'Departure',    value: shipment.departureDate ? new Date(shipment.departureDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A' },
+                    { label: 'Total Weight', value: `${shipment.totalWeightKg} kg` },
+                    { label: 'Total Boxes',  value: String(shipment.totalBoxes) },
+                    { label: 'Status',       value: shipment.status, highlight: shipment.status === 'Dispatched' ? 'text-green-600 font-bold' : '' },
+                ],
+                action: null
             });
         }
 
         res.status(200).json({
             status: 'success',
-            data: {
-                batchId: id,
-                nodes
-            }
+            data: { batchId: id, nodes }
         });
 
     } catch (err) {
