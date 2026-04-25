@@ -6,6 +6,7 @@ interface PMContextType {
   cycles: CropCycle[];
   farmers: Farmer[];
   shipments: any[];
+  stock: any[];
   pendingRequests: BudgetRequest[];
   pendingForecasts: any[];
   pendingReports: any[];
@@ -15,6 +16,7 @@ interface PMContextType {
   refreshCycles: () => Promise<void>;
   refreshFarmers: () => Promise<void>;
   refreshShipments: () => Promise<void>;
+  refreshStock: () => Promise<void>;
   refreshPendingRequests: () => Promise<void>;
   refreshPendingForecasts: () => Promise<void>;
   refreshPendingReports: () => Promise<void>;
@@ -28,6 +30,7 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [cycles, setCycles] = useState<CropCycle[]>([]);
   const [farmers, setFarmers] = useState<Farmer[]>([]);
   const [shipments, setShipments] = useState<any[]>([]);
+  const [stock, setStock] = useState<any[]>([]);
   const [pendingRequests, setPendingRequests] = useState<BudgetRequest[]>([]);
   const [pendingForecasts, setPendingForecasts] = useState<any[]>([]);
   const [pendingReports, setPendingReports] = useState<any[]>([]);
@@ -109,6 +112,16 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   }, []);
 
+  const refreshStock = useCallback(async () => {
+    try {
+      const res = await api.get('/stock');
+      const data = res.data?.data ?? res?.data ?? res ?? [];
+      setStock(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error('PMContext: Failed to fetch stock', err);
+    }
+  }, []);
+
   const refreshAll = useCallback(async () => {
     setLoading(true);
     await Promise.all([
@@ -119,9 +132,10 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       refreshPendingReports(),
       refreshPendingRoomRequests(),
       refreshShipments(),
+      refreshStock(),
     ]);
     setLoading(false);
-  }, [refreshCycles, refreshFarmers, refreshPendingRequests, refreshPendingForecasts, refreshPendingReports, refreshPendingRoomRequests, refreshShipments]);
+  }, [refreshCycles, refreshFarmers, refreshPendingRequests, refreshPendingForecasts, refreshPendingReports, refreshPendingRoomRequests, refreshShipments, refreshStock]);
 
   useEffect(() => {
     refreshAll();
@@ -132,6 +146,7 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       cycles,
       farmers,
       shipments,
+      stock,
       pendingRequests,
       pendingForecasts,
       pendingReports,
@@ -141,6 +156,7 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       refreshCycles,
       refreshFarmers,
       refreshShipments,
+      refreshStock,
       refreshPendingRequests,
       refreshPendingForecasts,
       refreshPendingReports,

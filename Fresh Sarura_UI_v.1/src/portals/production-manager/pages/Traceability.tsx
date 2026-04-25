@@ -61,17 +61,22 @@ const Traceability = () => {
 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!searchTerm.trim()) return;
+        const trimmed = searchTerm.trim().toUpperCase();
+        if (!trimmed) return;
 
         setIsLoading(true);
         setError(null);
         setSearchActive(true);
+        setTraceData(null);
         try {
-            const res = await api.get(`/traceability/${searchTerm.trim()}`);
-            setTraceData(res.data?.data);
+            const res = await api.get(`/traceability/${trimmed}`);
+            // Backend returns { status: 'success', data: { batchId, nodes } }
+            // api utility may unwrap one level, so try both
+            setTraceData(res.data?.data || res.data);
         } catch (err: any) {
             console.error('Search failed:', err);
-            setError(err.response?.data?.message || 'Failed to fetch traceability data. Ensure the Batch ID is correct.');
+            const msg = err.response?.data?.message || err.message || 'Failed to fetch traceability data. Ensure the Batch ID is correct.';
+            setError(msg);
             setTraceData(null);
         } finally {
             setIsLoading(false);
@@ -80,21 +85,23 @@ const Traceability = () => {
 
     const getNodeIcon = (type: string) => {
         switch (type) {
-            case 'source': return User;
-            case 'intake': return ShieldCheck;
-            case 'stock': return Box;
-            case 'export': return Plane;
-            default: return Clock;
+            case 'source':   return User;
+            case 'intake':   return ShieldCheck;
+            case 'stock':    return Box;
+            case 'export':   return Plane;
+            case 'shipment': return Plane;   // ← add this
+            default:         return Clock;
         }
     };
 
     const getNodeColor = (type: string) => {
         switch (type) {
-            case 'source': return 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400';
-            case 'intake': return 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
-            case 'stock': return 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400';
-            case 'export': return 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400';
-            default: return 'bg-gray-100 text-gray-600';
+            case 'source':   return 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400';
+            case 'intake':   return 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
+            case 'stock':    return 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400';
+            case 'export':   return 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400';
+            case 'shipment': return 'bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400';   // ← add this
+            default:         return 'bg-gray-100 text-gray-600';
         }
     };
 
@@ -193,7 +200,7 @@ const Traceability = () => {
                             <div className="absolute left-8 top-10 bottom-10 w-0.5 bg-gradient-to-b from-green-500 via-blue-500 to-orange-500 opacity-30 dark:opacity-50 hidden md:block"></div>
 
                             <div className="space-y-8">
-                                {traceData.nodes.map((node: any, index: number) => {
+                                {(traceData?.nodes || []).map((node: any, index: number) => {
                                     const Icon = getNodeIcon(node.type);
                                     return (
                                         <div key={node.id} className="relative flex flex-col md:flex-row gap-6 group">
@@ -201,7 +208,7 @@ const Traceability = () => {
                                                 <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transform group-hover:scale-105 transition-all duration-300 ${getNodeColor(node.type)} border-4 border-white dark:border-gray-900`}>
                                                     <Icon size={32} />
                                                 </div>
-                                                {index !== traceData.nodes.length - 1 && (
+                                                {index !== (traceData?.nodes?.length ?? 0) - 1 && (
                                                     <div className="h-full w-0.5 bg-gray-200 dark:bg-gray-700 my-2 md:hidden"></div>
                                                 )}
                                             </div>
