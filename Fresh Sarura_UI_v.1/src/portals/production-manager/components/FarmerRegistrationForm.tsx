@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Upload, User } from 'lucide-react';
+import { getProvinces, getDistricts, getSectors } from '@/lib/rwandaLocations';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -15,8 +16,6 @@ const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) 
   const [formData, setFormData] = useState({
     full_name: '',
     farm_name: '',
-    district: '',
-    sector: '',
     produce_types: [] as string[],
     farm_size_hectares: '',
     production_capacity_tons: '',
@@ -24,11 +23,21 @@ const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) 
     email: '',
     location: { lat: '', lng: '' },
   });
+
+  // Cascading location state
+  const [province, setProvince] = useState('');
+  const [district, setDistrict] = useState('');
+  const [sector, setSector] = useState('');
+  const [cell, setCell] = useState('');
+
+  // Derived dropdown options
+  const provinceOptions = getProvinces();
+  const districtOptions = province ? getDistricts(province) : [];
+  const sectorOptions = province && district ? getSectors(province, district) : [];
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState('');
 
-  const districts = ['Kigali', 'Musanze', 'Rubavu', 'Nyagatare', 'Huye', 'Muhanga'];
-  const sectors = ['Gasabo', 'Kicukiro', 'Nyarugenge', 'Gicumbi', 'Kayonza'];
+
   const produceOptions = [
     'French Beans',
     'Chili Peppers',
@@ -48,8 +57,10 @@ const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) 
         {
           full_name: formData.full_name,
           farm_name: formData.farm_name || null,
-          district: formData.district,
-          sector: formData.sector,
+          province,
+          district,
+          sector,
+          cell,
           produce_types: formData.produce_types,
           farm_size_hectares: parseFloat(formData.farm_size_hectares),
           production_capacity_tons: parseFloat(formData.production_capacity_tons),
@@ -75,8 +86,6 @@ const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) 
     setFormData({
       full_name: '',
       farm_name: '',
-      district: '',
-      sector: '',
       produce_types: [],
       farm_size_hectares: '',
       production_capacity_tons: '',
@@ -84,6 +93,10 @@ const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) 
       email: '',
       location: { lat: '', lng: '' },
     });
+    setProvince('');
+    setDistrict('');
+    setSector('');
+    setCell('');
   };
 
   const handleProduceToggle = (produce: string) => {
@@ -136,44 +149,75 @@ const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) 
           />
         </div>
 
-        {/* District & Sector */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-[#37474F] mb-1.5" style={{ fontFamily: 'Inter, sans-serif' }}>
-              District *
-            </label>
-            <select
-              required
-              value={formData.district}
-              onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-              className="w-full px-4 py-2.5 bg-[#F9FCFA] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4CAF50] text-sm"
-            >
-              <option value="">Select district</option>
-              {districts.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-[#37474F] mb-1.5" style={{ fontFamily: 'Inter, sans-serif' }}>
-              Sector *
-            </label>
-            <select
-              required
-              value={formData.sector}
-              onChange={(e) => setFormData({ ...formData, sector: e.target.value })}
-              className="w-full px-4 py-2.5 bg-[#F9FCFA] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4CAF50] text-sm"
-            >
-              <option value="">Select sector</option>
-              {sectors.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* Province */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Province <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={province}
+            onChange={e => { setProvince(e.target.value); setDistrict(''); setSector(''); }}
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            required
+          >
+            <option value="">Select Province</option>
+            {provinceOptions.map(p => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* District */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            District <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={district}
+            onChange={e => { setDistrict(e.target.value); setSector(''); }}
+            disabled={!province}
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            required
+          >
+            <option value="">Select District</option>
+            {districtOptions.map(d => (
+              <option key={d.value} value={d.value}>{d.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Sector */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Sector <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={sector}
+            onChange={e => setSector(e.target.value)}
+            disabled={!district}
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            required
+          >
+            <option value="">Select Sector</option>
+            {sectorOptions.map(s => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Cell — free text, kept */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Cell <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={cell}
+            onChange={e => setCell(e.target.value)}
+            placeholder="Enter cell"
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            required
+          />
         </div>
 
         {/* Produce Types */}

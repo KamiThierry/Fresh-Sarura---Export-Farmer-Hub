@@ -46,7 +46,7 @@ const ProductionManagerApp = () => {
             .reduce((sum, b) => sum + (b.receivedWeightKg || 0), 0)
     , [stock, todayStr]);
 
-    const coldRoomStock = useMemo(() =>
+    const _coldRoomStock = useMemo(() =>
         stock.reduce((sum, b) => sum + ((b.processedWeightKg || 0) - (b.rejectedWeightKg || 0)), 0)
     , [stock]);
 

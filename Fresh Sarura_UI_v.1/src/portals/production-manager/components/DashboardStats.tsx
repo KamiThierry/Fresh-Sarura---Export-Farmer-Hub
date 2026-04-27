@@ -1,5 +1,5 @@
 
-import { Scale, Thermometer, ShieldCheck, Plane, Sprout } from 'lucide-react';
+import { Scale, Thermometer, Plane, Sprout } from 'lucide-react';
 
 interface DashboardStatsProps {
   todaysIntake?: string;

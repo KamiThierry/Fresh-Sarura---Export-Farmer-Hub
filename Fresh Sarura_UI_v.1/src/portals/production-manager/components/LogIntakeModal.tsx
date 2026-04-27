@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save, Truck, Sprout } from 'lucide-react';
+import { X, Save, Truck } from 'lucide-react';
 
 interface LogIntakeModalProps {
     isOpen: boolean;

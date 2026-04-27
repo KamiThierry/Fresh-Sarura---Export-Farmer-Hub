@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
-import { Sprout, Plus, AlertTriangle, ChevronRight, BarChart2, AlertCircle, CheckCircle2, Thermometer } from 'lucide-react';
+import { Sprout, Plus, AlertTriangle, ChevronRight, BarChart2, AlertCircle, Thermometer } from 'lucide-react';
 import CreateCropCycleModal from '../components/CreateCropCycleModal';
 import CropCycleDetailModal from '../components/CropCycleDetailModal';
 import BudgetRejectionModal from '../components/BudgetRejectionModal';

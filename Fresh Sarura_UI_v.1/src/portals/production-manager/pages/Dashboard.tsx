@@ -28,8 +28,6 @@ interface DashboardProps {
 
 const Dashboard = ({
     currentIntake,
-    qualityGrade,
-    scheduledExports,
     isIntakeOpen,
     isTraceabilityOpen,
     onLogIntake,

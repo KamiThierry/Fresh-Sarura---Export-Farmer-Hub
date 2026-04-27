@@ -3,7 +3,7 @@ import {
     Search, Filter, Download, Plus, MoreHorizontal,
     Package, DollarSign, Layers,
     Leaf, ArrowRight, Clock,
-    ChevronDown, FileSpreadsheet, FileText, RefreshCw
+    ChevronDown, FileSpreadsheet, FileText
 } from 'lucide-react';
 import LogIntakeModal from '../components/LogIntakeModal';
 import QCSortingModal from '../components/QCSortingModal';
@@ -119,8 +119,8 @@ const InventoryManagement = () => {
         grade: 'A',
         weight: `${(item.processedWeightKg || 0).toLocaleString()} kg`,
         weightNum: item.processedWeightKg || 0,
-        location: item.assignedRoom || 'Processing Room',
-        temp: '4.5°C',
+        storageLocation: item.assignedRoom || 'Processing Room',
+        storageTemp: '4.5°C',
         status: 'Available',
         daysInStorage: Math.floor((Date.now() - new Date(item.updatedAt).getTime()) / (1000 * 60 * 60 * 24)),
         shelfLifeDays: 14,
@@ -497,8 +497,8 @@ const InventoryManagement = () => {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-sm font-bold text-gray-700 dark:text-gray-300">{item.weight}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{item.location}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{item.temp}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{item.storageLocation}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{item.storageTemp}</td>
                                             <td className="px-6 py-4">
                                                 {(() => {
                                                     const daysLeft = item.shelfLifeDays - item.daysInStorage;

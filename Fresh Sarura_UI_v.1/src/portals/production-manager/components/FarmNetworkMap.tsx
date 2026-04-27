@@ -2,6 +2,7 @@ import { MapContainer, TileLayer, CircleMarker, Popup, ZoomControl, Tooltip } fr
 import 'leaflet/dist/leaflet.css';
 import { Map as MapIcon } from 'lucide-react';
 import { Farmer } from '@/types';
+import { getDistrictCoordinates } from '@/lib/rwandaLocations';
 
 const STATUS_COLOR: Record<string, string> = {
     Active: '#22c55e',
@@ -26,40 +27,35 @@ interface FarmPin {
     coords: [number, number];
 }
 
-const getDeterministicCoords = (id: string): [number, number] => {
-    // Generate unique but stable offset from Rwanda center based on ID string
-    let hash = 0;
-    for (let i = 0; i < id.length; i++) {
-        hash = id.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const latOffset = (hash % 100) / 150; // Roughly +/- 0.6 degrees
-    const lonOffset = ((hash >> 8) % 100) / 120; // Roughly +/- 0.8 degrees
-    return [-1.9403 + latOffset, 29.8739 + lonOffset];
-};
-
 const STATUS_LEGEND = [
-    { color: '#22c55e', label: 'Active', sub: 'Supplying produce' },
+    { color: '#22c55e', label: 'Active',   sub: 'Supplying produce' },
     { color: '#f59e0b', label: 'Auditing', sub: 'Under inspection' },
     { color: '#ef4444', label: 'Inactive', sub: 'Not supplying' },
 ];
 
 const SIZE_LEGEND = [
-    { r: 8, label: '~1 Ha' },
+    { r: 8,  label: '~1 Ha'  },
     { r: 14, label: '~15 Ha' },
     { r: 20, label: '~45 Ha' },
 ];
 
 const FarmNetworkMap = ({ farmers = [] }: { farmers: Farmer[] }) => {
-    const pins: FarmPin[] = farmers.map(f => ({
-        id: f._id,
-        name: f.full_name,
-        location: `${f.district}, ${f.sector}`,
-        crop: f.produce_types?.[0] || 'N/A',
-        size: f.farm_size_hectares || 0,
-        status: f.status,
-        grade: f.grade || 'N/A',
-        coords: getDeterministicCoords(f._id)
-    }));
+    const pins: FarmPin[] = farmers.map(f => {
+        const { lat, lng } = getDistrictCoordinates(
+            (f as any).province ?? '',
+            f.district ?? ''
+        );
+        return {
+            id: f._id,
+            name: f.full_name,
+            location: `${f.district}, ${f.sector}`,
+            crop: f.produce_types?.[0] || 'N/A',
+            size: f.farm_size_hectares || 0,
+            status: f.status,
+            grade: f.grade || 'N/A',
+            coords: [lat, lng] as [number, number],
+        };
+    });
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
