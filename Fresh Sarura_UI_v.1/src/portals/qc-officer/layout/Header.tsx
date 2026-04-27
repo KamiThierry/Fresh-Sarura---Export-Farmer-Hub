@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Bell, ClipboardList, Truck, CheckCircle, AlertTriangle, ArrowRight, RefreshCw, LogOut } from 'lucide-react';
+import { Search, Bell, ClipboardList, Truck, LogOut } from 'lucide-react';
 import logo from '@/assets/sarura_logo_nav.png';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../../production-manager/components/ThemeToggle';

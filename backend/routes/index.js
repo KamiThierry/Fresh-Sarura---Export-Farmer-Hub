@@ -9,6 +9,8 @@ import processingBatchRoutes from './processingBatches.js';
 import stockRoutes from './stock.js';
 import notificationRoutes from './notifications.js';
 import roomRoutes from './rooms.js';
+import exportRoutes from './export.js';
+import traceabilityRoutes from './traceability.js';
 
 const router = express.Router();
 const apiVersion = '/api/v1';
@@ -23,5 +25,7 @@ router.use(`${apiVersion}/processing-batches`, processingBatchRoutes);
 router.use(`${apiVersion}/stock`, stockRoutes);
 router.use(`${apiVersion}/notifications`, notificationRoutes);
 router.use(`${apiVersion}/rooms`, roomRoutes);
+router.use(`${apiVersion}/traceability`, traceabilityRoutes);
+router.use(`${apiVersion}`, exportRoutes);
 
 export default router;

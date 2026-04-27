@@ -16,7 +16,8 @@ const notificationSchema = new mongoose.Schema({
             'BUDGET_REQUEST', 'BUDGET_APPROVED', 'BUDGET_REJECTED', 
             'REPORT_FLAGGED', 'FORECAST_VERIFIED', 'NEW_CYCLE', 
             'YIELD_FORECAST', 'FIELD_REPORT',
-            'HARVEST_DECLARED', 'HARVEST_PICKED_UP', 'ROOM_REQUESTED', 'ROOM_ASSIGNED', 'QC_COMPLETED'
+            'HARVEST_DECLARED', 'HARVEST_PICKED_UP', 'ROOM_REQUESTED', 'ROOM_ASSIGNED', 'QC_COMPLETED',
+            'EXPORT_READY', 'SHIPMENT_SCHEDULED', 'SHIPMENT_DISPATCHED'
         ],
         required: true
     },

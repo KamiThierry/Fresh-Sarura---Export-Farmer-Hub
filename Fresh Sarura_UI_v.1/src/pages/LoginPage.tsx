@@ -148,7 +148,7 @@ const LoginPage = () => {
           <div className="relative">
             <div className="flex justify-between items-center ml-1 mb-[5px]">
               <label htmlFor="password" className="text-white/60 text-[12px] font-medium">Password</label>
-              <Link to="/forgot-password" size="sm" className="text-[#7ec99a] text-[11.5px] hover:underline focus:outline-none">Forgot password?</Link>
+              <Link to="/forgot-password" className="text-[#7ec99a] text-[11.5px] hover:underline focus:outline-none">Forgot password?</Link>
             </div>
             <div className="relative">
               <input

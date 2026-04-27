@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Thermometer, Package, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { Package, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { api } from '../../../lib/api';
 
 interface StockItem {
