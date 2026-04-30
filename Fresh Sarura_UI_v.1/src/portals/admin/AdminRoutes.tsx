@@ -5,6 +5,7 @@ import UserManagement from './pages/UserManagement';
 import MasterData from './pages/MasterData';
 import EventLogs from './pages/EventLogs';
 import AdminSettings from './pages/AdminSettings';
+import Reports from './pages/Reports';
 
 const AdminRoutes = () => (
     <Routes>
@@ -14,8 +15,8 @@ const AdminRoutes = () => (
             <Route path="users" element={<UserManagement />} />
             <Route path="master-data" element={<MasterData />} />
             <Route path="event-logs" element={<EventLogs />} />
+            <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<AdminSettings />} />
-            {/* Catch-all */}
             <Route path="*" element={<Navigate to="dashboard" replace />} />
         </Route>
     </Routes>

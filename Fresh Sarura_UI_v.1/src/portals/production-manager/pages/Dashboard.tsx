@@ -12,7 +12,6 @@ import { api } from '@/lib/api';
 
 interface DashboardProps {
     currentIntake: number;
-    qualityGrade: string;
     scheduledExports: number;
     pendingRoomRequestsCount?: number;
     isIntakeOpen: boolean;
@@ -28,7 +27,6 @@ interface DashboardProps {
 
 const Dashboard = ({
     currentIntake,
-    qualityGrade,
     scheduledExports,
     isIntakeOpen,
     isTraceabilityOpen,

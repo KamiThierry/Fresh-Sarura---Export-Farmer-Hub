@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Leaf, Search, Bell, Loader2, LogOut } from 'lucide-react';
+import { Leaf, Search, Bell, Loader2, LogOut, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../../shared/component/ThemeToggle';
 import NotificationsModal from '../../shared/component/NotificationsModal';
@@ -175,19 +175,16 @@ const FarmManagerHeader = () => {
 
                 {/* User Avatar — click goes to settings */}
                 <div className="flex items-center gap-2 pl-2 border-l border-gray-200 dark:border-gray-700">
-                    <div className="text-right hidden md:block">
-                        <p className="text-sm font-semibold text-[#222222] dark:text-white">
-                            {currentUser?.name || 'Farm Manager'}
-                        </p>
-                        <p className="text-xs text-[#6B7280] dark:text-gray-400">Field Ops</p>
+                    <div onClick={() => navigate('/farm-manager/settings')} className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-bold shadow-md hover:saturate-150 transition-all active:scale-95">
+                            {initials}
+                        </div>
+                        <div className="text-left hidden md:block">
+                            <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{currentUser?.name || 'Farm Manager'}</p>
+                            <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-0.5">{currentUser?.role ? currentUser.role.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : 'Field Ops'}</p>
+                        </div>
+                        <ChevronDown size={14} className="text-gray-400 ml-1" />
                     </div>
-                    <button
-                        onClick={() => navigate('/farm-manager/settings')}
-                        title="My Profile & Settings"
-                        className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-semibold shadow-md hover:saturate-150 transition-all active:scale-95"
-                    >
-                        {initials}
-                    </button>
                     <button
                         onClick={handleLogout}
                         title="Sign out"

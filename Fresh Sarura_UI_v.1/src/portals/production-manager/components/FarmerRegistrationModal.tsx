@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Upload, User } from 'lucide-react';
+import { X, Upload, User, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
+import { getProvinces, getDistricts, getSectors } from '@/lib/rwandaLocations';
 
 interface FarmerRegistrationModalProps {
     isOpen: boolean;
@@ -10,12 +11,12 @@ interface FarmerRegistrationModalProps {
 }
 
 const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegistrationModalProps) => {
-    if (!isOpen) return null;
-
+    // ⚠️ All hooks MUST come before any conditional returns (React Rules of Hooks)
     const [formData, setFormData] = useState({
         full_name: '',
         farm_name: '',
         national_id: '',
+        province: '',   // used for cascading dropdowns AND saved to backend
         district: '',
         sector: '',
         cell: '',
@@ -27,55 +28,60 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
         email: '',
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
+    // Cascading dropdown options
+    const provinceOptions = getProvinces();
+    const districtOptions = formData.province ? getDistricts(formData.province) : [];
+    const sectorOptions   = (formData.province && formData.district)
+        ? getSectors(formData.province, formData.district)
+        : [];
 
-    const districts = ['Kigali', 'Musanze', 'Rubavu', 'Nyagatare', 'Huye', 'Muhanga'];
-    const sectors = ['Gasabo', 'Kicukiro', 'Nyarugenge', 'Gicumbi', 'Kayonza'];
     const produceOptions = [
-        'French Beans',
-        'Chili Peppers',
-        'Avocados',
-        'Passion Fruits',
-        'Tomatoes',
-        'Mangoes',
+        'French Beans', 'Chili Peppers', 'Avocados',
+        'Passion Fruits', 'Tomatoes', 'Mangoes',
     ];
 
     const handleProduceToggle = (produce: string) => {
-        setFormData((prev) => ({
+        setFormData(prev => ({
             ...prev,
             produce_types: prev.produce_types.includes(produce)
-                ? prev.produce_types.filter((p) => p !== produce)
+                ? prev.produce_types.filter(p => p !== produce)
                 : [...prev.produce_types, produce],
         }));
     };
 
-    const djangoHandleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError(null);
+        if (formData.produce_types.length === 0) {
+            setError('Please select at least one produce type.');
+            return;
+        }
         setIsSubmitting(true);
         try {
             const dataToSubmit = {
                 ...formData,
                 farm_size_hectares: parseFloat(formData.farm_size_hectares),
-                production_capacity_tons: parseFloat(formData.production_capacity_tons)
+                production_capacity_tons: parseFloat(formData.production_capacity_tons),
             };
             await api.post('/farmers', dataToSubmit);
             onFarmerAdded(formData.full_name);
             onClose();
-        } catch (error: any) {
-            alert(error.message || 'Failed to register farmer');
+        } catch (err: any) {
+            setError(err.message || 'Failed to register farmer. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
     };
+
+    // Guard AFTER all hooks
+    if (!isOpen) return null;
+
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <div
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
-                onClick={onClose}
-            />
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
 
-            {/* Modal Container */}
             <div className="relative w-full max-w-2xl max-h-[85vh] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
 
                 {/* Header */}
@@ -92,22 +98,27 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                     </button>
                 </div>
 
-                {/* Scrollable Form Content */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
-                    <form id="farmer-form" onSubmit={djangoHandleSubmit} className="space-y-5">
+                {/* Form */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                    {/* Error Banner */}
+                    {error && (
+                        <div className="mb-4 flex items-start gap-2 px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 rounded-lg text-red-600 dark:text-red-400 text-sm">
+                            <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                            <span>{error}</span>
+                        </div>
+                    )}
+
+                    <form id="farmer-form" onSubmit={handleSubmit} className="space-y-5">
 
                         {/* Full Name */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                Full Name *
-                            </label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Full Name *</label>
                             <div className="relative">
                                 <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                                 <input
-                                    type="text"
-                                    required
+                                    type="text" required
                                     value={formData.full_name}
-                                    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                                    onChange={e => setFormData({ ...formData, full_name: e.target.value })}
                                     className="w-full pl-9 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                                     placeholder="Enter farmer's full name"
                                 />
@@ -116,13 +127,11 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
 
                         {/* Farm Name */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                Farm Name (Optional)
-                            </label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Farm Name <span className="text-gray-400 font-normal">(Optional)</span></label>
                             <input
                                 type="text"
                                 value={formData.farm_name}
-                                onChange={(e) => setFormData({ ...formData, farm_name: e.target.value })}
+                                onChange={e => setFormData({ ...formData, farm_name: e.target.value })}
                                 className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                                 placeholder="Enter farm name (if applicable)"
                             />
@@ -130,52 +139,56 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
 
                         {/* National ID */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                National ID (16 Digits) *
-                            </label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">National ID (16 Digits) *</label>
                             <input
-                                type="text"
-                                required
-                                maxLength={16}
+                                type="text" required maxLength={16}
                                 value={formData.national_id}
-                                onChange={(e) => setFormData({ ...formData, national_id: e.target.value })}
+                                onChange={e => setFormData({ ...formData, national_id: e.target.value })}
                                 className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                                placeholder="e.g. 1 1990 8 0123456 7 89"
+                                placeholder="e.g. 1199008012345678"
                             />
+                        </div>
+
+                        {/* Province */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Province *</label>
+                            <select
+                                required
+                                value={formData.province}
+                                onChange={e => setFormData({ ...formData, province: e.target.value, district: '', sector: '' })}
+                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                            >
+                                <option value="">Select Province</option>
+                                {provinceOptions.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                            </select>
                         </div>
 
                         {/* District & Sector */}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                    District *
-                                </label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">District *</label>
                                 <select
                                     required
                                     value={formData.district}
-                                    onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                                    onChange={e => setFormData({ ...formData, district: e.target.value, sector: '' })}
+                                    disabled={!formData.province}
+                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <option value="">Select District</option>
-                                    {districts.map((d) => (
-                                        <option key={d} value={d}>{d}</option>
-                                    ))}
+                                    {districtOptions.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                    Sector *
-                                </label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Sector *</label>
                                 <select
                                     required
                                     value={formData.sector}
-                                    onChange={(e) => setFormData({ ...formData, sector: e.target.value })}
-                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                                    onChange={e => setFormData({ ...formData, sector: e.target.value })}
+                                    disabled={!formData.district}
+                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <option value="">Select Sector</option>
-                                    {sectors.map((s) => (
-                                        <option key={s} value={s}>{s}</option>
-                                    ))}
+                                    {sectorOptions.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                                 </select>
                             </div>
                         </div>
@@ -183,29 +196,23 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                         {/* Cell & Village */}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                    Cell *
-                                </label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Cell *</label>
                                 <input
-                                    type="text"
-                                    required
+                                    type="text" required
                                     value={formData.cell}
-                                    onChange={(e) => setFormData({ ...formData, cell: e.target.value })}
+                                    onChange={e => setFormData({ ...formData, cell: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                                    placeholder="Enter cell"
+                                    placeholder="Enter cell name"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                    Village *
-                                </label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Village *</label>
                                 <input
-                                    type="text"
-                                    required
+                                    type="text" required
                                     value={formData.village}
-                                    onChange={(e) => setFormData({ ...formData, village: e.target.value })}
+                                    onChange={e => setFormData({ ...formData, village: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                                    placeholder="Enter village"
+                                    placeholder="Enter village name"
                                 />
                             </div>
                         </div>
@@ -213,18 +220,21 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                         {/* Produce Types */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Produce Type *
+                                Produce Type *{' '}
+                                {formData.produce_types.length === 0 && (
+                                    <span className="text-xs font-normal text-gray-400">(select at least one)</span>
+                                )}
                             </label>
                             <div className="flex flex-wrap gap-2">
-                                {produceOptions.map((produce) => (
+                                {produceOptions.map(produce => (
                                     <button
-                                        key={produce}
-                                        type="button"
+                                        key={produce} type="button"
                                         onClick={() => handleProduceToggle(produce)}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${formData.produce_types.includes(produce)
-                                            ? 'bg-green-100 text-green-700 border-2 border-green-500 dark:bg-green-900/30 dark:text-green-300'
-                                            : 'bg-gray-50 text-gray-600 border border-gray-200 hover:border-green-500 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-700'
-                                            }`}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                            formData.produce_types.includes(produce)
+                                                ? 'bg-green-100 text-green-700 border-2 border-green-500 dark:bg-green-900/30 dark:text-green-300'
+                                                : 'bg-gray-50 text-gray-600 border border-gray-200 hover:border-green-500 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-700'
+                                        }`}
                                     >
                                         {produce}
                                     </button>
@@ -232,99 +242,88 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                             </div>
                         </div>
 
-                        {/* Farm Size & Production Capacity */}
+                        {/* Farm Size & Capacity */}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                    Farm Size (Ha) *
-                                </label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Farm Size (Ha) *</label>
                                 <input
-                                    type="number"
-                                    step="0.01"
-                                    required
+                                    type="number" step="0.01" min="0.01" required
                                     value={formData.farm_size_hectares}
-                                    onChange={(e) => setFormData({ ...formData, farm_size_hectares: e.target.value })}
+                                    onChange={e => setFormData({ ...formData, farm_size_hectares: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                                     placeholder="0.00"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                    Capacity (Tons) *
-                                </label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Capacity (Tons/Year) *</label>
                                 <input
-                                    type="number"
-                                    step="0.01"
-                                    required
+                                    type="number" step="0.01" min="0.01" required
                                     value={formData.production_capacity_tons}
-                                    onChange={(e) => setFormData({ ...formData, production_capacity_tons: e.target.value })}
+                                    onChange={e => setFormData({ ...formData, production_capacity_tons: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                                     placeholder="0.00"
                                 />
                             </div>
                         </div>
 
-
                         {/* Phone & Email */}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                    Phone Number *
-                                </label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Phone Number *</label>
                                 <input
-                                    type="tel"
-                                    required
+                                    type="tel" required
                                     value={formData.phone}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                                    placeholder="+250 xxx xxx xxx"
+                                    placeholder="+250 7xx xxx xxx"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                    Email Address *
-                                </label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email Address *</label>
                                 <input
-                                    type="email"
-                                    required
+                                    type="email" required
                                     value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                    onChange={e => setFormData({ ...formData, email: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                                    placeholder="email@example.com"
+                                    placeholder="farmer@example.com"
                                 />
                             </div>
                         </div>
 
                         {/* ID Upload */}
                         <div className="pt-2">
-                            <button type="button" className="w-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 flex flex-col items-center justify-center text-gray-500 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/10 transition-colors">
+                            <button
+                                type="button"
+                                className="w-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 flex flex-col items-center justify-center text-gray-500 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/10 transition-colors"
+                            >
                                 <Upload size={24} className="mb-2" />
                                 <span className="text-sm font-medium">Click to upload ID Card</span>
-                                <span className="text-xs text-gray-400 mt-1">PG, PNG or PDF (Max 5MB)</span>
+                                <span className="text-xs text-gray-400 mt-1">JPG, PNG or PDF (Max 5MB)</span>
                             </button>
                         </div>
 
                     </form>
                 </div>
 
-                {/* Footer Actions */}
+                {/* Footer */}
                 <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 flex gap-3">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        disabled={isSubmitting}
+                        className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
                     >
                         Cancel
                     </button>
                     <button
                         type="submit"
                         form="farmer-form"
-                        className="flex-1 px-4 py-2.5 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors shadow-lg shadow-green-600/20"
+                        disabled={isSubmitting}
+                        className="flex-1 px-4 py-2.5 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors shadow-lg shadow-green-600/20 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                         {isSubmitting ? 'Registering...' : 'Register Farmer'}
                     </button>
                 </div>
-
             </div>
         </div>,
         document.body

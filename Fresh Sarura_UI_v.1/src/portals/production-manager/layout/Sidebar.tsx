@@ -58,7 +58,7 @@ const Sidebar = () => {
         }`;
 
     return (
-        <aside className="fixed left-[10px] top-[84px] bottom-[10px] w-[260px] bg-green-50 dark:bg-[#1F2937] border border-green-100 dark:border-gray-700 rounded-2xl shadow-xl z-30 flex flex-col transition-colors duration-300 hidden md:flex">
+        <aside className="fixed left-[10px] top-[84px] bottom-[10px] w-[260px] bg-gradient-to-b from-green-50 to-white dark:from-[#1F2937] dark:to-gray-900 border border-green-100 dark:border-gray-700 rounded-2xl shadow-xl z-30 flex flex-col transition-colors duration-300 hidden md:flex">
             <nav className="flex-1 overflow-y-auto py-2 px-3 custom-scrollbar">
                 {mainGroups.map((group, i) => (
                     <div key={i} className="mb-1">

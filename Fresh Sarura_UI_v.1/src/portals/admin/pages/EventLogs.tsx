@@ -1,43 +1,49 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ShieldAlert, Search, Filter, Download, Activity, Lock, UserCheck, ChevronDown, FileSpreadsheet, FileText } from 'lucide-react';
 import Pagination from '../../shared/component/Pagination';
-
-const MOCK_EVENTS = [
-    { id: 'EVT-1048', timestamp: 'Mar 03, 10:15 AM', severity: 'CRITICAL', description: 'Multiple failed login attempts', actor: 'Unknown', ip: '197.243.22.10' },
-    { id: 'EVT-1047', timestamp: 'Mar 03, 09:45 AM', severity: 'INFO', description: "Master Data 'Crop' updated", actor: 'Super Admin', ip: '10.0.0.45' },
-    { id: 'EVT-1046', timestamp: 'Mar 03, 08:30 AM', severity: 'WARNING', description: 'Export batch #B-2026-001 canceled', actor: 'Production Manager', ip: '10.0.1.12' },
-    { id: 'EVT-1045', timestamp: 'Mar 03, 07:00 AM', severity: 'INFO', description: 'System automated backup completed', actor: 'SYSTEM', ip: 'localhost' },
-    { id: 'EVT-1044', timestamp: 'Mar 02, 16:20 PM', severity: 'INFO', description: 'New account approved (Simbi Farm)', actor: 'Super Admin', ip: '10.0.0.45' },
-];
+import { api } from '@/lib/api';
 
 const EventLogs = () => {
+    const [events, setEvents] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [severityFilter, setSeverityFilter] = useState('All');
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 3;
+    const itemsPerPage = 8;
 
-    const filteredEvents = MOCK_EVENTS.filter(event => {
-        const matchesSearch =
-            event.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            event.actor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            event.ip.toLowerCase().includes(searchTerm.toLowerCase());
+    const fetchLogs = useCallback(async () => {
+        try {
+            setLoading(true);
+            const params = new URLSearchParams();
+            if (severityFilter !== 'All') params.append('severity', severityFilter);
+            if (searchTerm) params.append('search', searchTerm);
+            
+            const res = await api.get(`/event-logs?${params.toString()}`);
+            setEvents(res.data || []);
+        } catch (err) {
+            console.error('Failed to fetch logs:', err);
+        } finally {
+            setLoading(false);
+        }
+    }, [severityFilter, searchTerm]);
 
-        const matchesSeverity = severityFilter === 'All' || event.severity.toLowerCase() === severityFilter.toLowerCase();
-
-        return matchesSearch && matchesSeverity;
-    });
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            fetchLogs();
+        }, 300);
+        return () => clearTimeout(timeout);
+    }, [fetchLogs]);
 
     const kpiCards = [
-        { label: 'Total Events', value: filteredEvents.length.toString(), icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-        { label: 'Critical Alerts', value: filteredEvents.filter(e => e.severity === 'CRITICAL').length.toString(), icon: ShieldAlert, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20' },
-        { label: 'Failed Logins', value: filteredEvents.filter(e => e.description.toLowerCase().includes('failed login')).length.toString(), icon: Lock, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
+        { label: 'Total Events', value: events.length.toString(), icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+        { label: 'Critical Alerts', value: events.filter(e => e.severity === 'CRITICAL').length.toString(), icon: ShieldAlert, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20' },
+        { label: 'Failed Logins', value: events.filter(e => e.description.toLowerCase().includes('failed login')).length.toString(), icon: Lock, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
         { label: 'Active Sessions', value: '18', icon: UserCheck, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
     ];
 
     const getSeverityBadge = (severity: string) => {
-        switch (severity) {
+        switch (severity.toUpperCase()) {
             case 'CRITICAL':
                 return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
             case 'WARNING':
@@ -45,6 +51,17 @@ const EventLogs = () => {
             default:
                 return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
         }
+    };
+
+    const formatDate = (dateStr: string) => {
+        const date = new Date(dateStr);
+        return date.toLocaleString('en-US', {
+            month: 'short',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
     };
 
     return (
@@ -67,7 +84,7 @@ const EventLogs = () => {
                         <div>
                             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{card.label}</p>
                             <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-                                {card.value}
+                                {loading ? '...' : card.value}
                             </div>
                         </div>
                         <div className={`p-3 rounded-xl ${card.bg}`}>
@@ -159,41 +176,53 @@ const EventLogs = () => {
 
             {/* Read-Only Data Table */}
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
-                <table className="w-full text-sm text-left">
-                    <thead>
-                        <tr className="border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
-                            <th className="px-5 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Timestamp</th>
-                            <th className="px-5 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Severity</th>
-                            <th className="px-5 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Event Description</th>
-                            <th className="px-5 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actor</th>
-                            <th className="px-5 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">IP Address</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
-                        {filteredEvents.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(event => (
-                            <tr key={event.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                                <td className="px-5 py-4 whitespace-nowrap text-gray-600 dark:text-gray-400 font-medium">
-                                    {event.timestamp}
-                                </td>
-                                <td className="px-5 py-4 whitespace-nowrap">
-                                    <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold ${getSeverityBadge(event.severity)}`}>
-                                        {event.severity}
-                                    </span>
-                                </td>
-                                <td className="px-5 py-4 text-gray-900 dark:text-white font-medium">
-                                    {event.description}
-                                </td>
-                                <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
-                                    {event.actor}
-                                </td>
-                                <td className="px-5 py-4 font-mono text-xs text-gray-500 dark:text-gray-400">
-                                    {event.ip}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-                <Pagination currentPage={currentPage} totalItems={filteredEvents.length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
+                {loading && events.length === 0 ? (
+                    <div className="p-20 text-center text-gray-500">Loading events...</div>
+                ) : (
+                    <>
+                        <table className="w-full text-sm text-left">
+                            <thead>
+                                <tr className="border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
+                                    <th className="px-5 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Timestamp</th>
+                                    <th className="px-5 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Severity</th>
+                                    <th className="px-5 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Event Description</th>
+                                    <th className="px-5 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actor</th>
+                                    <th className="px-5 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">IP Address</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
+                                {events.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="px-5 py-10 text-center text-gray-500">No events found</td>
+                                    </tr>
+                                ) : (
+                                    events.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(event => (
+                                        <tr key={event._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                                            <td className="px-5 py-4 whitespace-nowrap text-gray-600 dark:text-gray-400 font-medium">
+                                                {formatDate(event.timestamp)}
+                                            </td>
+                                            <td className="px-5 py-4 whitespace-nowrap">
+                                                <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold ${getSeverityBadge(event.severity)}`}>
+                                                    {event.severity}
+                                                </span>
+                                            </td>
+                                            <td className="px-5 py-4 text-gray-900 dark:text-white font-medium">
+                                                {event.description}
+                                            </td>
+                                            <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                                                {event.actor}
+                                            </td>
+                                            <td className="px-5 py-4 font-mono text-xs text-gray-500 dark:text-gray-400">
+                                                {event.ip}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                        <Pagination currentPage={currentPage} totalItems={events.length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
+                    </>
+                )}
             </div>
         </div>
     );

@@ -1,17 +1,15 @@
-import { Users, Clock, Database, AlertCircle, ClipboardList, ShieldAlert, ArrowUpRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, Leaf, RefreshCcw, Boxes, ShieldAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '@/lib/api';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import AddUserModal from '../components/AddUserModal';
 
-const StatCard = ({ label, value, sub, icon: Icon, color, onClick }: {
-    label: string; value: string; sub: string;
-    icon: React.ElementType; color: string; onClick?: () => void;
-}) => (
-    <div
-        onClick={onClick}
-        className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5 flex items-center gap-4 ${onClick ? 'hover:shadow-md hover:-translate-y-1 transition-all cursor-pointer' : ''}`}
-    >
-        <div className={`p-3 rounded-xl ${color}`}>
-            <Icon size={22} />
-        </div>
+
+const StatCard = ({ label, value, sub, icon: Icon, color, onClick }: any) => (
+    <div onClick={onClick}
+        className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5 flex items-center gap-4 ${onClick ? 'hover:shadow-md hover:-translate-y-1 transition-all cursor-pointer' : ''}`}>
+        <div className={`p-3 rounded-xl ${color}`}><Icon size={22} /></div>
         <div>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
@@ -22,112 +20,236 @@ const StatCard = ({ label, value, sub, icon: Icon, color, onClick }: {
 
 const Dashboard = () => {
     const navigate = useNavigate();
+    const [stats, setStats] = useState({ users: 0, farmers: 0, cycles: 0, shipments: 0 });
+    const [userName, setUserName] = useState('Admin');
+    const [loading, setLoading] = useState(true);
+    
+    const [activityData, setActivityData] = useState([]);
+    const [cycleStats, setCycleStats] = useState({ active: 0, harvesting: 0, planned: 0, completed: 0 });
+    const [recentEvents, setRecentEvents] = useState([]);
+    const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+    const [successToast, setSuccessToast] = useState<{ name: string } | null>(null);
 
-    const stats = [
-        { label: 'Total Users', value: '47', sub: '+3 this week', icon: Users, color: 'bg-green-50 text-green-600 dark:bg-green-900/20' },
-        { label: 'Pending Approvals', value: '5', sub: 'Accounts awaiting review', icon: Clock, color: 'bg-amber-50 text-amber-600 dark:bg-amber-900/20', onClick: () => navigate('/admin/users', { state: { filter: 'pending' } }) },
-        { label: 'Master Entities', value: '24', sub: 'Active records', icon: Database, color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' },
-        { label: 'System Alerts', value: '3', sub: '1 critical', icon: AlertCircle, color: 'bg-red-50 text-red-600 dark:bg-red-900/20', onClick: () => navigate('/admin/event-logs', { state: { filter: 'critical' } }) },
+
+    useEffect(() => {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            try {
+                const user = JSON.parse(userStr);
+                if (user.name) setUserName(user.name);
+            } catch { /* ignore */ }
+        }
+
+        const fetchDashboardData = async () => {
+            try {
+                const [usersRes, farmersRes, cyclesRes, stockRes, activityRes, cycleStatsRes, recentRes] = await Promise.allSettled([
+                    api.get('/auth/users'),    
+                    api.get('/farmers'),       
+                    api.get('/crop-cycles'),   
+                    api.get('/stock'),         
+                    api.get('/admin/stats/activity?months=3'),
+                    api.get('/admin/stats/cycles'),
+                    api.get('/admin/activity/recent?limit=10')
+                ]);
+
+                const users   = usersRes.status   === 'fulfilled' && Array.isArray(usersRes.value.data)    ? usersRes.value.data    : [];
+                const farmers = farmersRes.status === 'fulfilled' && Array.isArray(farmersRes.value.farmers) ? farmersRes.value.farmers : [];
+                const cycles  = cyclesRes.status  === 'fulfilled' && Array.isArray(cyclesRes.value.data)   ? cyclesRes.value.data   : [];
+                const stock   = stockRes.status   === 'fulfilled' && Array.isArray(stockRes.value.data)    ? stockRes.value.data    : [];
+
+                setStats({
+                    users:     users.length,
+                    farmers:   farmers.length,
+                    cycles:    cycles.filter((c: any) => c.status !== 'completed').length,
+                    shipments: stock.length,
+                });
+
+                if (activityRes.status === 'fulfilled') setActivityData(activityRes.value || []);
+                if (cycleStatsRes.status === 'fulfilled') setCycleStats(cycleStatsRes.value || { active: 0, harvesting: 0, planned: 0, completed: 0 });
+                if (recentRes.status === 'fulfilled') setRecentEvents(recentRes.value || []);
+
+            } catch (err) {
+                console.error('Failed to fetch dashboard data', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchDashboardData();
+    }, []);
+
+    const kpiCards = [
+        { label: 'Total Users',        value: loading ? '...' : String(stats.users),     sub: 'Registered accounts', icon: Users,       color: 'bg-green-50 text-green-600 dark:bg-green-900/20',     onClick: () => navigate('/admin/users') },
+        { label: 'Registered Farmers', value: loading ? '...' : String(stats.farmers),   sub: 'Active suppliers',    icon: Leaf,        color: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20' },
+        { label: 'Active Crop Cycles', value: loading ? '...' : String(stats.cycles),    sub: 'In progress',         icon: RefreshCcw,  color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' },
+        { label: 'Stock Batches',      value: loading ? '...' : String(stats.shipments), sub: 'Total on record',     icon: Boxes,       color: 'bg-purple-50 text-purple-600 dark:bg-purple-900/20' },
     ];
 
-    const recentActivity = [
-        { text: 'Farm Manager (Simbi Farm) account approved', sub: 'Actor: admin@freshsarura.rw', time: '2 min ago', dot: 'bg-green-500' },
-        { text: "New crop 'Habanero' added to Master Data", sub: 'Actor: admin@freshsarura.rw', time: '18 min ago', dot: 'bg-blue-500' },
-        { text: 'Failed login attempt detected', sub: 'Source: IP 197.243.22.10', time: '1 hr ago', dot: 'bg-red-500' },
-        { text: 'System backup completed successfully', sub: 'Source: System Automator', time: '3 hrs ago', dot: 'bg-green-500' },
-    ];
+    const cycleChartData = [
+        { name: 'Active', value: cycleStats.active, color: '#10B981' }, 
+        { name: 'Harvesting', value: cycleStats.harvesting, color: '#F59E0B' }, 
+        { name: 'Planned', value: cycleStats.planned, color: '#6366F1' }, 
+        { name: 'Completed', value: cycleStats.completed, color: '#6B7280' }, 
+    ].filter(d => d.value > 0);
 
     return (
         <div className="p-6 space-y-6 animate-fade-in">
-
             {/* Welcome Banner */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-green-700 to-green-600 p-8 text-white shadow-lg flex flex-col justify-between gap-4">
-                <div className="relative z-10">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <div className="flex items-center gap-3 mb-2">
-                                <h1 className="text-2xl md:text-3xl font-bold">Welcome back, Thierry</h1>
-                            </div>
-                            <p className="text-green-100 text-base md:text-lg opacity-90 max-w-2xl">
-                                Manage users, master data, and monitor system health from one place.
-                            </p>
-                        </div>
-                        {/* System Status Badge */}
-                        <div className="flex-shrink-0">
-                            <span className="bg-white/20 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-green-300 animate-pulse" />
-                                System Status: Operational
-                            </span>
-                        </div>
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-green-700 to-green-600 p-8 text-white shadow-lg">
+                <div className="relative z-10 flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl md:text-3xl font-bold mb-1">Welcome back, {userName}</h1>
+                        <p className="text-green-100 text-base opacity-90">Manage users, monitor operations, and oversee the full FreshSarura platform.</p>
                     </div>
+                    <span className="bg-white/20 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 flex-shrink-0">
+                        <span className="w-2 h-2 rounded-full bg-green-300 animate-pulse" />
+                        System: Operational
+                    </span>
                 </div>
-
-                {/* Decorators */}
-                <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-white opacity-10 blur-3xl pointer-events-none"></div>
-                <div className="absolute bottom-0 right-20 -mb-10 h-40 w-40 rounded-full bg-green-400 opacity-20 blur-2xl pointer-events-none"></div>
+                <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-white opacity-10 blur-3xl pointer-events-none" />
+                <div className="absolute bottom-0 right-20 -mb-10 h-40 w-40 rounded-full bg-green-400 opacity-20 blur-2xl pointer-events-none" />
             </div>
 
-            {/* Stat cards */}
+            {/* KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                {stats.map(s => <StatCard key={s.label} {...s} />)}
+                {kpiCards.map(s => <StatCard key={s.label} {...s} />)}
             </div>
 
-            {/* Bottom row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-                {/* Recent Activity */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <ClipboardList size={18} className="text-green-500" />
-                            Recent Activity
-                        </h2>
-                        <button
-                            onClick={() => navigate('/admin/event-logs')}
-                            className="text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1 cursor-pointer"
-                        >
-                            View All <ArrowUpRight size={14} />
-                        </button>
+            {/* Middle Row: Line Chart | Donut Chart | Quick Actions */}
+            <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+                {/* Line Chart */}
+                <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+                    <div className="mb-4">
+                        <h2 className="text-base font-bold text-gray-900 dark:text-white">Platform Activity</h2>
+                        <p className="text-sm text-gray-500">Platform activity over last 3 months</p>
                     </div>
-                    <div className="space-y-3">
-                        {recentActivity.map((a, i) => (
-                            <div key={i} className="flex items-start gap-3">
-                                <span className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${a.dot}`} />
-                                <div className="flex-1">
-                                    <p className="text-sm text-gray-700 dark:text-gray-300">{a.text}</p>
-                                    <p className="text-xs text-gray-500 mt-0.5">{a.sub}</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">{a.time}</p>
-                                </div>
-                            </div>
-                        ))}
+                    <div className="h-[250px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={activityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dy={10} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} />
+                                <Tooltip
+                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                                    cursor={{ stroke: '#E5E7EB', strokeWidth: 2, strokeDasharray: '3 3' }}
+                                />
+                                <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                                <Line type="monotone" name="New Farmers" dataKey="farmers" stroke="#10B981" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                                <Line type="monotone" name="Crop Cycles" dataKey="cycles" stroke="#F59E0B" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                            </LineChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
 
-                {/* Quick Links */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+                {/* Donut Chart */}
+                <div className="xl:col-span-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5 flex flex-col">
+                    <div className="mb-2">
+                        <h2 className="text-base font-bold text-gray-900 dark:text-white">Crop Cycle Status</h2>
+                        <p className="text-sm text-gray-500">Current occupancy breakdown</p>
+                    </div>
+                    <div className="flex-1 min-h-[200px]">
+                        {cycleChartData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={cycleChartData}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={60}
+                                        outerRadius={80}
+                                        paddingAngle={5}
+                                        dataKey="value"
+                                    >
+                                        {cycleChartData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.color} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
+                                    <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-sm text-gray-400">No active cycles</div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Quick Actions */}
+                <div className="xl:col-span-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
                     <h2 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <Users size={18} className="text-green-500" />
-                        Quick Actions
+                        <ShieldAlert size={18} className="text-green-500" /> Quick Actions
                     </h2>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-3">
                         {[
-                            { label: 'Add User', icon: Users, href: '/admin/users' },
-                            { label: 'Review Pending', icon: Clock, href: '/admin/users' },
-                            { label: 'Add Master Data', icon: Database, href: '/admin/master-data' },
-                            { label: 'View Event Logs', icon: ShieldAlert, href: '/admin/event-logs' },
-                        ].map(q => (
-                            <a
-                                key={q.label}
-                                href={q.href}
-                                className="flex items-center gap-2.5 p-3 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-green-300 dark:hover:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/10 transition-all cursor-pointer"
-                            >
-                                <q.icon size={16} className="text-green-600 dark:text-green-400" />
-                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{q.label}</span>
-                            </a>
+                            { label: 'Add User',             onClick: () => setIsAddUserModalOpen(true) },
+                            { label: 'View Event Logs',      onClick: () => navigate('/admin/event-logs') },
+                            { label: 'Analytics & Reports',  onClick: () => navigate('/admin/reports') },
+                            { label: 'System Settings',      onClick: () => navigate('/admin/settings') },
+                        ].map((q, idx) => (
+                            <button key={q.label} onClick={q.onClick}
+                                className={`flex items-center justify-between p-3 rounded-xl transition-all text-left ${idx === 0 ? 'bg-[#5cb85c] text-white shadow-lg shadow-green-900/10 hover:bg-[#4cae4c] border-transparent' : 'border border-gray-100 dark:border-gray-700 hover:border-green-300 hover:bg-green-50 dark:hover:bg-green-900/10'}`}>
+                                <span className={`text-sm font-medium ${idx === 0 ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`}>{q.label}</span>
+                                {idx === 0 && <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs">+</span>}
+                            </button>
                         ))}
                     </div>
                 </div>
             </div>
+
+            {/* Bottom Row: Recent Activity Table */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-base font-bold text-gray-900 dark:text-white">Recent Activity</h2>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-gray-500 uppercase bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
+                            <tr>
+                                <th className="px-4 py-3 font-medium">Time</th>
+                                <th className="px-4 py-3 font-medium">Actor</th>
+                                <th className="px-4 py-3 font-medium">Event</th>
+                                <th className="px-4 py-3 font-medium">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                            {recentEvents.length > 0 ? (
+                                recentEvents.map((evt: any) => (
+                                    <tr key={evt.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                        <td className="px-4 py-3 text-gray-500">{new Date(evt.time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
+                                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{evt.actor}</td>
+                                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{evt.event}</td>
+                                        <td className="px-4 py-3">
+                                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                                                evt.status.toLowerCase() === 'approved' || evt.status.toLowerCase() === 'success' || evt.status.toLowerCase() === 'verified' || evt.status.toLowerCase() === 'active'
+                                                ? 'bg-green-50 text-green-600' 
+                                                : evt.status.toLowerCase() === 'rejected' || evt.status.toLowerCase() === 'cancelled'
+                                                ? 'bg-red-50 text-red-600'
+                                                : evt.status.toLowerCase() === 'harvesting'
+                                                ? 'bg-amber-50 text-amber-600'
+                                                : 'bg-gray-100 text-gray-600'
+                                            }`}>
+                                                {evt.status}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={4} className="px-4 py-8 text-center text-gray-400">No recent activity</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Add User Modal */}
+            <AddUserModal 
+                isOpen={isAddUserModalOpen} 
+                onClose={() => setIsAddUserModalOpen(false)} 
+                onUserAdded={(name) => {
+                    navigate('/admin/users', { state: { newUser: name } });
+                }}
+            />
         </div>
     );
 };

@@ -1,7 +1,15 @@
-import { Leaf, Search, Bell } from 'lucide-react';
+import { Leaf, Search, Bell, ChevronDown } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle'; // Adjusted import path
 
 const Header = () => {
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : { name: 'Operations Manager', role: 'operations_manager' };
+    const initials = user.name ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 'OM';
+
+    const formatRole = (role: string) => {
+        return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    };
+
     return (
         <header className="fixed top-[10px] left-[10px] right-[10px] h-16 bg-white/80 dark:bg-gray-800/90 backdrop-blur-md border-theme z-40 px-6 flex items-center justify-between transition-colors duration-300 rounded-2xl shadow-floating">
             <div className="flex items-center gap-3">
@@ -37,14 +45,15 @@ const Header = () => {
                 </button>
 
                 {/* User Avatar & Profile */}
-                <div className="flex items-center gap-3 pl-2 border-l border-gray-200 dark:border-gray-700">
-                    <div className="text-right hidden md:block">
-                        <p className="text-sm font-semibold text-[#222222] dark:text-white">Operations Manager</p>
-                        <p className="text-xs text-[#6B7280] dark:text-gray-400">Unified Ops</p>
+                <div className="flex items-center gap-3 pl-2 border-l border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-bold shadow-md hover:saturate-150 transition-all active:scale-95">
+                        {initials}
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-semibold shadow-md">
-                        OM
+                    <div className="text-left hidden md:block">
+                        <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{user.name}</p>
+                        <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-0.5">{formatRole(user.role)}</p>
                     </div>
+                    <ChevronDown size={14} className="text-gray-400 ml-1" />
                 </div>
             </div>
         </header>

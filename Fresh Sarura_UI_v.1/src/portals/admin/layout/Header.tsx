@@ -1,11 +1,19 @@
 import { useState } from 'react';
-import { Search, Bell } from 'lucide-react';
+import { Search, Bell, ChevronDown } from 'lucide-react';
 import logo from '@/assets/sarura_logo_nav.png';
 import ThemeToggle from '../../shared/component/ThemeToggle';
 import NotificationsModal from '../components/NotificationsModal';
 
 const Header = () => {
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : { name: 'Super Admin', role: 'admin' };
+    const initials = user.name ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 'SA';
+
+    const formatRole = (role: string) => {
+        return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    };
 
     return (
         <>
@@ -44,14 +52,15 @@ const Header = () => {
                         <span className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full ring-2 ring-white dark:ring-gray-800" />
                     </button>
 
-                    <div className="flex items-center gap-3 pl-2 border-l border-gray-200 dark:border-gray-700">
-                        <div className="text-right hidden md:block">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-white">Super Admin</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">admin@freshsarura.rw</p>
+                    <div className="flex items-center gap-3 pl-2 border-l border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-bold shadow-md hover:saturate-150 transition-all active:scale-95">
+                            {initials}
                         </div>
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-600 to-green-400 flex items-center justify-center text-white text-sm font-bold shadow-md">
-                            SA
+                        <div className="text-left hidden md:block">
+                            <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{user.name}</p>
+                            <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-0.5">{formatRole(user.role)}</p>
                         </div>
+                        <ChevronDown size={14} className="text-gray-400 ml-1" />
                     </div>
                 </div>
             </header>

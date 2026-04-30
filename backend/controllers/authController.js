@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import User from '../models/User.js';
 import logger from '../utils/logger.js';
 import { sendPasswordResetEmail } from '../utils/emailService.js';
+import { createEventLog } from './eventLogController.js';
 
 // Generate JWT token
 const generateToken = (id, role) => {
@@ -24,10 +25,22 @@ export const login = async (req, res) => {
         // Find user and include password
         const user = await User.findOne({ email }).select('+password');
         if (!user || !(await user.comparePassword(password))) {
+            await createEventLog({
+                severity: 'CRITICAL',
+                description: `Failed login attempt for email: ${email}`,
+                actor: 'Unknown',
+                ip: req.ip || req.connection.remoteAddress
+            });
             return res.status(401).json({ message: 'Invalid email or password' });
         }
 
         if (!user.isActive) {
+            await createEventLog({
+                severity: 'WARNING',
+                description: `Login attempt for deactivated account: ${email}`,
+                actor: user.name,
+                ip: req.ip || req.connection.remoteAddress
+            });
             return res.status(403).json({ message: 'Your account has been deactivated' });
         }
 
@@ -35,6 +48,12 @@ export const login = async (req, res) => {
         const token = generateToken(user._id, user.role);
 
         logger.info(`User logged in: ${user.email} (${user.role})`);
+        await createEventLog({
+            severity: 'INFO',
+            description: `User logged in: ${user.email}`,
+            actor: user.name,
+            ip: req.ip || req.connection.remoteAddress
+        });
 
         res.status(200).json({
             token,
@@ -247,5 +266,46 @@ export const resetPassword = async (req, res) => {
     } catch (error) {
         logger.error('Reset password error:', error.message);
         res.status(500).json({ message: 'Error resetting password' });
+    }
+};
+
+// @route GET /api/v1/auth/users  (Admin only)
+export const getAllUsers = async (req, res) => {
+    try {
+        const users = await User.find().select('-password').sort({ createdAt: -1 });
+        res.json({ status: 'success', results: users.length, data: users });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// @route PATCH /api/v1/auth/users/:id  (Admin only)
+export const updateUser = async (req, res) => {
+    try {
+        const { name, role, isActive, phone } = req.body;
+        const user = await User.findByIdAndUpdate(
+            req.params.id,
+            { name, role, isActive, phone },
+            { new: true, runValidators: true }
+        ).select('-password');
+        if (!user) return res.status(404).json({ status: 'error', message: 'User not found.' });
+        res.json({ status: 'success', data: user });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// @route DELETE /api/v1/auth/users/:id  (Admin only — soft delete)
+export const deleteUser = async (req, res) => {
+    try {
+        const user = await User.findByIdAndUpdate(
+            req.params.id,
+            { isActive: false },
+            { new: true }
+        ).select('-password');
+        if (!user) return res.status(404).json({ status: 'error', message: 'User not found.' });
+        res.json({ status: 'success', message: 'User deactivated.' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
     }
 };
