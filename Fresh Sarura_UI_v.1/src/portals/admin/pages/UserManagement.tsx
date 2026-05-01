@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, Search, UserPlus, Edit2, PowerOff, Filter, CheckCircle, ShieldOff, Clock } from 'lucide-react';
+import { Users, Search, UserPlus, Edit2, PowerOff, Filter, CheckCircle, ShieldOff, Clock, Calendar } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AddUserModal from '../components/AddUserModal';
 import Toast from '../../shared/component/Toast';
@@ -19,6 +19,8 @@ const UserManagement = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
+    const [roleFilter, setRoleFilter] = useState('All');
+    const [dateFilter, setDateFilter] = useState('All');
     const [isAddUserOpen, setIsAddUserOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<any | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
@@ -76,7 +78,28 @@ const UserManagement = () => {
         const matchStatus = statusFilter === 'All' ||
             (statusFilter === 'Active' && u.isActive) ||
             (statusFilter === 'Inactive' && !u.isActive);
-        return matchSearch && matchStatus;
+        const matchRole = roleFilter === 'All' || u.role === roleFilter;
+
+        let matchDate = true;
+        if (dateFilter !== 'All') {
+            const joinedDate = new Date(u.createdAt);
+            const now = new Date();
+            if (dateFilter === 'Week') {
+                const weekAgo = new Date();
+                weekAgo.setDate(now.getDate() - 7);
+                matchDate = joinedDate >= weekAgo;
+            } else if (dateFilter === 'Month') {
+                const monthAgo = new Date();
+                monthAgo.setMonth(now.getMonth() - 1);
+                matchDate = joinedDate >= monthAgo;
+            } else if (dateFilter === '3Months') {
+                const threeMonthsAgo = new Date();
+                threeMonthsAgo.setMonth(now.getMonth() - 3);
+                matchDate = joinedDate >= threeMonthsAgo;
+            }
+        }
+
+        return matchSearch && matchStatus && matchRole && matchDate;
     });
 
     const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -129,11 +152,31 @@ const UserManagement = () => {
                 </div>
                 <div className="relative">
                     <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+                    <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
                         className="pl-8 pr-8 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none">
                         <option value="All">All Statuses</option>
                         <option value="Active">Active</option>
                         <option value="Inactive">Inactive</option>
+                    </select>
+                </div>
+                <div className="relative">
+                    <Users size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <select value={roleFilter} onChange={e => { setRoleFilter(e.target.value); setCurrentPage(1); }}
+                        className="pl-8 pr-8 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none">
+                        <option value="All">All Roles</option>
+                        {Object.entries(ROLE_LABELS).map(([val, label]) => (
+                            <option key={val} value={val}>{label}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="relative">
+                    <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <select value={dateFilter} onChange={e => { setDateFilter(e.target.value); setCurrentPage(1); }}
+                        className="pl-8 pr-8 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none">
+                        <option value="All">All Time</option>
+                        <option value="Week">This Week</option>
+                        <option value="Month">This Month</option>
+                        <option value="3Months">Last 3 Months</option>
                     </select>
                 </div>
             </div>

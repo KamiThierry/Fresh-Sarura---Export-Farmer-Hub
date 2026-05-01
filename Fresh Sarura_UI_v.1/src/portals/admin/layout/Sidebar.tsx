@@ -13,10 +13,12 @@ const portalSections = [
         icon: UserCog,
         color: 'text-green-600',
         items: [
-            { label: 'Farmer Management',  path: '/admin/pm/farmers' },
-            { label: 'Crop Planning',      path: '/admin/pm/crop-planning' },
+            { label: 'Farmer Management', path: '/admin/pm/farmers' },
+            { label: 'Crop Planning', path: '/admin/pm/crop-planning' },
             { label: 'Inventory & Batches', path: '/admin/pm/inventory' },
-            { label: 'Traceability',       path: '/admin/pm/traceability' },
+            { label: 'Room Management', path: '/admin/pm/rooms' },
+            { label: 'Traceability', path: '/admin/pm/traceability' },
+
         ],
     },
     {
@@ -24,7 +26,7 @@ const portalSections = [
         icon: Sprout,
         color: 'text-emerald-600',
         items: [
-            { label: 'Crop Planning',  path: '/admin/fm/crop-planning' },
+            { label: 'Crop Planning', path: '/admin/fm/crop-planning' },
             { label: 'Yield Forecast', path: '/admin/fm/yield-forecast' },
         ],
     },
@@ -33,7 +35,7 @@ const portalSections = [
         icon: FlaskConical,
         color: 'text-purple-600',
         items: [
-            { label: 'Processing',        path: '/admin/qc/processing' },
+            { label: 'Processing', path: '/admin/qc/processing' },
             { label: 'Cold Room (Stock)', path: '/admin/qc/cold-room' },
         ],
     },
@@ -42,9 +44,9 @@ const portalSections = [
         icon: Truck,
         color: 'text-blue-600',
         items: [
-            { label: 'Pending Pickup',   path: '/admin/logistics/pickup' },
+            { label: 'Pending Pickup', path: '/admin/logistics/pickup' },
             { label: 'Export Shipments', path: '/admin/logistics/shipments' },
-            { label: 'Documents',        path: '/admin/logistics/documents' },
+            { label: 'Documents', path: '/admin/logistics/documents' },
         ],
     },
 ];
@@ -53,15 +55,15 @@ const mainGroups = [
     {
         title: 'Overview',
         items: [
-            { path: '/admin/dashboard',   icon: Home,        label: 'Dashboard' },
+            { path: '/admin/dashboard', icon: Home, label: 'Dashboard' },
         ],
     },
     {
         title: 'Administration',
         items: [
-            { path: '/admin/users',      icon: Users,        label: 'User Management' },
-            { path: '/admin/event-logs', icon: ShieldAlert,  label: 'Event Logs' },
-            { path: '/admin/reports',    icon: BarChart3,    label: 'Analytics & Reports' },
+            { path: '/admin/users', icon: Users, label: 'User Management' },
+            { path: '/admin/event-logs', icon: ShieldAlert, label: 'Event Logs' },
+            { path: '/admin/reports', icon: BarChart3, label: 'Analytics & Reports' },
         ],
     },
 ];
@@ -81,17 +83,15 @@ const Sidebar = () => {
     };
 
     const linkClass = ({ isActive }: { isActive: boolean }) =>
-        `w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-            isActive
-                ? 'bg-[#5cb85c] text-white shadow-lg shadow-green-900/10'
-                : 'text-gray-500 hover:bg-gray-100/50 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'
+        `w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${isActive
+            ? 'bg-[#5cb85c] text-white shadow-lg shadow-green-900/10'
+            : 'text-gray-500 hover:bg-gray-100/50 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'
         }`;
 
     const subLinkClass = ({ isActive }: { isActive: boolean }) =>
-        `block px-3 py-1.5 rounded-lg text-sm transition-colors duration-200 ${
-            isActive
-                ? 'text-green-700 font-semibold bg-green-100 dark:bg-green-900/30 dark:text-green-400'
-                : 'text-gray-500 hover:text-green-700 hover:bg-green-50 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-green-400'
+        `block px-3 py-1.5 rounded-lg text-sm transition-colors duration-200 ${isActive
+            ? 'text-green-700 font-semibold bg-green-100 dark:bg-green-900/30 dark:text-green-400'
+            : 'text-gray-500 hover:text-green-700 hover:bg-green-50 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-green-400'
         }`;
 
     return (
@@ -145,9 +145,8 @@ const Sidebar = () => {
                                         </span>
                                         <ChevronDown
                                             size={14}
-                                            className={`transition-transform duration-200 ${
-                                                isOpen ? 'rotate-180' : ''
-                                            }`}
+                                            className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''
+                                                }`}
                                         />
                                     </button>
 

@@ -10,6 +10,15 @@ const eventLogSchema = new mongoose.Schema({
         enum: ['INFO', 'WARNING', 'CRITICAL', 'DEBUG'],
         default: 'INFO'
     },
+    module: {
+        type: String,
+        enum: ['Farmer Management', 'Crop Planning', 'Production & QC', 'Export & Shipments', 'User Management', 'System'],
+        default: 'System'
+    },
+    action: {
+        type: String,
+        required: true
+    },
     description: {
         type: String,
         required: true

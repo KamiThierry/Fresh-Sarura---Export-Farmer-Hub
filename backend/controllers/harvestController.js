@@ -253,11 +253,41 @@ export const completeBatch = async (req, res) => {
 // GET /api/v1/stock  ← PM + QC see final stock
 export const getStock = async (req, res) => {
     try {
-        const batches = await ProcessingBatch.find({ status: 'Done' })
+        const { startDate, endDate } = req.query;
+        const filter = { status: 'Done' };
+        if (startDate && endDate) {
+            filter.updatedAt = {
+                $gte: new Date(startDate),
+                $lte: new Date(`${endDate}T23:59:59.999Z`)
+            };
+        }
+        const batches = await ProcessingBatch.find(filter)
             .populate('cycleId', 'crop_name farm_name')
             .populate('intakeLogId', 'pickedUpWeightKg arrivedAt')
             .sort({ updatedAt: -1 });
         res.json({ status: 'success', results: batches.length, data: batches });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// GET /api/v1/intake-logs
+export const getIntakeLogs = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        const filter = {};
+        if (startDate && endDate) {
+            filter.createdAt = {
+                $gte: new Date(startDate),
+                $lte: new Date(`${endDate}T23:59:59.999Z`)
+            };
+        }
+        const logs = await IntakeLog.find(filter)
+            .populate('harvestDeclarationId')
+            .populate('cycleId')
+            .populate('loggedBy', 'name')
+            .sort({ createdAt: -1 });
+        res.json({ status: 'success', results: logs.length, data: logs });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }

@@ -10,6 +10,14 @@ export const getCropCycles = async (req, res) => {
     try {
         const filter = {};
         if (req.query.farmer_id) filter.farmer_id = req.query.farmer_id;
+        
+        const { startDate, endDate } = req.query;
+        if (startDate && endDate) {
+            filter.createdAt = {
+                $gte: new Date(startDate),
+                $lte: new Date(`${endDate}T23:59:59.999Z`)
+            };
+        }
         const cycles = await CropCycle.find(filter)
             .populate('farmer_id')
             .sort({ createdAt: -1 });

@@ -6,7 +6,15 @@ import { sendFarmerWelcomeEmail } from '../utils/emailService.js';
 // @route GET /api/v1/farmers
 export const getFarmers = async (req, res) => {
     try {
-        const farmers = await Farmer.find().sort({ createdAt: -1 });
+        const { startDate, endDate } = req.query;
+        const filter = {};
+        if (startDate && endDate) {
+            filter.createdAt = {
+                $gte: new Date(startDate),
+                $lte: new Date(`${endDate}T23:59:59.999Z`)
+            };
+        }
+        const farmers = await Farmer.find(filter).sort({ createdAt: -1 });
         res.status(200).json({ farmers });
     } catch (error) {
         logger.error('Get farmers error:', error.message);

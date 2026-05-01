@@ -36,15 +36,15 @@ const ProductionManagerApp = () => {
     const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
     const [isCreateCycleOpen, setIsCreateCycleOpen] = useState(false);
 
-    const { stock } = usePMContext();
+    const { stock, intakeLogs } = usePMContext();
 
     const todayStr = new Date().toISOString().split('T')[0];
 
     const currentIntake = useMemo(() =>
-        stock
-            .filter(b => b.createdAt?.startsWith(todayStr))
-            .reduce((sum, b) => sum + (b.receivedWeightKg || 0), 0)
-    , [stock, todayStr]);
+        intakeLogs
+            .filter(log => log.createdAt?.startsWith(todayStr))
+            .reduce((sum, log) => sum + (log.pickedUpWeightKg || 0), 0)
+    , [intakeLogs, todayStr]);
 
     const _coldRoomStock = useMemo(() =>
         stock.reduce((sum, b) => sum + ((b.processedWeightKg || 0) - (b.rejectedWeightKg || 0)), 0)

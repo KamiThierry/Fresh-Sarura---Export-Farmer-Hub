@@ -272,7 +272,15 @@ export const resetPassword = async (req, res) => {
 // @route GET /api/v1/auth/users  (Admin only)
 export const getAllUsers = async (req, res) => {
     try {
-        const users = await User.find().select('-password').sort({ createdAt: -1 });
+        const { startDate, endDate } = req.query;
+        const filter = {};
+        if (startDate && endDate) {
+            filter.createdAt = {
+                $gte: new Date(startDate),
+                $lte: new Date(`${endDate}T23:59:59.999Z`)
+            };
+        }
+        const users = await User.find(filter).select('-password').sort({ createdAt: -1 });
         res.json({ status: 'success', results: users.length, data: users });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });

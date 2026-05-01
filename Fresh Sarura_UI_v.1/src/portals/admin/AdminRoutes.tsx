@@ -12,6 +12,7 @@ import PMFarmerManagement from '../production-manager/pages/FarmerManagement';
 import PMCropPlanning from '../production-manager/pages/CropPlanning';
 import PMInventoryManagement from '../production-manager/pages/InventoryManagement';
 import PMTraceability from '../production-manager/pages/Traceability';
+import PMRoomManagement from '../production-manager/pages/RoomManagement';
 import { PMProvider } from '@/context/PMContext';
 
 // FM Pages
@@ -43,6 +44,7 @@ const AdminRoutes = () => (
             <Route path="pm/crop-planning" element={<PMProvider><PMCropPlanning /></PMProvider>} />
             <Route path="pm/inventory" element={<PMProvider><PMInventoryManagement /></PMProvider>} />
             <Route path="pm/traceability" element={<PMProvider><PMTraceability /></PMProvider>} />
+            <Route path="pm/rooms" element={<PMProvider><PMRoomManagement /></PMProvider>} />
 
             {/* Farm Manager Sub-routes */}
             <Route path="fm/crop-planning" element={<FMCropPlanning />} />

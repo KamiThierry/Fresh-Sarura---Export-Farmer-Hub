@@ -6,18 +6,18 @@ import logger from '../utils/logger.js';
 // @access  Private (Admin)
 export const getAllLogs = async (req, res) => {
     try {
-        const { severity, search } = req.query;
+        const { module, action, actor, search } = req.query;
         let query = {};
 
-        if (severity && severity !== 'All') {
-            query.severity = severity.toUpperCase();
-        }
+        if (module && module !== 'All') query.module = module;
+        if (action && action !== 'All') query.action = action;
+        if (actor && actor !== 'All') query.actor = actor;
 
         if (search) {
             query.$or = [
                 { description: { $regex: search, $options: 'i' } },
                 { actor: { $regex: search, $options: 'i' } },
-                { ip: { $regex: search, $options: 'i' } }
+                { action: { $regex: search, $options: 'i' } }
             ];
         }
 

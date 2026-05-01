@@ -141,7 +141,15 @@ export const createShipment = async (req, res) => {
 // GET /api/v1/shipments
 export const getShipments = async (req, res) => {
     try {
-        const shipments = await Shipment.find()
+        const { startDate, endDate } = req.query;
+        const filter = {};
+        if (startDate && endDate) {
+            filter.createdAt = {
+                $gte: new Date(startDate),
+                $lte: new Date(`${endDate}T23:59:59.999Z`)
+            };
+        }
+        const shipments = await Shipment.find(filter)
             .populate('exportBatches', 'batchId cropName clientName boxCount allocatedWeightKg gradeLabel')
             .populate('createdBy', 'name')
             .sort({ createdAt: -1 });
