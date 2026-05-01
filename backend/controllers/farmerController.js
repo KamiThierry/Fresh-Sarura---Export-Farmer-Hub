@@ -20,7 +20,7 @@ export const registerFarmer = async (req, res) => {
     let newlyCreatedUser = false;
     try {
         const {
-            full_name, farm_name, national_id, district, sector, cell, village,
+            full_name, farm_name, national_id, province, district, sector, cell, village,
             produce_types, farm_size_hectares, production_capacity_tons, phone, email
         } = req.body;
 
@@ -64,6 +64,7 @@ export const registerFarmer = async (req, res) => {
                 full_name,
                 farm_name,
                 national_id,
+                province,
                 district,
                 sector,
                 cell,

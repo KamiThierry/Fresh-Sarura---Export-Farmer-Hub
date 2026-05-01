@@ -16,7 +16,7 @@ const FarmDashboard = () => {
     const [isSuppliesModalOpen, setIsSuppliesModalOpen] = useState(false);
     const [timeRange, setTimeRange] = useState(30); // days
 
-    const { dashboard, cycles, loading, submitFieldReport, submitBudgetRequest, declareHarvest } = useFarmManager();
+    const { dashboard, cycles, loading, submitBudgetRequest, declareHarvest } = useFarmManager();
 
     // Get farmer name from localStorage user object (set at login)
     const user = JSON.parse(localStorage.getItem('user') || '{}');

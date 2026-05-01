@@ -11,16 +11,15 @@ interface FarmerRegistrationModalProps {
 }
 
 const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegistrationModalProps) => {
-    // ⚠️ All hooks MUST come before any conditional returns (React Rules of Hooks)
     const [formData, setFormData] = useState({
         full_name: '',
         farm_name: '',
         national_id: '',
-        province: '',   // used for cascading dropdowns AND saved to backend
+        province: '',   // UI-only for cascading dropdowns — not sent to backend
         district: '',
         sector: '',
         cell: '',
-        village: '',
+        village: '',    // Required by backend
         produce_types: [] as string[],
         farm_size_hectares: '',
         production_capacity_tons: '',
@@ -33,9 +32,7 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
     // Cascading dropdown options
     const provinceOptions = getProvinces();
     const districtOptions = formData.province ? getDistricts(formData.province) : [];
-    const sectorOptions   = (formData.province && formData.district)
-        ? getSectors(formData.province, formData.district)
-        : [];
+    const sectorOptions = (formData.province && formData.district) ? getSectors(formData.province, formData.district) : [];
 
     const produceOptions = [
         'French Beans', 'Chili Peppers', 'Avocados',
@@ -54,14 +51,19 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+
+        // Client-side guard for produce_types (can't use HTML required on buttons)
         if (formData.produce_types.length === 0) {
             setError('Please select at least one produce type.');
             return;
         }
+
         setIsSubmitting(true);
         try {
+            // Strip province — backend doesn't have this field
+            const { province: _province, ...rest } = formData;
             const dataToSubmit = {
-                ...formData,
+                ...rest,
                 farm_size_hectares: parseFloat(formData.farm_size_hectares),
                 production_capacity_tons: parseFloat(formData.production_capacity_tons),
             };
@@ -75,7 +77,6 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
         }
     };
 
-    // Guard AFTER all hooks
     if (!isOpen) return null;
 
     return createPortal(

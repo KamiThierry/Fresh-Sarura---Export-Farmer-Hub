@@ -1,20 +1,24 @@
 
-import { Scale, Thermometer, ShieldCheck, Plane, Sprout } from 'lucide-react';
+import { Scale, Thermometer, Plane, Sprout } from 'lucide-react';
 
 interface DashboardStatsProps {
   todaysIntake?: string;
+  coldRoomStock?: string;
   activeCyclesCount?: number;
   scheduledExports?: string;
   pendingRoomRequestsCount?: number;
   userName?: string;
+  scheduledShipments?: any[];
 }
 
 const DashboardStats = ({
-  todaysIntake = "2,450 kg",
+  todaysIntake = "0 kg",
+  coldRoomStock = "0 Tons",
   activeCyclesCount = 0,
-  scheduledExports = "8 Tons",
+  scheduledExports = "0 Tons",
   pendingRoomRequestsCount = 0,
-  userName = "Manager"
+  userName = "Manager",
+  scheduledShipments = [],
 }: DashboardStatsProps) => {
   const stats = [
     {
@@ -28,9 +32,9 @@ const DashboardStats = ({
     {
       icon: Thermometer,
       label: 'Cold Room Stock',
-      value: '12.5 Tons',
-      sub: pendingRoomRequestsCount > 0 
-        ? `${pendingRoomRequestsCount} Room Requests Pending` 
+      value: coldRoomStock,
+      sub: pendingRoomRequestsCount > 0
+        ? `${pendingRoomRequestsCount} Room Requests Pending`
         : '4 Tons expiring soon',
       color: pendingRoomRequestsCount > 0 ? 'text-red-600 font-bold' : 'text-blue-600',
       bg: pendingRoomRequestsCount > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-blue-50 dark:bg-blue-900/20',
@@ -47,8 +51,12 @@ const DashboardStats = ({
     {
       icon: Plane,
       label: 'Scheduled to Fly',
-      value: scheduledExports,
-      sub: 'Flight EK123 @ 10 PM',
+      value: scheduledShipments.length > 0
+        ? `${scheduledShipments.reduce((sum: number, s: any) => sum + (s.totalWeightKg || 0), 0) / 1000} Tons`
+        : scheduledExports,
+      sub: scheduledShipments.length > 0
+        ? `${scheduledShipments[0].flightNumber} → ${scheduledShipments[0].destination}`
+        : 'No flights scheduled',
       color: 'text-orange-600',
       bg: 'bg-orange-50 dark:bg-orange-900/20',
     },
@@ -93,7 +101,7 @@ const DashboardStats = ({
                 )}
               </div>
               <div className={`p-3 rounded-lg flex-shrink-0 ${stat.bg}`}>
-               <stat.icon className={`${stat.color}`} size={24} />
+                <stat.icon className={`${stat.color}`} size={24} />
               </div>
             </div>
             {'badge' in stat && stat.badge && (

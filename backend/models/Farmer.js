@@ -25,6 +25,9 @@ const farmerSchema = new mongoose.Schema({
         unique: true,
         trim: true,
     },
+    province: {
+        type: String,
+    },
     district: {
         type: String,
         required: [true, 'District is required'],

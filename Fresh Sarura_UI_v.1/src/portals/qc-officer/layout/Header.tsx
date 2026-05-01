@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Bell, ClipboardList, Truck, CheckCircle, AlertTriangle, ArrowRight, RefreshCw, LogOut, ChevronDown } from 'lucide-react';
+import { Search, Bell, ClipboardList, Truck, LogOut } from 'lucide-react';
 import logo from '@/assets/sarura_logo_nav.png';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../../production-manager/components/ThemeToggle';
@@ -177,16 +177,17 @@ const Header = () => {
 
                     {/* User Avatar & Profile */}
                     <div className="flex items-center gap-3 pl-2 border-l border-gray-200 dark:border-gray-700">
-                        <div onClick={() => navigate('/qc/settings')} className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-bold shadow-md hover:saturate-150 transition-all active:scale-95">
-                                {user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
-                            </div>
-                            <div className="text-left hidden md:block">
-                                <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{user.name}</p>
-                                <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-0.5">{formatRole(user.role)}</p>
-                            </div>
-                            <ChevronDown size={14} className="text-gray-400 ml-1" />
+                        <div className="text-right hidden md:block">
+                            <p className="text-sm font-semibold text-[#222222] dark:text-white">{user.name}</p>
+                            <p className="text-xs text-[#6B7280] dark:text-gray-400">{formatRole(user.role)}</p>
                         </div>
+                        <button
+                            onClick={() => navigate('/qc/settings')}
+                            className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-semibold shadow-md active:scale-95 transition-all"
+                            title="My Profile & Settings"
+                        >
+                            {user.name.charAt(0).toUpperCase()}
+                        </button>
                         {/* Separate logout button */}
                         <button
                             onClick={() => {

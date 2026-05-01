@@ -1,17 +1,9 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, Search, Filter, Plus, Download, Printer, Eye, MoreVertical, CheckCircle, AlertCircle, Calendar, X } from 'lucide-react';
+import { FileText, Search, Filter, Plus, Download, Printer, Eye, MoreVertical, CheckCircle, AlertCircle, Calendar, X, Loader2 } from 'lucide-react';
 import DocumentUploadModal from '../components/DocumentUploadModal';
 import Pagination from '../../shared/component/Pagination';
-
-// Mock Data
-const MOCK_DOCUMENTS = [
-    { id: 'DOC-001', name: 'PL-2024-001_Invoice.pdf', type: 'Commercial Invoice', shipmentId: 'PL-2024-001', uploadedBy: 'John Doe', date: 'Oct 24, 2023 • 14:30', status: 'Verified', size: '1.2 MB' },
-    { id: 'DOC-002', name: 'PL-2024-001_Phyto.pdf', type: 'Phytosanitary Cert', shipmentId: 'PL-2024-001', uploadedBy: 'Sarah Smith', date: 'Oct 24, 2023 • 10:15', status: 'Verified', size: '850 KB' },
-    { id: 'DOC-003', name: 'PL-2024-002_AWB.pdf', type: 'Airway Bill', shipmentId: 'PL-2024-002', uploadedBy: 'Mike Jones', date: 'Oct 25, 2023 • 09:00', status: 'Review Needed', size: '2.4 MB' },
-    { id: 'DOC-004', name: 'PL-2024-002_PackingList.pdf', type: 'Packing List', shipmentId: 'PL-2024-002', uploadedBy: 'Mike Jones', date: 'Oct 25, 2023 • 08:45', status: 'Verified', size: '150 KB' },
-    { id: 'DOC-005', name: 'Standard_SOP_v2.pdf', type: 'SOP', shipmentId: null, uploadedBy: 'Admin', date: 'Oct 01, 2023 • 12:00', status: 'Verified', size: '4.5 MB' },
-];
+import { api } from '../../../lib/api';
 
 const Documents = () => {
     const [searchParams] = useSearchParams();
@@ -24,9 +16,26 @@ const Documents = () => {
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable');
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 3;
+    const itemsPerPage = 10;
 
-    // Reset filter if URL param changes (optional, but good for deep linking handling)
+    const [documents, setDocuments] = useState<any[]>([]);
+    const [loadingDocs, setLoadingDocs] = useState(true);
+
+    const fetchDocuments = useCallback(async () => {
+        setLoadingDocs(true);
+        try {
+            const res = await api.get('/export-documents');
+            setDocuments(res.data || []);
+        } catch (err) {
+            console.error('Failed to fetch documents:', err);
+        } finally {
+            setLoadingDocs(false);
+        }
+    }, []);
+
+    useEffect(() => { fetchDocuments(); }, [fetchDocuments]);
+
+    // Reset filter if URL param changes
     useEffect(() => {
         if (initialShipmentId) {
             setFilterShipment(initialShipmentId);
@@ -34,37 +43,33 @@ const Documents = () => {
     }, [initialShipmentId]);
 
     const filteredDocs = useMemo(() => {
-        return MOCK_DOCUMENTS.filter(doc => {
-            const matchesSearch = doc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (doc.shipmentId && doc.shipmentId.toLowerCase().includes(searchTerm.toLowerCase()));
-            const matchesType = filterType === 'All' || doc.type === filterType;
-            const matchesShipment = !filterShipment || doc.shipmentId === filterShipment;
-
+        return documents.filter(doc => {
+            const matchesSearch =
+                doc.fileName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                doc.shipmentId?.plNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                doc.docType?.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesType = filterType === 'All' || doc.docType === filterType;
+            const matchesShipment = !filterShipment ||
+                doc.shipmentId?.plNumber === filterShipment ||
+                doc.shipmentId === filterShipment ||
+                (typeof doc.shipmentId === 'object' && doc.shipmentId?._id === filterShipment);
             return matchesSearch && matchesType && matchesShipment;
         });
-    }, [searchTerm, filterType, filterShipment]);
+    }, [documents, searchTerm, filterType, filterShipment]);
 
     // Reset to page 1 whenever filters change
     useEffect(() => { setCurrentPage(1); }, [searchTerm, filterType, filterShipment]);
 
     const toggleSelection = (id: string) => {
-        setSelectedDocs(prev =>
-            prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id]
-        );
+        setSelectedDocs(prev => prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id]);
     };
 
     const toggleAll = () => {
-        if (selectedDocs.length === filteredDocs.length) {
+        if (selectedDocs.length === filteredDocs.length && filteredDocs.length > 0) {
             setSelectedDocs([]);
         } else {
-            setSelectedDocs(filteredDocs.map(d => d.id));
+            setSelectedDocs(filteredDocs.map(d => d._id));
         }
-    };
-
-    const getStatusColor = (status: string) => {
-        return status === 'Verified'
-            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
     };
 
     const getTypeColor = (type: string) => {
@@ -128,8 +133,6 @@ const Documents = () => {
                         <option value="Airway Bill">AWBs</option>
                         <option value="Packing List">Packing Lists</option>
                     </select>
-
-
                 </div>
             </div>
 
@@ -157,75 +160,114 @@ const Documents = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                            {filteredDocs.length > 0 ? (
-                                filteredDocs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(doc => (
-                                    <tr
-                                        key={doc.id}
-                                        className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group ${selectedDocs.includes(doc.id) ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}`}
-                                    >
-                                        <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'}`}>
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedDocs.includes(doc.id)}
-                                                onChange={() => toggleSelection(doc.id)}
-                                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                            />
-                                        </td>
-                                        <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'}`}>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded bg-red-100 dark:bg-red-900/20 flex items-center justify-center text-red-600 dark:text-red-400 shrink-0">
-                                                    <FileText size={16} />
+                            {loadingDocs ? (
+                                <tr>
+                                    <td colSpan={8} className="py-12 text-center">
+                                        <div className="flex items-center justify-center gap-2 text-gray-400">
+                                            <Loader2 size={20} className="animate-spin" />
+                                            <span className="text-sm">Loading documents...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ) : filteredDocs.length > 0 ? (
+                                filteredDocs
+                                    .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                                    .map(doc => (
+                                        <tr
+                                            key={doc._id}
+                                            className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group ${selectedDocs.includes(doc._id) ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}`}
+                                        >
+                                            <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'}`}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedDocs.includes(doc._id)}
+                                                    onChange={() => toggleSelection(doc._id)}
+                                                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                />
+                                            </td>
+                                            <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'}`}>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded bg-red-100 dark:bg-red-900/20 flex items-center justify-center text-red-600 dark:text-red-400 shrink-0">
+                                                        <FileText size={16} />
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-bold text-gray-900 dark:text-white truncate max-w-[200px]">{doc.fileName}</div>
+                                                        <div className="text-xs text-gray-500">{doc.docType}</div>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <div className="font-bold text-gray-900 dark:text-white truncate max-w-[200px]">{doc.name}</div>
-                                                    <div className="text-xs text-gray-500">{doc.size}</div>
+                                            </td>
+                                            <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'}`}>
+                                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border border-transparent ${getTypeColor(doc.docType)}`}>
+                                                    {doc.docType}
+                                                </span>
+                                            </td>
+                                            <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'}`}>
+                                                {doc.shipmentId?.plNumber ? (
+                                                    <button
+                                                        onClick={() => setFilterShipment(doc.shipmentId.plNumber)}
+                                                        className="text-indigo-600 dark:text-indigo-400 hover:underline font-mono text-xs font-bold"
+                                                    >
+                                                        {doc.shipmentId.plNumber}
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-gray-400 text-xs italic">Unassigned</span>
+                                                )}
+                                            </td>
+                                            <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'}`}>
+                                                <span className="text-sm text-gray-700 dark:text-gray-300">
+                                                    {doc.uploadedBy?.name || '—'}
+                                                </span>
+                                            </td>
+                                            <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'}`}>
+                                                <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+                                                    <Calendar size={14} className="text-gray-400" />
+                                                    {new Date(doc.createdAt).toLocaleString('en-RW', { dateStyle: 'medium', timeStyle: 'short' })}
                                                 </div>
-                                            </div>
-                                        </td>
-                                        <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'}`}>
-                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border border-transparent ${getTypeColor(doc.type)}`}>
-                                                {doc.type}
-                                            </span>
-                                        </td>
-                                        <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'}`}>
-                                            {doc.shipmentId ? (
-                                                <button className="text-indigo-600 dark:text-indigo-400 hover:underline font-mono text-xs font-bold">
-                                                    {doc.shipmentId}
-                                                </button>
-                                            ) : (
-                                                <span className="text-gray-400 text-xs italic">Unassigned</span>
-                                            )}
-                                        </td>
-                                        <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'}`}>
-                                            <span className="text-sm text-gray-700 dark:text-gray-300">{doc.uploadedBy}</span>
-                                        </td>
-                                        <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'}`}>
-                                            <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
-                                                <Calendar size={14} className="text-gray-400" />
-                                                {doc.date}
-                                            </div>
-                                        </td>
-                                        <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'}`}>
-                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${doc.status === 'Verified' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
-                                                {doc.status === 'Verified' ? <CheckCircle size={12} /> : <AlertCircle size={12} />}
-                                                {doc.status}
-                                            </span>
-                                        </td>
-                                        <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'} text-right`}>
-                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="View">
-                                                    <Eye size={16} />
-                                                </button>
-                                                <button className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Download">
-                                                    <Download size={16} />
-                                                </button>
-                                                <button className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="More">
-                                                    <MoreVertical size={16} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
+                                            </td>
+                                            <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'}`}>
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                                                    doc.status === 'Verified'
+                                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                                        : 'bg-amber-50 text-amber-700 border-amber-100'
+                                                }`}>
+                                                    {doc.status === 'Verified' ? <CheckCircle size={12} /> : <AlertCircle size={12} />}
+                                                    {doc.status}
+                                                </span>
+                                            </td>
+                                            <td className={`px-6 ${density === 'compact' ? 'py-2' : 'py-4'} text-right`}>
+                                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={() => {
+                                                            const w = window.open();
+                                                            if (w && doc.fileUrl) {
+                                                                w.document.write(`<iframe src="${doc.fileUrl}" style="width:100%;height:100vh;border:none;" />`);
+                                                            }
+                                                        }}
+                                                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                                        title="View"
+                                                    >
+                                                        <Eye size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            if (!doc.fileUrl) return;
+                                                            const a = document.createElement('a');
+                                                            a.href = doc.fileUrl;
+                                                            a.download = doc.fileName;
+                                                            a.click();
+                                                        }}
+                                                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                                        title="Download"
+                                                    >
+                                                        <Download size={16} />
+                                                    </button>
+                                                    <button className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="More">
+                                                        <MoreVertical size={16} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
                             ) : (
                                 <tr>
                                     <td colSpan={8} className="py-12 text-center">
@@ -279,6 +321,7 @@ const Documents = () => {
                 isOpen={isUploadModalOpen}
                 onClose={() => setIsUploadModalOpen(false)}
                 preselectedShipmentId={filterShipment}
+                onSuccess={() => { setIsUploadModalOpen(false); fetchDocuments(); }}
             />
 
         </div>

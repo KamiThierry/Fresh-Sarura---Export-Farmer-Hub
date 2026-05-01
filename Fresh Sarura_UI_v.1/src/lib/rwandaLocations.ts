@@ -1,20 +1,4 @@
-// Rwanda administrative hierarchy — Provinces → Districts → Sectors
-// Used for cascading dropdowns across the platform.
-
-interface District {
-  id: string;
-  name: string;
-  coordinates: { lat: number; lng: number };
-  sectors: string[];
-}
-
-interface Province {
-  id: string;
-  name: string;
-  districts: District[];
-}
-
-const RWANDA_LOCATIONS: { provinces: Province[] } = {
+const RWANDA_LOCATIONS = {
   provinces: [
     {
       id: 'kigali',
@@ -199,16 +183,16 @@ const RWANDA_LOCATIONS: { provinces: Province[] } = {
   ]
 };
 
-export const getProvinces = (): { value: string; label: string }[] =>
+export const getProvinces = () =>
   RWANDA_LOCATIONS.provinces.map(p => ({ value: p.id, label: p.name }));
 
-export const getDistricts = (provinceId: string): { value: string; label: string }[] => {
+export const getDistricts = (provinceId: string) => {
   const province = RWANDA_LOCATIONS.provinces.find(p => p.id === provinceId);
   if (!province) return [];
   return province.districts.map(d => ({ value: d.id, label: d.name }));
 };
 
-export const getSectors = (provinceId: string, districtId: string): { value: string; label: string }[] => {
+export const getSectors = (provinceId: string, districtId: string) => {
   const province = RWANDA_LOCATIONS.provinces.find(p => p.id === provinceId);
   if (!province) return [];
   const district = province.districts.find(d => d.id === districtId);
@@ -218,11 +202,11 @@ export const getSectors = (provinceId: string, districtId: string): { value: str
 
 /** Returns real GPS coordinates for a given district.
  *  If provinceId is missing or not matched, falls back to searching all provinces. */
-export const getDistrictCoordinates = (provinceId: string, districtId: string): { lat: number; lng: number } => {
+export const getDistrictCoordinates = (provinceId: string, districtId: string) => {
   const fallback = { lat: -1.9403, lng: 29.8739 };
   if (!districtId) return fallback;
 
-  // Fast path: search within provided province first
+  // If province provided, search within it first (fast path)
   if (provinceId) {
     const province = RWANDA_LOCATIONS.provinces.find(p => p.id === provinceId);
     if (province) {
@@ -240,7 +224,7 @@ export const getDistrictCoordinates = (provinceId: string, districtId: string): 
   return fallback;
 };
 
-export const getAllDistricts = (): { value: string; label: string }[] => {
+export const getAllDistricts = () => {
   const districts: { value: string; label: string }[] = [];
   RWANDA_LOCATIONS.provinces.forEach(province => {
     province.districts.forEach(district => {

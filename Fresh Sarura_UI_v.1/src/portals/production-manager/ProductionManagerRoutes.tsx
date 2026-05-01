@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './layout/Layout';
 import Dashboard from './pages/Dashboard';
@@ -18,9 +18,17 @@ import RoomManagement from './pages/RoomManagement';
 import QCInspectionModal from './components/QCInspectionModal';
 import FarmerRegistrationModal from './components/FarmerRegistrationModal';
 import CreateCropCycleModal from './components/CreateCropCycleModal';
-import { PMProvider } from '@/context/PMContext';
+import { PMProvider, usePMContext } from '@/context/PMContext';
 
 const ProductionManagerRoutes = () => {
+    return (
+        <PMProvider>
+            <ProductionManagerApp />
+        </PMProvider>
+    );
+};
+
+const ProductionManagerApp = () => {
     const [isIntakeOpen, setIsIntakeOpen] = useState(false);
     const [isQCOpen, setIsQCOpen] = useState(false);
     const [isTraceabilityOpen, setIsTraceabilityOpen] = useState(false);
@@ -28,19 +36,29 @@ const ProductionManagerRoutes = () => {
     const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
     const [isCreateCycleOpen, setIsCreateCycleOpen] = useState(false);
 
-    const [currentIntake, setCurrentIntake] = useState(2450); // Initial value in kg
+    const { stock } = usePMContext();
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const currentIntake = useMemo(() =>
+        stock
+            .filter(b => b.createdAt?.startsWith(todayStr))
+            .reduce((sum, b) => sum + (b.receivedWeightKg || 0), 0)
+    , [stock, todayStr]);
+
+    const _coldRoomStock = useMemo(() =>
+        stock.reduce((sum, b) => sum + ((b.processedWeightKg || 0) - (b.rejectedWeightKg || 0)), 0)
+    , [stock]);
+
     const [qualityGrade, setQualityGrade] = useState("96% Class A");
-    const scheduledExports = 8000; // 8000 kg = 8 Tons
+    const scheduledExports = 8000;
 
     const handleLogIntake = () => {
         setIsIntakeOpen(true);
     };
 
-    const handleIntakeSubmit = (weight: number) => {
-        setCurrentIntake((prev) => prev + weight);
+    const handleIntakeSubmit = (_weight: number) => {
         setIsIntakeOpen(false);
-        // You could show a toast here
-        alert(`Successfully logged ${weight} kg! New total: ${currentIntake + weight} kg`);
     };
 
     const handleQCInspection = () => {
@@ -77,7 +95,7 @@ const ProductionManagerRoutes = () => {
 
 
     return (
-        <PMProvider>
+        <>
             <Routes>
                 <Route element={<Layout />}>
                     {/* Home/Dashboard Route */}
@@ -120,7 +138,7 @@ const ProductionManagerRoutes = () => {
                 </Route>
             </Routes>
 
-            {/* Global Modals (Always available, outside Layout/Routes or inside context provider ideally) */}
+            {/* Global Modals */}
             <QCInspectionModal
                 isOpen={isQCOpen}
                 onClose={() => setIsQCOpen(false)}
@@ -145,8 +163,9 @@ const ProductionManagerRoutes = () => {
                 onClose={() => setIsCreateCycleOpen(false)}
                 onSubmit={() => setIsCreateCycleOpen(false)}
             />
-        </PMProvider>
+        </>
     );
 };
 
 export default ProductionManagerRoutes;
+
