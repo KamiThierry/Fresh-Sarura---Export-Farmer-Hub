@@ -1,14 +1,20 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react'; // Analytics & Reports Page
 import {
     BarChart3, Download, Calendar, Users,
     Package, Plane, Leaf, TrendingUp, TrendingDown,
-    Minus, Thermometer
+    Minus, Thermometer, ChevronDown, FileSpreadsheet, FileText
 } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, LineChart, Line, Legend
 } from 'recharts';
 import { api } from '@/lib/api';
+
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import logo from '@/assets/sarura_logo_nav.png';
+import html2canvas from 'html2canvas';
+import * as XLSX from 'xlsx';
 
 // ─── Types ────────────────────────────────────────────────────────
 type Tab = 'overview' | 'farmers' | 'production' | 'export' | 'users';
@@ -157,6 +163,7 @@ const Reports = () => {
     const [farmers,   setFarmers]   = useState<any[]>([]);
     const [cycles,    setCycles]    = useState<any[]>([]);
     const [loading,   setLoading]   = useState(true);
+    const [isExportOpen, setIsExportOpen] = useState(false);
 
     useEffect(() => {
         const fetchAll = async () => {
@@ -231,24 +238,464 @@ const Reports = () => {
     const pagedShipments  = filteredShipments.slice((shipmentPage - 1) * PER_PAGE, shipmentPage * PER_PAGE);
     const pagedUsers      = users.slice((userPage - 1) * PER_PAGE, userPage * PER_PAGE);
 
-    const handleDownload = () => {
-        const rows = [
-            ['FRESH SARURA — SYSTEM REPORT'], [`Period: ${startDate} to ${endDate}`], [''],
-            ['PACKHOUSE SUMMARY'],
-            ['Total Received (kg)', totalReceived], ['Total Processed (kg)', totalProcessed],
-            ['Total Rejected (kg)', totalRejected], ['Loss Rate (%)', lossRate], [''],
-            ['EXPORT SUMMARY'],
-            ['Dispatched Shipments', dispatched.length], ['Total Exported (kg)', totalExportedKg], [''],
-            ['PLATFORM SUMMARY'],
-            ['Total Users', users.length], ['Total Farmers', farmers.length],
-            ['Crop Cycles in Period', filteredCycles.length],
-        ];
-        const csv = rows.map(r => r.join(',')).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `FreshSarura_Report_${startDate}_to_${endDate}.csv`; a.click();
-        URL.revokeObjectURL(url);
+    const handleExportXLSX = () => {
+        const tabLabel = tabs.find(t => t.id === activeTab)?.label || 'Report';
+        const wb = XLSX.utils.book_new();
+
+        // ── Helper: create a styled worksheet from headers + rows ──
+        const makeSheet = (headers: string[], rows: (string | number)[][]) => {
+            const data = [headers, ...rows];
+            const ws   = XLSX.utils.aoa_to_sheet(data);
+
+            // Column widths — set each column to fit content
+            ws['!cols'] = headers.map((h, i) => {
+                const maxLen = Math.max(
+                    h.length,
+                    ...rows.map(r => String(r[i] ?? '').length)
+                );
+                return { wch: Math.min(maxLen + 4, 40) }; // max 40 chars wide
+            });
+
+            // Freeze first row (header)
+            ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+            return ws;
+        };
+
+        if (activeTab === 'overview') {
+            const ws = makeSheet(
+                ['Metric', 'Value'],
+                [
+                    ['Total Received (Tons)',    `${(totalReceived  / 1000).toFixed(1)}`],
+                    ['Total Processed (Tons)',   `${(totalProcessed / 1000).toFixed(1)}`],
+                    ['Total Exported (Tons)',    `${(totalExportedKg / 1000).toFixed(1)}`],
+                    ['Loss Rate (%)',            lossRate],
+                    ['Dispatched Shipments',     dispatched.length],
+                    ['Total Shipments',          filteredShipments.length],
+                    ['Registered Farmers',       farmers.length],
+                    ['Active Farmers',           farmers.filter(f => f.status === 'Active' || f.status === 'active').length],
+                    ['Crop Cycles in Period',    filteredCycles.length],
+                    ['Production Batches',       filteredStock.length],
+                    ['Total Users',              users.length],
+                ]
+            );
+            XLSX.utils.book_append_sheet(wb, ws, 'Overview');
+        }
+
+        else if (activeTab === 'farmers') {
+            // Sheet 1 — Farmers
+            const farmerWs = makeSheet(
+                ['Full Name', 'Farm Name', 'National ID', 'Phone', 'Email', 'District', 'Sector', 'Cell', 'Village', 'Produce Types', 'Farm Size (ha)', 'Capacity (Tons)', 'Status', 'Registered'],
+                farmers.map(f => [
+                    f.full_name,
+                    f.farm_name                || 'Individual',
+                    f.national_id              || 'N/A',
+                    String(f.phone             || 'N/A'),
+                    f.email                    || 'N/A',
+                    f.district                 || 'N/A',
+                    f.sector                   || 'N/A',
+                    f.cell                     || 'N/A',
+                    f.village                  || 'N/A',
+                    (f.produce_types || []).join(', '),
+                    f.farm_size_hectares       || 0,
+                    f.production_capacity_tons || 0,
+                    f.status                   || 'Active',
+                    new Date(f.created_at || '').toLocaleDateString('en-GB'),
+                ])
+            );
+            XLSX.utils.book_append_sheet(wb, farmerWs, 'Farmers');
+
+            // Sheet 2 — Crop Cycles
+            const cycleWs = makeSheet(
+                ['Cycle ID', 'Crop Name', 'Season', 'Status', 'Start Date'],
+                filteredCycles.map(c => [
+                    String(c._id).slice(-8).toUpperCase(),
+                    c.crop_name || 'N/A',
+                    c.season                   || 'N/A',
+                    c.status                   || 'N/A',
+                    new Date(c.start_date || '').toLocaleDateString('en-GB'),
+                ])
+            );
+            XLSX.utils.book_append_sheet(wb, cycleWs, 'Crop Cycles');
+        }
+
+        else if (activeTab === 'production') {
+            const ws = makeSheet(
+                ['Stock ID', 'Crop', 'Received (kg)', 'Processed (kg)', 'Rejected (kg)', 'Loss %', 'Room', 'Status', 'Date'],
+                filteredStock.map(b => {
+                    const loss = b.receivedWeightKg > 0
+                        ? ((b.rejectedWeightKg / b.receivedWeightKg) * 100).toFixed(1) : '0';
+                    return [
+                        b.stockId           || 'N/A',
+                        b.cropName          || 'N/A',
+                        b.receivedWeightKg  || 0,
+                        b.processedWeightKg || 0,
+                        b.rejectedWeightKg  || 0,
+                        `${loss}%`,
+                        b.assignedRoom      || 'N/A',
+                        b.status            || 'N/A',
+                        new Date(b.updatedAt).toLocaleDateString('en-GB'),
+                    ];
+                })
+            );
+            XLSX.utils.book_append_sheet(wb, ws, 'Production & QC');
+        }
+
+        else if (activeTab === 'export') {
+            const ws = makeSheet(
+                ['PL Number', 'Flight', 'Airline', 'Destination', 'Client', 'Weight (kg)', 'Boxes', 'AWB Number', 'Invoice', 'Status', 'Departure Date'],
+                filteredShipments.map(s => [
+                    s.plNumber       || 'N/A',
+                    s.flightNumber   || 'N/A',
+                    s.airlineCode    || 'N/A',
+                    s.destination    || 'N/A',
+                    s.clientName     || 'N/A',
+                    s.totalWeightKg  || 0,
+                    s.totalBoxes     || 0,
+                    s.awbNumber      || 'N/A',
+                    s.invoiceNumber  || 'N/A',
+                    s.status         || 'N/A',
+                    s.departureDate  ? new Date(s.departureDate).toLocaleDateString('en-GB') : 'N/A',
+                ])
+            );
+            XLSX.utils.book_append_sheet(wb, ws, 'Shipments');
+        }
+
+        else if (activeTab === 'users') {
+            const ws = makeSheet(
+                ['Name', 'Email', 'Role', 'Phone', 'Status', 'Joined'],
+                users.map(u => [
+                    u.name  || 'N/A',
+                    u.email || 'N/A',
+                    (u.role || '').replace(/_/g, ' '),
+                    String(u.phone || 'N/A'), // string → no scientific notation
+                    u.isActive ? 'Active' : 'Inactive',
+                    new Date(u.createdAt).toLocaleDateString('en-GB'),
+                ])
+            );
+            XLSX.utils.book_append_sheet(wb, ws, 'Users');
+        }
+
+        XLSX.writeFile(wb, `FreshSarura_${tabLabel.replace(/\s/g, '_')}_Report_${startDate}_to_${endDate}.xlsx`);
+        setIsExportOpen(false);
+    };
+
+    const handleExportPDF = async () => {
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const timestamp = new Date().toLocaleString('en-GB', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+
+        const toTitleCase = (str: string) =>
+            str.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+        // ── Helper: capture a chart by element id ──
+        const captureChart = async (id: string): Promise<string | null> => {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            try {
+                const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+                return canvas.toDataURL('image/png');
+            } catch { return null; }
+        };
+
+        // ── 1. Header ──
+        try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch {}
+        doc.setTextColor(21, 128, 61);
+        doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+        doc.text('Fresh Sarura', 28, 19);
+        doc.setTextColor(107, 114, 128);
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+        doc.text('Export & Farmer Hub', 28, 23);
+        doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+        doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+        doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+        doc.setDrawColor(229, 231, 235);
+        doc.line(15, 30, pageWidth - 15, 30);
+
+        // ── 2. Report Title ──
+        doc.setTextColor(17, 24, 39);
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+        const reportTitle = tabs.find(t => t.id === activeTab)?.label.toUpperCase() || 'ANALYTICS';
+        doc.text(`${reportTitle} REPORT SUMMARY`, 15, 42);
+
+        // ── 3. Tab-specific summary fields ──
+        const summaryFields: { label: string; value: string }[] =
+            activeTab === 'overview' ? [
+                { label: 'Total Received',        value: `${(totalReceived  / 1000).toFixed(1)} Tons` },
+                { label: 'Total Processed',       value: `${(totalProcessed / 1000).toFixed(1)} Tons` },
+                { label: 'Total Exported',        value: `${(totalExportedKg / 1000).toFixed(1)} Tons` },
+                { label: 'Loss Rate',             value: `${lossRate}%` },
+                { label: 'Dispatched Shipments',  value: String(dispatched.length) },
+                { label: 'Registered Farmers',    value: String(farmers.length) },
+                { label: 'Crop Cycles in Period', value: String(filteredCycles.length) },
+                { label: 'Total Users',           value: String(users.length) },
+            ]
+            : activeTab === 'farmers' ? [
+                { label: 'Total Registered Farmers', value: String(farmers.length) },
+                { label: 'Active Farmers',           value: String(farmers.filter(f => f.status === 'Active' || f.status === 'active').length) },
+                { label: 'Crop Cycles in Period',    value: String(filteredCycles.length) },
+                { label: 'Avg Farm Size',            value: farmers.length ? `${(farmers.reduce((s, f) => s + (f.farm_size_hectares || 0), 0) / farmers.length).toFixed(1)} ha` : '0 ha' },
+            ]
+            : activeTab === 'production' ? [
+                { label: 'Total Intake (kg)',     value: totalReceived.toLocaleString() },
+                { label: 'Total Processed (kg)', value: totalProcessed.toLocaleString() },
+                { label: 'Total Rejected (kg)',  value: totalRejected.toLocaleString() },
+                { label: 'Loss Rate',            value: `${lossRate}%` },
+                { label: 'Production Batches',   value: String(filteredStock.length) },
+            ]
+            : activeTab === 'export' ? [
+                { label: 'Total Shipments',      value: String(filteredShipments.length) },
+                { label: 'Dispatched',           value: String(dispatched.length) },
+                { label: 'Total Exported (Tons)', value: `${(totalExportedKg / 1000).toFixed(2)} Tons` },
+                { label: 'Avg Shipment Size',    value: dispatched.length ? `${(totalExportedKg / dispatched.length / 1000).toFixed(2)} Tons` : '—' },
+            ]
+            : activeTab === 'users' ? [
+                { label: 'Total Users',       value: String(users.length) },
+                { label: 'Active Users',      value: String(users.filter(u => u.isActive).length) },
+                { label: 'Pending Approval',  value: String(users.filter(u => !u.isActive).length) },
+                { label: 'Admins',            value: String(users.filter(u => u.role === 'admin').length) },
+            ] : [];
+
+        let yPos = 52;
+        doc.setFontSize(9);
+        summaryFields.forEach(field => {
+            doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
+            doc.text(field.label, 15, yPos);
+            doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
+            doc.text(field.value, pageWidth - 15, yPos, { align: 'right' });
+            doc.setDrawColor(243, 244, 246);
+            doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+            yPos += 10;
+        });
+
+        const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [92, 184, 92] };
+        const commonBodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } };
+        const alternateRowStyles: any = { fillColor: [249, 250, 251] };
+
+        // ── 4. Capture chart for current tab ──
+        const chartIdMap: Record<Tab, string> = {
+            overview:   'packhouse-chart',
+            farmers:    '',
+            production: 'production-chart',
+            export:     'export-chart',
+            users:      'user-role-chart',
+        };
+        const chartImg = chartIdMap[activeTab] ? await captureChart(chartIdMap[activeTab]) : null;
+
+        // ── 5. Tab-specific table ──
+        if (activeTab === 'overview') {
+            if (chartImg) {
+                doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+                doc.text('PACKHOUSE ACTIVITY CHART', 15, yPos + 8);
+                doc.addImage(chartImg, 'PNG', 15, yPos + 12, pageWidth - 30, 55);
+                yPos += 75;
+            }
+            const shipmentsImg = await captureChart('shipments-chart');
+            if (shipmentsImg) {
+                doc.text('EXPORT SHIPMENTS CHART', 15, yPos + 8);
+                doc.addImage(shipmentsImg, 'PNG', 15, yPos + 12, pageWidth - 30, 55);
+                yPos += 75;
+            }
+            // Platform Overview Table
+            doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+            doc.text('PLATFORM OVERVIEW', 15, yPos + 10);
+            autoTable(doc, {
+                startY: yPos + 15,
+                head: [['METRIC', 'VALUE']],
+                body: [
+                    ['Total Received',          `${(totalReceived  / 1000).toFixed(1)} Tons`],
+                    ['Total Processed',         `${(totalProcessed / 1000).toFixed(1)} Tons`],
+                    ['Total Rejected',          `${totalRejected.toLocaleString()} kg`],
+                    ['Loss Rate',               `${lossRate}%`],
+                    ['Total Exported',          `${(totalExportedKg / 1000).toFixed(1)} Tons`],
+                    ['Dispatched Shipments',    String(dispatched.length)],
+                    ['Total Shipments',         String(filteredShipments.length)],
+                    ['Registered Farmers',      String(farmers.length)],
+                    ['Active Farmers',          String(farmers.filter(f => f.status === 'Active').length)],
+                    ['Crop Cycles in Period',   String(filteredCycles.length)],
+                    ['Production Batches',      String(filteredStock.length)],
+                    ['Total Users',             String(users.length)],
+                ],
+                theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+                margin: { left: 15, right: 15, bottom: 30 }
+            });
+
+        } else if (activeTab === 'farmers') {
+            doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+            doc.text('REGISTERED FARMERS', 15, yPos + 10);
+            autoTable(doc, {
+                startY: yPos + 15,
+                head: [['FARMER / FARM', 'NATIONAL ID', 'CONTACT INFO', 'PHYSICAL ADDRESS', 'MAIN CROP', 'SIZE', 'STATUS']],
+                body: farmers.map(f => [
+                    `${toTitleCase(f.full_name)}\n${toTitleCase(f.farm_name || 'Individual')}`,
+                    f.national_id || 'N/A',
+                    `${f.phone || 'N/A'}\n${f.email || 'N/A'}`,
+                    `${toTitleCase(f.district)}, ${toTitleCase(f.sector)}\nCell: ${toTitleCase(f.cell)}, Village: ${toTitleCase(f.village)}`,
+                    (f.produce_types || []).join(', '),
+                    `${f.farm_size_hectares || 0} ha`,
+                    toTitleCase(f.status || 'Active')
+                ]),
+                theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+                margin: { left: 15, right: 15, bottom: 30 },
+                didParseCell: (data) => {
+                    if (data.section === 'body' && data.column.index === 6) {
+                        const s = String(data.cell.raw).toLowerCase();
+                        if (s.includes('active'))   data.cell.styles.textColor = [22, 163, 74];
+                        if (s.includes('inactive')) data.cell.styles.textColor = [220, 38, 38];
+                        if (s.includes('auditing')) data.cell.styles.textColor = [234, 88, 12];
+                    }
+                }
+            });
+            let nextY = (doc as any).lastAutoTable.finalY + 15;
+            if (nextY > 240) { doc.addPage(); nextY = 20; }
+            doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+            doc.text('CROP CYCLES OVERVIEW', 15, nextY);
+            autoTable(doc, {
+                startY: nextY + 5,
+                head: [['CYCLE ID', 'CROP', 'SEASON', 'STATUS', 'START DATE']],
+                body: filteredCycles.map(c => [
+                    String(c._id).slice(-8).toUpperCase(),
+                    toTitleCase(c.crop_name || 'N/A'),
+                    (c.season || 'N/A').toUpperCase(),
+                    toTitleCase(c.status || 'Active'),
+                    new Date(c.start_date || '').toLocaleDateString('en-GB')
+                ]),
+                theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+                margin: { left: 15, right: 15, bottom: 30 },
+                didParseCell: (data) => {
+                    if (data.section === 'body' && data.column.index === 3) {
+                        const s = String(data.cell.raw).toLowerCase();
+                        if (s.includes('active'))     data.cell.styles.textColor = [22, 163, 74];
+                        if (s.includes('harvesting')) data.cell.styles.textColor = [245, 158, 11];
+                        if (s.includes('completed'))  data.cell.styles.textColor = [107, 114, 128];
+                    }
+                }
+            });
+
+        } else if (activeTab === 'production') {
+            if (chartImg) {
+                doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+                doc.text('MONTHLY PACKHOUSE ACTIVITY', 15, yPos + 8);
+                doc.addImage(chartImg, 'PNG', 15, yPos + 12, pageWidth - 30, 55);
+                yPos += 75;
+            }
+            doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+            doc.text('PROCESSING BATCHES', 15, yPos + 10);
+            autoTable(doc, {
+                startY: yPos + 15,
+                head: [['STOCK ID', 'CROP', 'RECEIVED (KG)', 'PROCESSED (KG)', 'LOSS %', 'STATUS', 'DATE']],
+                body: filteredStock.map(b => {
+                    const loss = b.receivedWeightKg > 0 ? ((b.rejectedWeightKg / b.receivedWeightKg) * 100).toFixed(1) : '0';
+                    return [b.stockId || '—', toTitleCase(b.cropName || '—'),
+                        (b.receivedWeightKg || 0).toLocaleString(), (b.processedWeightKg || 0).toLocaleString(),
+                        `${loss}%`, toTitleCase(b.status || '—'), new Date(b.updatedAt).toLocaleDateString('en-GB')];
+                }),
+                theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+                margin: { left: 15, right: 15, bottom: 30 },
+                didParseCell: (data) => {
+                    if (data.section === 'body' && data.column.index === 5) {
+                        const s = String(data.cell.raw).toLowerCase();
+                        if (s.includes('processed')) data.cell.styles.textColor = [22, 163, 74];
+                        if (s.includes('rejected'))  data.cell.styles.textColor = [220, 38, 38];
+                        if (s.includes('pending'))   data.cell.styles.textColor = [234, 88, 12];
+                    }
+                }
+            });
+
+        } else if (activeTab === 'export') {
+            if (chartImg) {
+                doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+                doc.text('EXPORT VOLUME OVER TIME', 15, yPos + 8);
+                doc.addImage(chartImg, 'PNG', 15, yPos + 12, pageWidth - 30, 55);
+                yPos += 75;
+            }
+            doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+            doc.text('EXPORT SHIPMENTS', 15, yPos + 10);
+            autoTable(doc, {
+                startY: yPos + 15,
+                head: [['PL NUMBER', 'FLIGHT', 'DESTINATION', 'CLIENT', 'WEIGHT (KG)', 'STATUS', 'DEPARTURE']],
+                body: filteredShipments.map(s => [
+                    s.plNumber || '—', s.flightNumber || '—',
+                    toTitleCase(s.destination || '—'), toTitleCase(s.clientName || '—'),
+                    (s.totalWeightKg || 0).toLocaleString(), toTitleCase(s.status || '—'),
+                    s.departureDate ? new Date(s.departureDate).toLocaleDateString('en-GB') : '—'
+                ]),
+                theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+                margin: { left: 15, right: 15, bottom: 30 },
+                didParseCell: (data) => {
+                    if (data.section === 'body' && data.column.index === 5) {
+                        const s = String(data.cell.raw).toLowerCase();
+                        if (s.includes('dispatched')) data.cell.styles.textColor = [22, 163, 74];
+                    }
+                }
+            });
+
+        } else if (activeTab === 'users') {
+            if (chartImg) {
+                doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+                doc.text('USER DISTRIBUTION BY ROLE', 15, yPos + 8);
+                doc.addImage(chartImg, 'PNG', 15, yPos + 12, pageWidth - 30, 55);
+                yPos += 75;
+            }
+            doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+            doc.text('SYSTEM USER ACTIVITY', 15, yPos + 10);
+            autoTable(doc, {
+                startY: yPos + 15,
+                head: [['NAME', 'EMAIL', 'ROLE', 'PHONE', 'STATUS', 'JOINED']],
+                body: users.map(u => [
+                    toTitleCase(u.name), u.email,
+                    toTitleCase(u.role?.replace(/_/g, ' ') || '—'),
+                    u.phone || '—', u.isActive ? 'Active' : 'Inactive',
+                    new Date(u.createdAt).toLocaleDateString('en-GB')
+                ]),
+                theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+                margin: { left: 15, right: 15, bottom: 30 },
+                didParseCell: (data) => {
+                    if (data.section === 'body' && data.column.index === 4) {
+                        if (String(data.cell.raw) === 'Active') data.cell.styles.textColor = [22, 163, 74];
+                        else data.cell.styles.textColor = [220, 38, 38];
+                    }
+                }
+            });
+        }
+
+        // ── 6. Insights ──
+        let lastY = (doc as any).lastAutoTable?.finalY || yPos;
+        if (lastY > 210) { doc.addPage(); lastY = 20; }
+        doc.setTextColor(17, 24, 39); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+        doc.text('SYSTEM INSIGHTS', 15, lastY + 15);
+        const activeCount    = farmers.filter(f => f.status === 'Active').length;
+        const avgFarmSize    = farmers.length ? (farmers.reduce((s, f) => s + (f.farm_size_hectares || 0), 0) / farmers.length).toFixed(1) : '0';
+        const cropCounts: any = {};
+        filteredCycles.forEach(c => cropCounts[c.crop_name] = (cropCounts[c.crop_name] || 0) + 1);
+        const topCrop        = Object.entries(cropCounts).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || 'N/A';
+        const harvesting     = filteredCycles.filter(c => c.status?.toLowerCase() === 'harvesting').length;
+        const activePercent  = farmers.length ? ((activeCount / farmers.length) * 100).toFixed(1) : '0';
+        doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'normal');
+        doc.text(`• Platform Health: ${activePercent}% of farmers are currently active.`, 15, lastY + 23);
+        doc.text(`• Top Produce: ${topCrop} is the most frequent crop in this period.`, 15, lastY + 29);
+        doc.text(`• Average Farm Size: ${avgFarmSize} hectares per registered farmer.`, 15, lastY + 35);
+        doc.text(`• Activity: ${filteredStock.length} production batches and ${filteredShipments.length} export shipments logged (${harvesting} cycles harvesting).`, 15, lastY + 41);
+
+        // ── 7. Footer ──
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
+            doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
+            doc.text('This is a computer generated report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+            const footerY = 288;
+            doc.text('Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw', pageWidth / 2, footerY, { align: 'center' });
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
+        }
+
+        const tabLabel = tabs.find(t => t.id === activeTab)?.label.replace(/\s/g, '_') || 'Full';
+        doc.save(`FreshSarura_${tabLabel}_Report_${startDate}_to_${endDate}.pdf`);
+        setIsExportOpen(false);
     };
 
     const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
@@ -265,7 +712,7 @@ const Reports = () => {
     return (
         <div className="p-6 space-y-6 animate-fade-in">
 
-            {/* ── Header Row (image 2 style: title left, controls right) ── */}
+            {/* ── Header Row ── */}
             <div className="flex items-center justify-between flex-wrap gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Analytics & Reports</h1>
@@ -274,7 +721,6 @@ const Reports = () => {
                     </p>
                 </div>
 
-                {/* Date range + button — all in one row like image 2 */}
                 <div className="flex items-center gap-3 flex-wrap">
                     <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 shadow-sm">
                         <Calendar size={15} className="text-green-500 flex-shrink-0" />
@@ -294,10 +740,50 @@ const Reports = () => {
                     {loading && (
                         <span className="text-xs text-gray-400 animate-pulse">Loading…</span>
                     )}
-                    <button onClick={handleDownload}
-                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-colors shadow-sm">
-                        <Download size={15} /> Export Data
-                    </button>
+                    
+                    <div className="relative">
+                        <button onClick={() => setIsExportOpen(!isExportOpen)}
+                            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-colors shadow-sm">
+                            <Download size={15} /> 
+                            Export Data
+                            <ChevronDown size={13} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isExportOpen && (
+                            <>
+                                <div className="fixed inset-0 z-10" onClick={() => setIsExportOpen(false)} />
+                                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden">
+                                    <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Select Format</p>
+                                    <button
+                                        onClick={handleExportXLSX}
+                                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+                                    >
+                                        <div className="p-1.5 bg-green-50 dark:bg-green-900/20 rounded-lg flex-shrink-0">
+                                            <FileSpreadsheet size={16} className="text-green-600" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export Excel</p>
+                                            <p className="text-[11px] text-gray-400 mt-0.5">Excel Spreadsheet (.xlsx)</p>
+                                        </div>
+                                    </button>
+                                    <div className="mx-4 border-t border-gray-100 dark:border-gray-700" />
+                                    <button
+                                        onClick={handleExportPDF}
+                                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+                                    >
+                                        <div className="p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex-shrink-0">
+                                            <FileText size={16} className="text-blue-600" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export PDF</p>
+                                            <p className="text-[11px] text-gray-400 mt-0.5">Printable Report (.pdf)</p>
+                                        </div>
+                                    </button>
+                                    <div className="pb-2" />
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -339,7 +825,7 @@ const Reports = () => {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className={chartCard}>
+                        <div className={chartCard} id="packhouse-chart">
                             <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-1">Packhouse Activity</h2>
                             <p className="text-xs text-gray-400 mb-4">Received vs Processed vs Rejected (kg)</p>
                             {monthlyStockData.length === 0
@@ -358,7 +844,7 @@ const Reports = () => {
                                 </ResponsiveContainer>
                             }
                         </div>
-                        <div className={chartCard}>
+                        <div className={chartCard} id="shipments-chart">
                             <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-1">Export Shipments</h2>
                             <p className="text-xs text-gray-400 mb-4">Volume in Tons over time</p>
                             {monthlyShipmentData.length === 0
@@ -436,7 +922,7 @@ const Reports = () => {
                         <KpiCard label="Total Rejected"  value={`${totalRejected.toLocaleString()} kg`}  icon={TrendingDown} iconBg="bg-red-50 dark:bg-red-900/20 text-red-500"     trend="down"    trendLabel="Failed QC" />
                         <KpiCard label="Loss Rate"       value={`${lossRate}%`}                          icon={TrendingDown} iconBg="bg-amber-50 dark:bg-amber-900/20 text-amber-600" trend={parseFloat(lossRate) > 10 ? 'down' : 'up'} trendLabel={parseFloat(lossRate) > 10 ? 'Above threshold' : 'Within target'} />
                     </div>
-                    <div className={chartCard}>
+                    <div className={chartCard} id="production-chart">
                         <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-1">Monthly Packhouse Activity</h2>
                         <p className="text-xs text-gray-400 mb-4">Received vs Processed vs Rejected (kg)</p>
                         {monthlyStockData.length === 0
@@ -489,7 +975,7 @@ const Reports = () => {
                         <KpiCard label="Total Exported"    value={`${(totalExportedKg / 1000).toFixed(2)} Tons`} icon={Package} iconBg="bg-purple-50 dark:bg-purple-900/20 text-purple-600" trend="up" trendLabel="Weight dispatched" />
                         <KpiCard label="Avg Shipment Size" value={dispatched.length ? `${(totalExportedKg / dispatched.length / 1000).toFixed(2)} T` : '—'} icon={BarChart3} iconBg="bg-amber-50 dark:bg-amber-900/20 text-amber-600" trend="neutral" trendLabel="Per dispatched shipment" />
                     </div>
-                    <div className={chartCard}>
+                    <div className={chartCard} id="export-chart">
                         <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-1">Export Volume Over Time</h2>
                         <p className="text-xs text-gray-400 mb-4">Shipment count and weight in Tons</p>
                         {monthlyShipmentData.length === 0
@@ -538,7 +1024,7 @@ const Reports = () => {
                         <KpiCard label="Active Users"      value={String(users.filter(u => u.isActive).length)}      icon={Users} iconBg="bg-green-50 dark:bg-green-900/20 text-green-600"   trend="up"      trendLabel="Approved accounts" />
                         <KpiCard label="Pending Approval"  value={String(users.filter(u => !u.isActive).length)}     icon={Users} iconBg="bg-amber-50 dark:bg-amber-900/20 text-amber-600"   trend="neutral" trendLabel="Awaiting activation" />
                     </div>
-                    <div className={chartCard}>
+                    <div className={chartCard} id="user-role-chart">
                         <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-1">User Distribution by Role</h2>
                         <p className="text-xs text-gray-400 mb-4">Number of accounts per system role</p>
                         {roleData.length === 0

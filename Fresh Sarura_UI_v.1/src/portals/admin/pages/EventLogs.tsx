@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-    Search, Filter, Download, Activity, ChevronDown, 
-    FileSpreadsheet, FileText, Users, Package, Plane, 
+import {
+    Search, Filter, Download, Activity, ChevronDown,
+    FileSpreadsheet, FileText, Users, Package, Plane,
     Leaf, Sprout, Calendar, UserCog, Clock
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -21,10 +21,10 @@ interface LogEntry {
 // ─── Constants ────────────────────────────────────────────────────
 const MODULE_COLORS: Record<LogModule, string> = {
     'Farmer Management': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-    'Crop Planning':      'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
-    'Production & QC':   'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    'Crop Planning': 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+    'Production & QC': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
     'Export & Shipments': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-    'User Management':   'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+    'User Management': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
 };
 
 const EventLogs = () => {
@@ -49,7 +49,7 @@ const EventLogs = () => {
 
             const res = await api.get(`/event-logs?${params.toString()}`);
             const data = res.data?.data ?? res.data ?? [];
-            
+
             const mappedData = data.map((log: any) => ({
                 _id: log._id,
                 timestamp: log.timestamp || log.createdAt,
@@ -79,9 +79,9 @@ const EventLogs = () => {
 
     const summaryStats = [
         { label: 'Total Activities', value: events.length.toString(), icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-        { label: 'Farmer Actions',   value: events.filter(e => e.module === 'Farmer Management').length.toString(), icon: Leaf, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
+        { label: 'Farmer Actions', value: events.filter(e => e.module === 'Farmer Management').length.toString(), icon: Leaf, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
         { label: 'Production Actions', value: events.filter(e => e.module === 'Production & QC').length.toString(), icon: Package, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
-        { label: 'Export Actions',    value: events.filter(e => e.module === 'Export & Shipments').length.toString(), icon: Plane, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
+        { label: 'Export Actions', value: events.filter(e => e.module === 'Export & Shipments').length.toString(), icon: Plane, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
     ];
 
     const formatDate = (dateStr: string) => {
@@ -104,15 +104,12 @@ const EventLogs = () => {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-green-50 dark:bg-green-900/20 rounded-xl text-green-600">
-                        <Activity size={22} />
-                    </div>
                     <div>
                         <h1 className="text-[22px] font-bold text-gray-900 dark:text-white">Activity Log</h1>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">All actions performed across FreshSarura</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">All actions performed across Fresh Sarura</p>
                     </div>
                 </div>
-                
+
                 <div className="relative">
                     <button
                         onClick={() => setIsExportOpen(prev => !prev)}

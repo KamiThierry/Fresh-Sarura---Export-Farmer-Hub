@@ -345,7 +345,11 @@ const CropCycleDetailModal = ({
     .over{color:#b91c1c}.under{color:#166534}
     .st-approved{color:#166534;font-weight:700}.st-rejected{color:#b91c1c;font-weight:700}.st-pending{color:#b45309;font-weight:700}
     /* ── Footer ── */
-    .footer{margin-top:24px;border-top:1px solid #ddd;padding-top:8px;display:flex;justify-content:space-between;font-size:8px;color:#999}
+    .footer { margin-top: 40px; border-top: 1px solid #e5e7eb; padding-top: 12px; font-size: 8px; color: #6b7280; text-align: center; }
+    .footer-disclaimer { margin-bottom: 6px; font-weight: 500; }
+    .footer-contact { display: flex; justify-content: space-between; align-items: center; }
+    .footer-info { flex: 1; text-align: center; margin-left: 60px; }
+    .footer-page { text-align: right; font-weight: 600; }
     @media print{body{padding:12px 20px}button{display:none!important}}
   </style>
 </head>
@@ -418,8 +422,11 @@ const CropCycleDetailModal = ({
   </table>` : ''}
 
   <div class="footer">
-    <span>FreshSarura Export Farmer Hub &nbsp;•&nbsp; Confidential — Internal Use Only</span>
-    <span>Cycle: ${displayCycleId}</span>
+    <div class="footer-disclaimer">This is a computer generated report by Fresh Sarura. No signature required.</div>
+    <div class="footer-contact">
+      <div class="footer-info">Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw</div>
+      <div class="footer-page">Page 1 of 1</div>
+    </div>
   </div>
 </body>
 </html>`;

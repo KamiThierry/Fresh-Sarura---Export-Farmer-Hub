@@ -13,6 +13,10 @@ import { Farmer } from '@/types';
 
 
 import { usePMContext } from '@/context/PMContext';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import logo from '@/assets/sarura_logo_nav.png';
+import * as XLSX from 'xlsx';
 
 const FarmerManagement = () => {
   // State
@@ -27,6 +31,7 @@ const FarmerManagement = () => {
 
   const { 
     farmers, 
+    cycles,
     loading, 
     refreshFarmers 
   } = usePMContext();
@@ -51,6 +56,153 @@ const FarmerManagement = () => {
     { label: 'Total Hectares', value: `${totalHa} Ha`, icon: Map, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
     { label: 'Pending Certs', value: String(filteredFarmers.filter(f => f.status === 'Auditing').length), icon: FileWarning, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20', alert: true },
   ];
+
+  // ─── Export Logic ────────────────────────────────────────────────
+  const handleExportXLSX = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Helper: create a styled worksheet
+    const makeSheet = (headers: string[], rows: (string | number)[][]) => {
+      const data = [headers, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      ws['!cols'] = headers.map((h, i) => {
+        const maxLen = Math.max(h.length, ...rows.map(r => String(r[i] ?? '').length));
+        return { wch: Math.min(maxLen + 4, 40) };
+      });
+      ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+      return ws;
+    };
+
+    // Sheet 1: Farmers
+    const farmerWs = makeSheet(
+      ['Full Name', 'Farm Name', 'National ID', 'Phone', 'Email', 'District', 'Sector', 'Cell', 'Village', 'Produce Types', 'Farm Size (ha)', 'Capacity (Tons)', 'Status', 'Registered'],
+      filteredFarmers.map(f => [
+        f.full_name,
+        f.farm_name || 'Individual',
+        f.national_id || 'N/A',
+        String(f.phone || 'N/A'),
+        f.email || 'N/A',
+        f.district || 'N/A',
+        f.sector || 'N/A',
+        f.cell || 'N/A',
+        f.village || 'N/A',
+        (f.produce_types || []).join(', '),
+        f.farm_size_hectares || 0,
+        f.production_capacity_tons || 0,
+        f.status || 'Active',
+        new Date(f.created_at || '').toLocaleDateString('en-GB'),
+      ])
+    );
+    XLSX.utils.book_append_sheet(wb, farmerWs, 'Farmers');
+
+    // Sheet 2: Crop Cycles (related to these farmers)
+    const cycleWs = makeSheet(
+      ['Cycle ID', 'Crop Name', 'Season', 'Status', 'Start Date'],
+      cycles.map(c => [
+        String(c._id).slice(-8).toUpperCase(),
+        c.crop_name || 'N/A',
+        c.season || 'N/A',
+        c.status || 'N/A',
+        new Date(c.start_date || '').toLocaleDateString('en-GB'),
+      ])
+    );
+    XLSX.utils.book_append_sheet(wb, cycleWs, 'Crop Cycles');
+
+    XLSX.writeFile(wb, `FreshSarura_Farmer_Network_${new Date().toISOString().split('T')[0]}.xlsx`);
+    setIsExportOpen(false);
+  };
+
+  const handleExportPDF = async () => {
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const timestamp = new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const toTitleCase = (str: string) => str.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+    // 1. Header
+    try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch { }
+    doc.setTextColor(21, 128, 61);
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('Fresh Sarura', 28, 19);
+    doc.setTextColor(107, 114, 128);
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+    doc.text('Export & Farmer Hub', 28, 23);
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+    doc.setDrawColor(229, 231, 235);
+    doc.line(15, 30, pageWidth - 15, 30);
+
+    // 2. Title & Summary
+    doc.setTextColor(17, 24, 39);
+    doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+    doc.text('FARMER NETWORK REPORT', 15, 42);
+
+    const summaryFields = [
+      { label: 'Total Registered Farmers', value: String(filteredFarmers.length) },
+      { label: 'Active Farmers', value: String(farmers.filter(f => f.status.toLowerCase() === 'active').length) },
+      { label: 'Total Farm Land', value: `${totalHa} Ha` },
+      { label: 'Pending Certifications', value: String(filteredFarmers.filter(f => f.status.toLowerCase() === 'auditing').length) }
+    ];
+
+    let yPos = 52;
+    doc.setFontSize(9);
+    summaryFields.forEach(field => {
+      doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
+      doc.text(field.label, 15, yPos);
+      doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'bold');
+      doc.text(field.value, pageWidth - 15, yPos, { align: 'right' });
+      doc.setDrawColor(243, 244, 246);
+      doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+      yPos += 10;
+    });
+
+    const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [92, 184, 92] };
+    const commonBodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } };
+    const alternateRowStyles: any = { fillColor: [249, 250, 251] };
+
+    // 3. Farmers Table
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+    doc.text('REGISTERED FARMERS', 15, yPos + 10);
+    autoTable(doc, {
+      startY: yPos + 15,
+      head: [['FARMER / FARM', 'NATIONAL ID', 'CONTACT INFO', 'PHYSICAL ADDRESS', 'MAIN CROP', 'SIZE', 'STATUS']],
+      body: filteredFarmers.map(f => [
+        `${toTitleCase(f.full_name)}\n${toTitleCase(f.farm_name || 'Individual')}`,
+        f.national_id || 'N/A',
+        `${f.phone || 'N/A'}\n${f.email || 'N/A'}`,
+        `${toTitleCase(f.district)}, ${toTitleCase(f.sector)}\nCell: ${toTitleCase(f.cell)}, Village: ${toTitleCase(f.village)}`,
+        (f.produce_types || []).join(', '),
+        `${f.farm_size_hectares || 0} ha`,
+        toTitleCase(f.status || 'Active')
+      ]),
+      theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+      margin: { left: 15, right: 15, bottom: 30 },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 6) {
+          const s = String(data.cell.raw).toLowerCase();
+          if (s.includes('active'))   data.cell.styles.textColor = [22, 163, 74];
+          if (s.includes('inactive')) data.cell.styles.textColor = [220, 38, 38];
+          if (s.includes('auditing')) data.cell.styles.textColor = [234, 88, 12];
+        }
+      }
+    });
+
+    // 4. Footer
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
+      doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
+      doc.text('This is a computer generated report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+      const footerY = 288;
+      doc.text('Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw', pageWidth / 2, footerY, { align: 'center' });
+      doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
+    }
+
+    doc.save(`FreshSarura_Farmers_${new Date().toISOString().split('T')[0]}.pdf`);
+    setIsExportOpen(false);
+  };
 
   return (
     <div className="space-y-6 pb-20">
@@ -81,7 +233,7 @@ const FarmerManagement = () => {
                   <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden">
                     <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Export Options</p>
                     <button
-                      onClick={() => { alert('Exporting as Excel…'); setIsExportOpen(false); }}
+                      onClick={handleExportXLSX}
                       className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
                     >
                       <div className="p-1.5 bg-green-50 dark:bg-green-900/20 rounded-lg flex-shrink-0">
@@ -94,7 +246,7 @@ const FarmerManagement = () => {
                     </button>
                     <div className="mx-4 border-t border-gray-100 dark:border-gray-700" />
                     <button
-                      onClick={() => { alert('Exporting as PDF…'); setIsExportOpen(false); }}
+                      onClick={handleExportPDF}
                       className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
                     >
                       <div className="p-1.5 bg-red-50 dark:bg-red-900/20 rounded-lg flex-shrink-0">

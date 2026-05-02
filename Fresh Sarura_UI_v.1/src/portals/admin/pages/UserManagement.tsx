@@ -11,7 +11,7 @@ const ROLE_LABELS: Record<string, string> = {
     farm_manager: 'Farm Manager',
     logistic_officer: 'Logistics Officer',
     quality_officer: 'QC Officer',
-    buyer: 'Buyer',
+
 };
 
 const UserManagement = () => {
@@ -106,10 +106,10 @@ const UserManagement = () => {
     const totalPages = Math.ceil(filtered.length / itemsPerPage);
 
     const summaryStats = [
-        { label: 'Total Users',      value: users.length,                          icon: Users,       color: 'text-blue-600',  bg: 'bg-blue-50 dark:bg-blue-900/20' },
-        { label: 'Active Accounts',  value: users.filter(u => u.isActive).length,  icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
-        { label: 'Inactive',         value: users.filter(u => !u.isActive).length, icon: ShieldOff,   color: 'text-red-600',   bg: 'bg-red-50 dark:bg-red-900/20' },
-        { label: 'Admins',           value: users.filter(u => u.role === 'admin').length, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
+        { label: 'Total Users', value: users.length, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+        { label: 'Active Accounts', value: users.filter(u => u.isActive).length, icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
+        { label: 'Inactive', value: users.filter(u => !u.isActive).length, icon: ShieldOff, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20' },
+        { label: 'Admins', value: users.filter(u => u.role === 'admin').length, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
     ];
 
     return (
@@ -117,7 +117,6 @@ const UserManagement = () => {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-green-50 dark:bg-green-900/20 rounded-xl text-green-600"><Users size={22} /></div>
                     <div>
                         <h1 className="text-[22px] font-bold text-gray-900 dark:text-white">User Management</h1>
                         <p className="text-sm text-gray-500 dark:text-gray-400">Manage platform users and access</p>
@@ -290,13 +289,13 @@ const UserManagement = () => {
                 </div>
             )}
 
-            <AddUserModal 
-                isOpen={isAddUserOpen} 
-                onClose={() => setIsAddUserOpen(false)} 
+            <AddUserModal
+                isOpen={isAddUserOpen}
+                onClose={() => setIsAddUserOpen(false)}
                 onUserAdded={(name) => {
                     fetchUsers();
                     setSuccessToast({ name });
-                }} 
+                }}
             />
 
             {successToast && (
