@@ -4,6 +4,7 @@ import BudgetRequest from '../models/BudgetRequest.js';
 import YieldForecast from '../models/YieldForecast.js';
 import FieldReport from '../models/FieldReport.js';
 import { createNotification } from './notificationController.js';
+import { createEventLog } from './eventLogController.js';
 
 // GET /api/v1/crop-cycles  (supports ?farmer_id=<id> filter)
 export const getCropCycles = async (req, res) => {
@@ -97,6 +98,15 @@ export const createCropCycle = async (req, res) => {
         }
 
         res.status(201).json({ status: 'success', message: 'Crop cycle created!', data: cycle });
+
+        await createEventLog({
+            module: 'Crop Planning',
+            action: 'Crop Cycle Created',
+            severity: 'INFO',
+            description: `New crop cycle created: ${crop_name} for ${farm_name} (${season})`,
+            actor: req.user.name,
+            metadata: { cycleId: cycle.cycleId, cropName: crop_name, farmName: farm_name, season }
+        });
     } catch (err) {
         console.error("Error creating crop cycle:", err);
         res.status(500).json({ status: 'error', message: err.message });

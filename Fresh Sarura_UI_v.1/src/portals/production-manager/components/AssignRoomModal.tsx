@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Thermometer, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import { X, Thermometer, CheckCircle2, Loader2, AlertCircle, ChevronDown, Snowflake, FlaskConical } from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface AssignRoomModalProps {
@@ -11,19 +11,38 @@ interface AssignRoomModalProps {
 }
 
 const AssignRoomModal = ({ isOpen, onClose, batch, onSuccess }: AssignRoomModalProps) => {
-    const [assignedRoom, setAssignedRoom] = useState('');
+    const [selectedRoomId, setSelectedRoomId] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [availableRooms, setAvailableRooms] = useState<any[]>([]);
+    const [isLoadingRooms, setIsLoadingRooms] = useState(false);
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+    useEffect(() => {
+        const fetchRooms = async () => {
+            setIsLoadingRooms(true);
+            try {
+                const res = await api.get('/rooms');
+                const rooms = res.data?.data || res.data || [];
+                setAvailableRooms(rooms.filter((r: any) => r.status === 'Available'));
+            } catch (err) {
+                console.error('Failed to fetch rooms:', err);
+            } finally {
+                setIsLoadingRooms(false);
+            }
+        };
+        if (isOpen) fetchRooms();
+    }, [isOpen]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!assignedRoom.trim()) return;
+        if (!selectedRoomId) return;
 
         setIsSubmitting(true);
         setError(null);
 
         try {
-            await api.patch(`/processing-batches/${batch._id}/assign-room`, { assignedRoom });
+            await api.patch(`/processing-batches/${batch._id}/assign-room`, { roomId: selectedRoomId });
             onSuccess();
             onClose();
         } catch (err: any) {
@@ -42,10 +61,10 @@ const AssignRoomModal = ({ isOpen, onClose, batch, onSuccess }: AssignRoomModalP
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose} />
 
             {/* Modal Content */}
-            <div className="relative w-full max-w-md bg-white dark:bg-gray-800 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
+            <div className="relative w-full max-w-md bg-white dark:bg-gray-800 rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
                 
                 {/* Header */}
-                <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-emerald-50/50 dark:bg-emerald-900/10">
+                <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-emerald-50/50 dark:bg-emerald-900/10 rounded-t-3xl">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                             <Thermometer size={20} />
@@ -86,22 +105,61 @@ const AssignRoomModal = ({ isOpen, onClose, batch, onSuccess }: AssignRoomModalP
                             </div>
                         </div>
 
-                        {/* Room Assignment Input */}
-                        <div>
+                        {/* Room Assignment Dropdown */}
+                        <div className="relative">
                             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 ml-1">
-                                Room Name / Number
+                                Select Available Room
                             </label>
-                            <input
-                                autoFocus
-                                type="text"
-                                required
-                                value={assignedRoom}
-                                onChange={e => setAssignedRoom(e.target.value)}
-                                className="w-full px-4 py-3.5 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-bold placeholder-gray-400"
-                                placeholder="e.g. Room 2A, Cold Storage 1"
-                            />
+                            
+                            <button
+                                type="button"
+                                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                className={`w-full px-4 py-3.5 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-bold flex items-center justify-between group ${isDropdownOpen ? 'ring-2 ring-emerald-500' : ''}`}
+                            >
+                                <span className={selectedRoomId ? '' : 'text-gray-400 font-normal'}>
+                                    {availableRooms.find(r => r._id === selectedRoomId)?.name || 'Choose a room...'}
+                                </span>
+                                <ChevronDown size={18} className={`text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {isDropdownOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)} />
+                                    <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-2 max-h-60 overflow-y-auto">
+                                        {isLoadingRooms ? (
+                                            <div className="p-4 text-center text-gray-400 text-xs">Loading rooms...</div>
+                                        ) : availableRooms.length === 0 ? (
+                                            <div className="p-4 text-center text-gray-500 text-xs font-medium">No available rooms found.</div>
+                                        ) : (
+                                            availableRooms.map((room) => (
+                                                <button
+                                                    key={room._id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedRoomId(room._id);
+                                                        setIsDropdownOpen(false);
+                                                    }}
+                                                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors text-left border-b border-gray-50 dark:border-gray-700/50 last:border-0"
+                                                >
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${room.type === 'Cold Room' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'bg-purple-50 dark:bg-purple-900/20 text-purple-600'}`}>
+                                                        {room.type === 'Cold Room' ? <Snowflake size={14} /> : <FlaskConical size={14} />}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="text-sm font-bold text-gray-900 dark:text-white">{room.name}</p>
+                                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">{room.type} • Cap: {room.capacityKg.toLocaleString()} kg</p>
+                                                    </div>
+                                                    {selectedRoomId === room._id && (
+                                                        <CheckCircle2 size={16} className="text-emerald-600" />
+                                                    )}
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+                                </>
+                            )}
+
                             <p className="text-[10px] text-gray-500 mt-2 ml-1 italic">
-                                This will move the batch status to 'Processing' upon assignment.
+                                Only rooms currently marked as 'Available' are shown.
                             </p>
                         </div>
 
@@ -114,7 +172,7 @@ const AssignRoomModal = ({ isOpen, onClose, batch, onSuccess }: AssignRoomModalP
                     </div>
 
                     {/* Footer */}
-                    <div className="px-6 py-5 bg-gray-50/80 dark:bg-gray-900/30 border-t border-gray-100 dark:border-gray-700 flex items-center justify-end gap-3">
+                    <div className="px-6 py-5 bg-gray-50/80 dark:bg-gray-900/30 border-t border-gray-100 dark:border-gray-700 flex items-center justify-end gap-3 rounded-b-3xl">
                         <button
                             type="button"
                             onClick={onClose}
@@ -124,9 +182,9 @@ const AssignRoomModal = ({ isOpen, onClose, batch, onSuccess }: AssignRoomModalP
                         </button>
                         <button
                             type="submit"
-                            disabled={isSubmitting || !assignedRoom.trim()}
+                            disabled={isSubmitting || !selectedRoomId}
                             className={`px-8 py-2.5 rounded-xl text-sm font-bold shadow-lg flex items-center gap-2 transition-all ${
-                                isSubmitting || !assignedRoom.trim()
+                                isSubmitting || !selectedRoomId
                                 ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
                                 : 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95 shadow-emerald-900/20'
                             }`}

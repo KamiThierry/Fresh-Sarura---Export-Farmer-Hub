@@ -3,6 +3,7 @@ import Shipment from '../models/Shipment.js';
 import ExportDocument from '../models/ExportDocument.js';
 import ProcessingBatch from '../models/ProcessingBatch.js';
 import { notifyByRole } from './notificationController.js';
+import { createEventLog } from './eventLogController.js';
 
 // ── EXPORT BATCHES ────────────────────────────────────────────────────────────
 
@@ -40,6 +41,20 @@ export const createExportBatch = async (req, res) => {
         });
 
         res.status(201).json({ status: 'success', data: batch });
+
+        await createEventLog({
+            module: 'Production & QC',
+            action: 'Export Batch Created',
+            severity: 'INFO',
+            description: `Export batch created: ${cropName} — ${boxCount} boxes for ${clientName} to ${destination}`,
+            actor: req.user.name,
+            metadata: {
+                batchId: batch._id,
+                cropName, clientName,
+                destination, boxCount,
+                weightKg: allocatedWeightKg
+            }
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -79,6 +94,15 @@ export const markReadyForExport = async (req, res) => {
         });
 
         res.json({ status: 'success', message: 'Batch marked as Ready for Export.', data: batch });
+
+        await createEventLog({
+            module: 'Export & Shipments',
+            action: 'Batch Ready for Export',
+            severity: 'INFO',
+            description: `Export batch marked ready: ${batch.cropName} — ${batch.boxCount} boxes to ${batch.destination}`,
+            actor: req.user.name,
+            metadata: { batchId: batch._id, cropName: batch.cropName }
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -133,6 +157,21 @@ export const createShipment = async (req, res) => {
         });
 
         res.status(201).json({ status: 'success', data: shipment });
+
+        await createEventLog({
+            module: 'Export & Shipments',
+            action: 'Shipment Created',
+            severity: 'INFO',
+            description: `Packing list ${shipment.plNumber} generated — Flight ${flightNumber} to ${destination}`,
+            actor: req.user.name,
+            metadata: {
+                shipmentId: shipment._id,
+                plNumber: shipment.plNumber,
+                flightNumber, destination,
+                weightKg: totalWeightKg,
+                boxes: totalBoxes
+            }
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -197,6 +236,20 @@ export const dispatchShipment = async (req, res) => {
         });
 
         res.json({ status: 'success', message: 'Shipment marked as dispatched.', data: shipment });
+
+        await createEventLog({
+            module: 'Export & Shipments',
+            action: 'Shipment Dispatched',
+            severity: 'INFO',
+            description: `Shipment dispatched: ${shipment.plNumber} — Flight ${shipment.flightNumber} to ${shipment.destination}`,
+            actor: req.user.name,
+            metadata: {
+                shipmentId: shipment._id,
+                plNumber: shipment.plNumber,
+                destination: shipment.destination,
+                weightKg: shipment.totalWeightKg
+            }
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -223,6 +276,15 @@ export const uploadDocument = async (req, res) => {
         });
 
         res.status(201).json({ status: 'success', data: doc });
+
+        await createEventLog({
+            module: 'Export & Shipments',
+            action: 'Document Uploaded',
+            severity: 'INFO',
+            description: `Export document uploaded: ${docType} — ${fileName}`,
+            actor: req.user.name,
+            metadata: { shipmentId, docType, fileName }
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }

@@ -5,6 +5,7 @@ import CropCycle from '../models/CropCycle.js';
 import Notification from '../models/Notification.js';
 import Room from '../models/Room.js';
 import { notifyByRole } from './notificationController.js';
+import { createEventLog } from './eventLogController.js';
 
 // ── HARVEST DECLARATIONS ──────────────────────────────────────────────────────
 
@@ -50,6 +51,15 @@ export const declareHarvest = async (req, res) => {
         await CropCycle.findByIdAndUpdate(cycleId, { status: 'harvesting' });
 
         res.status(201).json({ status: 'success', data: declaration });
+
+        await createEventLog({
+            module: 'Production & QC',
+            action: 'Harvest Declared',
+            severity: 'INFO',
+            description: `Harvest declared: ${cropName} — est. ${estimatedWeightKg} kg from ${farmName}`,
+            actor: req.user.name,
+            metadata: { cycleId, cropName, estimatedWeightKg, farmName }
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -113,6 +123,15 @@ export const logPickup = async (req, res) => {
         });
 
         res.json({ status: 'success', message: 'Pickup logged.', data: intakeLog });
+
+        await createEventLog({
+            module: 'Production & QC',
+            action: 'Produce Picked Up',
+            severity: 'INFO',
+            description: `Produce picked up: ${declaration.cropName} — ${pickedUpWeightKg} kg (Truck: ${truckId || 'N/A'})`,
+            actor: req.user.name,
+            metadata: { intakeLogId: intakeLog._id, cropName: declaration.cropName, pickedUpWeightKg, truckId }
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -147,6 +166,15 @@ export const requestRoom = async (req, res) => {
         });
 
         res.status(201).json({ status: 'success', data: batch });
+
+        await createEventLog({
+            module: 'Production & QC',
+            action: 'Room Requested',
+            severity: 'INFO',
+            description: `Processing room requested for ${cropName || 'produce'} (${receivedWeightKg} kg)`,
+            actor: req.user.name,
+            metadata: { batchId: batch._id, receivedWeightKg, cropName }
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -209,6 +237,15 @@ export const assignRoom = async (req, res) => {
         });
 
         res.json({ status: 'success', message: 'Room assigned.', data: batch });
+
+        await createEventLog({
+            module: 'Production & QC',
+            action: 'Room Assigned',
+            severity: 'INFO',
+            description: `Room "${room.name}" assigned to processing batch`,
+            actor: req.user.name,
+            metadata: { batchId: batch._id, roomName: room.name, roomId }
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -243,6 +280,15 @@ export const completeBatch = async (req, res) => {
         });
 
         res.json({ status: 'success', message: 'Batch completed.', data: batch });
+
+        await createEventLog({
+            module: 'Production & QC',
+            action: 'Batch Processing Completed',
+            severity: 'INFO',
+            description: `Processing completed: ${batch.cropName} — ${processedWeightKg} kg processed, ${rejectedWeightKg} kg rejected`,
+            actor: req.user.name,
+            metadata: { batchId: batch._id, processedWeightKg, rejectedWeightKg }
+        });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import NotificationsModal from '../../shared/component/NotificationsModal';
 import { api } from '@/lib/api';
-import { usePMSearch } from '@/lib/useGlobalSearch';
+import { useUniversalSearch } from '@/lib/useGlobalSearch';
 import logo from '@/assets/sarura_logo_nav.png';
 
 // --- Type badge colours ---
@@ -22,12 +22,12 @@ const Header = () => {
     const dropdownRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
 
-    // Live search
-    const { results: searchResults, loading: searchLoading } = usePMSearch(searchQuery);
-
     // Real user from localStorage
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : { name: 'User', role: 'Staff' };
+
+    // Live search
+    const { results: searchResults, loading: searchLoading } = useUniversalSearch(searchQuery, user.role || 'production_manager');
 
     const fetchNotifications = async () => {
         try {

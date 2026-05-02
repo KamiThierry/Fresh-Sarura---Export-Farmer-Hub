@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, UserPlus, ArrowRight } from 'lucide-react';
+import { X, UserPlus, ArrowRight, Mail, Phone, Shield, User, ChevronDown } from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface AddUserModalProps {
@@ -56,26 +56,40 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
                 <div className="flex-1 overflow-y-auto p-6">
                     {error && <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg">{error}</div>}
                     <form id="add-user-form" onSubmit={handleSubmit} className="space-y-4">
-                        {[
-                            { label: 'Full Name *', key: 'name', type: 'text', placeholder: 'Enter full name', required: true },
-                            { label: 'Email Address *', key: 'email', type: 'email', placeholder: 'name@freshsarura.rw', required: true },
-                            { label: 'Phone Number', key: 'phone', type: 'tel', placeholder: '+250 xxx xxx xxx', required: false },
-                        ].map(({ label, key, type, placeholder, required }) => (
-                            <div key={key}>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{label}</label>
-                                <input type={type} required={required} value={(formData as any)[key]}
-                                    onChange={e => setFormData({ ...formData, [key]: e.target.value })}
-                                    placeholder={placeholder}
-                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm dark:text-white" />
-                            </div>
-                        ))}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Full Name *</label>
+                            <input type="text" required value={formData.name}
+                                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                placeholder="Enter full name"
+                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm dark:text-white" />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email Address *</label>
+                            <input type="email" required value={formData.email}
+                                onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                placeholder="name@freshsarura.rw"
+                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm dark:text-white" />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Phone Number</label>
+                            <input type="tel" value={formData.phone}
+                                onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                                placeholder="+250 xxx xxx xxx"
+                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm dark:text-white" />
+                        </div>
+
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Role *</label>
-                            <select required value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}
-                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm dark:text-white">
-                                <option value="">Select a role</option>
-                                {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                            </select>
+                            <div className="relative">
+                                <select required value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}
+                                    className="w-full px-4 pr-10 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm dark:text-white appearance-none">
+                                    <option value="">Select a role</option>
+                                    {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                </select>
+                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                            </div>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Temporary Password *</label>

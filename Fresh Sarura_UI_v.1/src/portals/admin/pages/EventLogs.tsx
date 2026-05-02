@@ -1,10 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Search, Filter, Download, Activity, ChevronDown,
-    FileSpreadsheet, FileText, Users, Package, Plane,
-    Leaf, Sprout, Calendar, UserCog, Clock
+    FileSpreadsheet, FileText, Package, Plane,
+    Leaf, Sprout, UserCog
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import logo from '@/assets/sarura_logo_nav.png';
+import * as XLSX from 'xlsx';
 
 // ─── Types ────────────────────────────────────────────────────────
 type LogModule = 'Farmer Management' | 'Crop Planning' | 'Production & QC' | 'Export & Shipments' | 'User Management';
@@ -99,6 +103,113 @@ const EventLogs = () => {
     const actions = useMemo(() => Array.from(new Set(events.map(e => e.action))).sort(), [events]);
     const actors = useMemo(() => Array.from(new Set(events.map(e => e.actor))).sort(), [events]);
 
+    const handleExportXLSX = () => {
+        const wb = XLSX.utils.book_new();
+        const headers = ['Timestamp', 'Module', 'Action', 'Actor', 'Detail'];
+        const rows = events.map(e => [
+            formatDate(e.timestamp),
+            e.module,
+            e.action,
+            e.actor,
+            e.detail
+        ]);
+
+        const data = [headers, ...rows];
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        
+        ws['!cols'] = headers.map((h, i) => {
+            const maxLen = Math.max(h.length, ...rows.map(r => String(r[i] ?? '').length));
+            return { wch: Math.min(maxLen + 4, 80) };
+        });
+        ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Activity Log');
+        XLSX.writeFile(wb, `FreshSarura_Activity_Log_${new Date().toISOString().split('T')[0]}.xlsx`);
+        setIsExportOpen(false);
+    };
+
+    const handleExportPDF = () => {
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const timestamp = new Date().toLocaleString('en-GB', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+
+        // Header
+        try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch {}
+        doc.setTextColor(21, 128, 61);
+        doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+        doc.text('Fresh Sarura', 28, 19);
+        doc.setTextColor(107, 114, 128);
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+        doc.text('Export & Farmer Hub', 28, 23);
+        doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+        doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+        doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+        doc.setDrawColor(229, 231, 235);
+        doc.line(15, 30, pageWidth - 15, 30);
+
+        // Report Title
+        doc.setTextColor(17, 24, 39);
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+        doc.text('SYSTEM ACTIVITY LOG', 15, 42);
+
+        // Summary Fields
+        let yPos = 52;
+        doc.setFontSize(9);
+        const activeFilters = [
+            { label: 'Total Activities', value: events.length.toString() },
+            { label: 'Farmer Actions', value: events.filter(e => e.module === 'Farmer Management').length.toString() },
+            { label: 'Production Actions', value: events.filter(e => e.module === 'Production & QC').length.toString() },
+            { label: 'Export Actions', value: events.filter(e => e.module === 'Export & Shipments').length.toString() }
+        ];
+
+        activeFilters.forEach(field => {
+            doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
+            doc.text(field.label, 15, yPos);
+            doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
+            doc.text(field.value, pageWidth - 15, yPos, { align: 'right' });
+            doc.setDrawColor(243, 244, 246);
+            doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+            yPos += 10;
+        });
+
+        // Table
+        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+        doc.text('ACTIVITY STREAM', 15, yPos + 10);
+        
+        const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [92, 184, 92] };
+        const commonBodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } };
+        const alternateRowStyles: any = { fillColor: [249, 250, 251] };
+
+        autoTable(doc, {
+            startY: yPos + 15,
+            head: [['TIMESTAMP', 'MODULE', 'ACTION', 'ACTOR', 'DETAIL']],
+            body: events.map(e => [
+                formatDate(e.timestamp), e.module, e.action, e.actor, e.detail
+            ]),
+            theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+            margin: { left: 15, right: 15, bottom: 30 }
+        });
+
+        // Footer
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
+            doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
+            doc.text('This is a computer generated report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+            const footerY = 288;
+            doc.text('Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw', pageWidth / 2, footerY, { align: 'center' });
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
+        }
+
+        doc.save(`FreshSarura_Activity_Log_${new Date().toISOString().split('T')[0]}.pdf`);
+        setIsExportOpen(false);
+    };
+
     return (
         <div className="p-6 space-y-6 animate-fade-in">
             {/* Header */}
@@ -113,9 +224,9 @@ const EventLogs = () => {
                 <div className="relative">
                     <button
                         onClick={() => setIsExportOpen(prev => !prev)}
-                        className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-bold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
                     >
-                        <Download size={16} className="text-green-600" />
+                        <Download size={15} />
                         Export Log
                         <ChevronDown size={13} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
                     </button>
@@ -126,7 +237,7 @@ const EventLogs = () => {
                             <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden">
                                 <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Select Format</p>
                                 <button
-                                    onClick={() => { alert('Exporting as Excel…'); setIsExportOpen(false); }}
+                                    onClick={handleExportXLSX}
                                     className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
                                 >
                                     <div className="p-1.5 bg-green-50 dark:bg-green-900/20 rounded-lg flex-shrink-0">
@@ -139,7 +250,7 @@ const EventLogs = () => {
                                 </button>
                                 <div className="mx-4 border-t border-gray-100 dark:border-gray-700" />
                                 <button
-                                    onClick={() => { alert('Exporting as PDF…'); setIsExportOpen(false); }}
+                                    onClick={handleExportPDF}
                                     className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
                                 >
                                     <div className="p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex-shrink-0">

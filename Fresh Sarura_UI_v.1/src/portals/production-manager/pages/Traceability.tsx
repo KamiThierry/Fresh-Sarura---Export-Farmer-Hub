@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Search, XCircle as XCircleIcon, ShieldCheck, Box, Thermometer, Plane, Download, ExternalLink, AlertTriangle, CheckCircle, XCircle, Clock, Printer, FileCheck, User, Loader2 } from 'lucide-react';
 import { api } from '../../../lib/api';
@@ -13,6 +13,46 @@ const Traceability = () => {
     const [traceData, setTraceData] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
     const [certFilter, setCertFilter] = useState<{ farmerName: string; certLabel: string } | null>(null);
+    const [availableIds, setAvailableIds] = useState<{ id: string; type: string; produce?: string }[]>([]);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const fetchIds = async () => {
+            try {
+                const [stockRes, batchRes] = await Promise.all([
+                    api.get('/stock'),
+                    api.get('/export-batches')
+                ]);
+                const stockData = stockRes.data?.data || stockRes.data || [];
+                const batchData = batchRes.data?.data || batchRes.data || [];
+
+                const ids = [
+                    ...stockData.map((s: any) => ({ id: s.stockId, type: 'Stock', produce: s.cropName })),
+                    ...batchData.map((b: any) => ({ id: b.batchId, type: 'Export Batch', produce: b.cropName }))
+                ].filter(item => item.id);
+                setAvailableIds(ids);
+            } catch (err) {
+                console.error('Failed to fetch available IDs', err);
+            }
+        };
+        fetchIds();
+    }, []);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setShowDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const filteredOptions = availableIds.filter(opt => 
+        opt.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        opt.produce?.toLowerCase().includes(searchTerm.toLowerCase())
+    ).slice(0, 5);
 
     // Read URL search params on mount / when URL changes
     useEffect(() => {
@@ -141,15 +181,43 @@ const Traceability = () => {
                     <div className="mb-12 sticky top-5 z-20">
                         <div className="relative max-w-2xl mx-auto shadow-2xl shadow-blue-900/20 rounded-2xl">
                             <form onSubmit={handleSearch} className="relative flex">
-                                <div className="relative flex-1">
+                                <div className="relative flex-1" ref={dropdownRef}>
                                     <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={24} />
                                     <input
                                         type="text"
                                         placeholder="Enter Batch ID (e.g., EB-XXXXXX)..."
                                         className="w-full pl-14 pr-4 py-5 rounded-l-2xl bg-white dark:bg-gray-800 border-2 border-transparent focus:border-blue-500 text-lg shadow-sm outline-none dark:text-white transition-all"
                                         value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        onFocus={() => setShowDropdown(true)}
+                                        onChange={(e) => {
+                                            setSearchTerm(e.target.value);
+                                            setShowDropdown(true);
+                                        }}
                                     />
+
+                                    {showDropdown && searchTerm.trim() && filteredOptions.length > 0 && (
+                                        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                                            {filteredOptions.map((opt, i) => (
+                                                <button
+                                                    key={i}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSearchTerm(opt.id);
+                                                        setShowDropdown(false);
+                                                    }}
+                                                    className="w-full px-5 py-4 flex items-center justify-between hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors text-left border-b border-gray-50 dark:border-gray-700/50 last:border-0"
+                                                >
+                                                    <div>
+                                                        <p className="text-base font-bold text-gray-900 dark:text-white font-mono">{opt.id}</p>
+                                                        <p className="text-xs text-gray-500 uppercase tracking-wider">{opt.produce || 'Unknown Produce'}</p>
+                                                    </div>
+                                                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${opt.type === 'Stock' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                        {opt.type}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                                 <button
                                     type="submit"

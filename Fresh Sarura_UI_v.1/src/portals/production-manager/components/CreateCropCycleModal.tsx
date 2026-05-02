@@ -44,6 +44,17 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
     // Produce types from selected farmer
     const produceTypes: string[] = selectedFarmer?.produce_types ?? [];
 
+    const isFormValid = formData.farmer_id && 
+                       formData.crop_name && 
+                       formData.season && 
+                       formData.planting_date && 
+                       formData.start_date && 
+                       formData.expected_harvest_date && 
+                       formData.block_name && 
+                       formData.block_size_hectares !== '' && 
+                       formData.field_size_hectares !== '' && 
+                       formData.total_budget > 0;
+
     // Fetch farmers when modal opens
     useEffect(() => {
         if (!isOpen) return;
@@ -136,7 +147,9 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
 
                             {/* Farmer / Farm selection */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Farm / Farmer</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Farm / Farmer <span className="text-red-500">*</span>
+                                </label>
                                 <select
                                     name="farmer_id"
                                     value={formData.farmer_id}
@@ -192,7 +205,9 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                             <div className="grid grid-cols-2 gap-4">
                                 {/* Crop — dropdown from produce_types if farmer selected, otherwise text input */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Crop</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Crop <span className="text-red-500">*</span>
+                                    </label>
                                     {produceTypes.length > 0 ? (
                                         <select
                                             name="crop_name"
@@ -217,22 +232,29 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                                     )}
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Season</label>
-                                    <input
-                                        type="text"
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Season <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
                                         name="season"
                                         value={formData.season}
                                         onChange={handleInputChange}
-                                        placeholder="e.g. Season A"
                                         className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-green-500"
-                                    />
+                                    >
+                                        <option value="">Select Season...</option>
+                                        <option value="Season A">Season A</option>
+                                        <option value="Season B">Season B</option>
+                                        <option value="Season C">Season C</option>
+                                    </select>
                                 </div>
                             </div>
 
                             {/* Dates Row */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Planting Date</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Planting Date <span className="text-red-500">*</span>
+                                    </label>
                                     <input
                                         type="date"
                                         name="planting_date"
@@ -242,7 +264,9 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Start Date <span className="text-red-500">*</span>
+                                    </label>
                                     <input
                                         type="date"
                                         name="start_date"
@@ -254,7 +278,9 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expected Harvest Date</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Expected Harvest Date <span className="text-red-500">*</span>
+                                </label>
                                 <input
                                     type="date"
                                     name="expected_harvest_date"
@@ -267,7 +293,9 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                             {/* Block & Field Size Row */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Block Name</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Block Name <span className="text-red-500">*</span>
+                                    </label>
                                     <input
                                         type="text"
                                         name="block_name"
@@ -278,7 +306,9 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Block Size (Ha)</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Block Size (Ha) <span className="text-red-500">*</span>
+                                    </label>
                                     <input
                                         type="number"
                                         name="block_size_hectares"
@@ -303,7 +333,9 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Total Field Size (Ha)</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Total Field Size (Ha) <span className="text-red-500">*</span>
+                                </label>
                                 <input
                                     type="number"
                                     name="field_size_hectares"
@@ -357,7 +389,9 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                     <section className="space-y-4">
                         <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">2. Global Limit</h3>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Total Allocated Budget (Rwf)</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Total Allocated Budget (Rwf) <span className="text-red-500">*</span>
+                            </label>
                             <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">Rwf</span>
                                 <input
@@ -443,13 +477,18 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                 <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
                     <button
                         onClick={() => onSubmit(formData)}
-                        disabled={remaining < 0}
-                        className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2 ${remaining < 0
+                        disabled={remaining < 0 || !isFormValid}
+                        className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2 ${
+                            (remaining < 0 || !isFormValid)
                             ? 'bg-gray-400 cursor-not-allowed opacity-70'
                             : 'bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 shadow-green-900/20'
                             }`}
                     >
-                        {remaining < 0 ? 'Over Budget — Adjust Allocations' : 'Create & Activate Cycle'}
+                        {remaining < 0 
+                            ? 'Over Budget — Adjust Allocations' 
+                            : !isFormValid 
+                            ? 'Please Fill All Required Fields' 
+                            : 'Create & Activate Cycle'}
                     </button>
                 </div>
             </div>

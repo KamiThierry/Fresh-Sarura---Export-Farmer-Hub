@@ -26,6 +26,8 @@ export const login = async (req, res) => {
         const user = await User.findOne({ email }).select('+password');
         if (!user || !(await user.comparePassword(password))) {
             await createEventLog({
+                module: 'User Management',
+                action: 'Failed Login',
                 severity: 'CRITICAL',
                 description: `Failed login attempt for email: ${email}`,
                 actor: 'Unknown',
@@ -36,6 +38,8 @@ export const login = async (req, res) => {
 
         if (!user.isActive) {
             await createEventLog({
+                module: 'User Management',
+                action: 'Blocked Login',
                 severity: 'WARNING',
                 description: `Login attempt for deactivated account: ${email}`,
                 actor: user.name,
@@ -49,10 +53,13 @@ export const login = async (req, res) => {
 
         logger.info(`User logged in: ${user.email} (${user.role})`);
         await createEventLog({
+            module: 'User Management',
+            action: 'User Login',
             severity: 'INFO',
-            description: `User logged in: ${user.email}`,
+            description: `User logged in: ${user.email} (${user.role})`,
             actor: user.name,
-            ip: req.ip || req.connection.remoteAddress
+            ip: req.ip || req.connection.remoteAddress,
+            metadata: { role: user.role, email: user.email }
         });
 
         res.status(200).json({
@@ -83,6 +90,15 @@ export const createUser = async (req, res) => {
         }
 
         const user = await User.create({ name, email, password, phone, role });
+
+        await createEventLog({
+            module: 'User Management',
+            action: 'User Created',
+            severity: 'INFO',
+            description: `Admin created new user: ${user.email} with role ${user.role}`,
+            actor: req.user?.name || 'Admin',
+            metadata: { userId: user._id, role: user.role }
+        });
 
         logger.info(`New user created: ${user.email} (${user.role})`);
 
@@ -127,6 +143,15 @@ export const register = async (req, res) => {
         }
 
         const user = await User.create({ name, email, password, phone, role, isActive: true });
+
+        await createEventLog({
+            module: 'User Management',
+            action: 'User Registered',
+            severity: 'INFO',
+            description: `New user registered: ${user.email} as ${user.role}`,
+            actor: user.name,
+            metadata: { userId: user._id, role: user.role }
+        });
 
         logger.info(`New user registered: ${user.email} (${user.role})`);
 
@@ -297,6 +322,15 @@ export const updateUser = async (req, res) => {
             { new: true, runValidators: true }
         ).select('-password');
         if (!user) return res.status(404).json({ status: 'error', message: 'User not found.' });
+
+        await createEventLog({
+            module: 'User Management',
+            action: 'User Updated',
+            severity: 'INFO',
+            description: `User account updated: ${user.email} — role: ${user.role}, active: ${user.isActive}`,
+            actor: req.user?.name || 'Admin',
+            metadata: { userId: user._id, changes: { name, role, isActive } }
+        });
         res.json({ status: 'success', data: user });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
@@ -312,6 +346,15 @@ export const deleteUser = async (req, res) => {
             { new: true }
         ).select('-password');
         if (!user) return res.status(404).json({ status: 'error', message: 'User not found.' });
+
+        await createEventLog({
+            module: 'User Management',
+            action: 'User Deactivated',
+            severity: 'WARNING',
+            description: `User account deactivated: ${user.email}`,
+            actor: req.user?.name || 'Admin',
+            metadata: { userId: user._id }
+        });
         res.json({ status: 'success', message: 'User deactivated.' });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });

@@ -1,19 +1,146 @@
-import { useState } from 'react';
-import { Search, Bell, ChevronDown } from 'lucide-react';
+import { Search, Bell, ChevronDown, Loader2 } from 'lucide-react';
 import logo from '@/assets/sarura_logo_nav.png';
 import ThemeToggle from '../../shared/component/ThemeToggle';
-import NotificationsModal from '../components/NotificationsModal';
+import NotificationsModal from '../../shared/component/NotificationsModal';
+import { useRef, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useUniversalSearch } from '@/lib/useGlobalSearch';
+import { api } from '@/lib/api';
+
+const TYPE_COLOURS: Record<string, string> = {
+    'User': 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400',
+    'Farmer': 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400',
+    'Crop Cycle': 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400',
+    'Shipment': 'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400',
+    'Batch': 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400',
+};
 
 const Header = () => {
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+    const [notifications, setNotifications] = useState<any[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const navigate = useNavigate();
+
+    const fetchNotifications = async () => {
+        try {
+            const [notifRes, logsRes] = await Promise.all([
+                api.get('/notifications'),
+                api.get('/event-logs?limit=15')
+            ]);
+            
+            const notifs = notifRes.data?.data ?? notifRes.data ?? [];
+            const logs = logsRes.data?.data ?? logsRes.data ?? [];
+            
+            // Get read logs from localStorage
+            const readLogIds = JSON.parse(localStorage.getItem('readLogIds') || '[]');
+            const clearedLogIds = JSON.parse(localStorage.getItem('clearedLogIds') || '[]');
+            
+            const logNotifs = logs
+                .filter((log: any) => !clearedLogIds.includes(log._id))
+                .map((log: any) => {
+                    const isRecent = (new Date().getTime() - new Date(log.timestamp || log.createdAt).getTime()) < 5 * 60 * 1000; // 5 mins
+                    const hasBeenRead = readLogIds.includes(log._id);
+                    
+                    let type = 'INFO';
+                    if (log.severity === 'CRITICAL') type = 'CRITICAL';
+                    else if (log.severity === 'WARNING') type = 'WARNING';
+                    else if (log.action?.toLowerCase().includes('registration') || log.action?.toLowerCase().includes('user created')) type = 'REGISTRATION';
+
+                    return {
+                        _id: log._id,
+                        title: log.action || 'System Activity',
+                        message: log.description || log.detail || 'New activity logged',
+                        type: type,
+                        createdAt: log.timestamp || log.createdAt,
+                        isRead: hasBeenRead || !isRecent, 
+                        isLog: true
+                    };
+                });
+
+            // Combine and sort by date
+            const combined = [...(Array.isArray(notifs) ? notifs : []), ...logNotifs]
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                
+            setNotifications(combined.slice(0, 20));
+        } catch (err) {
+            console.error('Failed to fetch notifications:', err);
+        }
+    };
+
+    useEffect(() => {
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 5000); // 5s for "instant" feel
+        return () => clearInterval(interval);
+    }, []);
+
+    const handleMarkAsRead = async (id: string) => {
+        try {
+            const notification = notifications.find(n => n._id === id);
+            if (notification?.isLog) {
+                const readLogIds = JSON.parse(localStorage.getItem('readLogIds') || '[]');
+                if (!readLogIds.includes(id)) {
+                    localStorage.setItem('readLogIds', JSON.stringify([...readLogIds, id]));
+                }
+            } else {
+                await api.patch(`/notifications/${id}/read`, {});
+            }
+            fetchNotifications();
+        } catch (err) { console.error(err); }
+    };
+
+    const handleMarkAllAsRead = async () => {
+        try {
+            // Mark real notifications as read
+            await api.patch('/notifications/read-all', {});
+            
+            // Mark all current logs as read
+            const currentLogIds = notifications.filter(n => n.isLog).map(n => n._id);
+            const existingReadLogIds = JSON.parse(localStorage.getItem('readLogIds') || '[]');
+            const newReadLogIds = Array.from(new Set([...existingReadLogIds, ...currentLogIds]));
+            localStorage.setItem('readLogIds', JSON.stringify(newReadLogIds));
+            
+            fetchNotifications();
+        } catch (err) { console.error(err); }
+    };
+
+    const handleClearAll = async () => {
+        try {
+            // Clear notifications on backend
+            await api.delete('/notifications');
+            
+            // Mark all current logs as 'cleared' locally
+            const currentLogIds = notifications.filter(n => n.isLog).map(n => n._id);
+            const existingClearedIds = JSON.parse(localStorage.getItem('clearedLogIds') || '[]');
+            localStorage.setItem('clearedLogIds', JSON.stringify(Array.from(new Set([...existingClearedIds, ...currentLogIds]))));
+            
+            fetchNotifications();
+        } catch (err) { console.error(err); }
+    };
+
+    const unreadCount = notifications.filter(n => !n.isRead).length;
 
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : { name: 'Super Admin', role: 'admin' };
     const initials = user.name ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 'SA';
 
+    const { results: searchResults, loading: searchLoading } = useUniversalSearch(searchQuery, user.role);
+
     const formatRole = (role: string) => {
         return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     };
+
+    // Close dropdown on click outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     return (
         <>
@@ -30,13 +157,53 @@ const Header = () => {
 
                 {/* Search */}
                 <div className="flex-1 max-w-md mx-8 hidden md:block">
-                    <div className="relative">
+                    <div className="relative" ref={dropdownRef}>
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={16} />
+                        {searchLoading && searchQuery.length >= 2 && (
+                            <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+                        )}
                         <input
                             type="text"
-                            placeholder="Search users, master data, system logs..."
+                            value={searchQuery}
+                            onChange={(e) => {
+                                setSearchQuery(e.target.value);
+                                setIsDropdownOpen(e.target.value.length >= 2);
+                            }}
+                            onFocus={() => setIsDropdownOpen(searchQuery.length >= 2)}
+                            placeholder="Search users, farmers, cycles, shipments..."
                             className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 border border-transparent focus:border-green-400 focus:outline-none focus:ring-2 focus:ring-green-400/20 text-sm dark:text-gray-200 dark:placeholder-gray-400 transition-all"
                         />
+
+                        {/* Live Results Dropdown */}
+                        {isDropdownOpen && searchQuery.length >= 2 && (
+                            <div className="absolute top-full left-0 w-full mt-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
+                                {searchResults.length > 0 ? (
+                                    <ul>
+                                        {searchResults.map((result) => (
+                                            <li
+                                                key={result.id}
+                                                onClick={() => { navigate(result.url); setSearchQuery(''); setIsDropdownOpen(false); }}
+                                                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors border-b border-gray-50 dark:border-gray-700/50 last:border-0"
+                                            >
+                                                <div className="flex-1 overflow-hidden">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${TYPE_COLOURS[result.type] ?? 'bg-gray-100 text-gray-500'}`}>
+                                                            {result.type}
+                                                        </span>
+                                                        <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{result.title}</p>
+                                                    </div>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{result.subtitle}</p>
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : !searchLoading ? (
+                                    <div className="p-4 text-center text-sm text-gray-500">No results found</div>
+                                ) : (
+                                    <div className="p-4 text-center text-sm text-gray-400">Searching...</div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -46,10 +213,18 @@ const Header = () => {
 
                     <button
                         onClick={() => setIsNotificationsOpen(true)}
-                        className="relative p-2.5 rounded-xl bg-white/80 hover:bg-green-500 hover:text-white transition-all shadow-sm dark:bg-gray-700/50 dark:text-gray-200 dark:hover:bg-green-600"
+                        className={`relative p-2.5 rounded-xl transition-all shadow-sm ${
+                            unreadCount > 0 
+                                ? 'bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400' 
+                                : 'bg-white/80 dark:bg-gray-700/50 text-gray-500 dark:text-gray-200 hover:bg-green-500 hover:text-white'
+                        }`}
                     >
                         <Bell size={18} />
-                        <span className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full ring-2 ring-white dark:ring-gray-800" />
+                        {unreadCount > 0 && (
+                            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center bg-green-600 rounded-full text-[10px] font-bold text-white ring-2 ring-white dark:ring-gray-800">
+                                {unreadCount}
+                            </span>
+                        )}
                     </button>
 
                     <div className="flex items-center gap-3 pl-2 border-l border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors">
@@ -68,6 +243,10 @@ const Header = () => {
             <NotificationsModal
                 isOpen={isNotificationsOpen}
                 onClose={() => setIsNotificationsOpen(false)}
+                notifications={notifications}
+                onMarkAsRead={handleMarkAsRead}
+                onMarkAllAsRead={handleMarkAllAsRead}
+                onClearAll={handleClearAll}
             />
         </>
     );

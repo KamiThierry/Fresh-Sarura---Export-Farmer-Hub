@@ -2,6 +2,7 @@ import Farmer from '../models/Farmer.js';
 import logger from '../utils/logger.js';
 import User from '../models/User.js';
 import { sendFarmerWelcomeEmail } from '../utils/emailService.js';
+import { createEventLog } from './eventLogController.js';
 
 // @route GET /api/v1/farmers
 export const getFarmers = async (req, res) => {
@@ -103,6 +104,22 @@ export const registerFarmer = async (req, res) => {
                 message: 'Farmer registered successfully!',
                 farmer,
             });
+
+            await createEventLog({
+                module: 'Farmer Management',
+                action: 'Farmer Registered',
+                severity: 'INFO',
+                description: `New farmer registered: ${full_name} from ${district}, ${province}`,
+                actor: req.user.name,
+                metadata: {
+                    farmerId: farmer._id,
+                    farmerName: full_name,
+                    district,
+                    province,
+                    produce: produce_types,
+                    farmSize: farm_size_hectares
+                }
+            });
         } catch (farmerError) {
             // ROLLBACK: If farmer creation fails and we JUST created the user in this request, delete the user
             if (newlyCreatedUser && farmerUser) {
@@ -141,6 +158,15 @@ export const updateFarmer = async (req, res) => {
 
         logger.info(`Farmer updated: ${farmer.full_name} by ${req.user.email}`);
         res.status(200).json({ message: 'Farmer updated successfully', farmer });
+
+        await createEventLog({
+            module: 'Farmer Management',
+            action: 'Farmer Updated',
+            severity: 'INFO',
+            description: `Farmer record updated: ${farmer.full_name}`,
+            actor: req.user.name,
+            metadata: { farmerId: farmer._id, changes: updateFields }
+        });
     } catch (error) {
         logger.error('Update farmer error:', error.message);
         res.status(500).json({ message: error.message || 'Server error updating farmer' });
@@ -161,6 +187,15 @@ export const deleteFarmer = async (req, res) => {
 
         logger.info(`Farmer permanently deleted: ${farmer.full_name} by ${req.user.email}`);
         res.status(200).json({ message: 'Farmer and linked account deleted successfully' });
+
+        await createEventLog({
+            module: 'Farmer Management',
+            action: 'Farmer Deleted',
+            severity: 'WARNING',
+            description: `Farmer permanently deleted: ${farmer.full_name}`,
+            actor: req.user.name,
+            metadata: { farmerName: farmer.full_name }
+        });
     } catch (error) {
         res.status(500).json({ message: 'Server error deleting farmer' });
     }
@@ -183,6 +218,15 @@ export const suspendFarmer = async (req, res) => {
 
         logger.info(`Farmer suspended: ${farmer.full_name} by ${req.user.email}`);
         res.status(200).json({ message: 'Farmer account suspended', farmer });
+
+        await createEventLog({
+            module: 'Farmer Management',
+            action: 'Farmer Suspended',
+            severity: 'WARNING',
+            description: `Farmer account suspended: ${farmer.full_name}`,
+            actor: req.user.name,
+            metadata: { farmerId: farmer._id, farmerName: farmer.full_name }
+        });
     } catch (error) {
         res.status(500).json({ message: 'Server error suspending farmer' });
     }
@@ -205,6 +249,15 @@ export const reactivateFarmer = async (req, res) => {
 
         logger.info(`Farmer reactivated: ${farmer.full_name} by ${req.user.email}`);
         res.status(200).json({ message: 'Farmer account reactivated', farmer });
+
+        await createEventLog({
+            module: 'Farmer Management',
+            action: 'Farmer Reactivated',
+            severity: 'INFO',
+            description: `Farmer account reactivated: ${farmer.full_name}`,
+            actor: req.user.name,
+            metadata: { farmerId: farmer._id, farmerName: farmer.full_name }
+        });
     } catch (error) {
         res.status(500).json({ message: 'Server error reactivating farmer' });
     }

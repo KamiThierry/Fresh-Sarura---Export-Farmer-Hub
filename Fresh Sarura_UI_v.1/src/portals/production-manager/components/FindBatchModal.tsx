@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Search, QrCode, User, Scale, Plane, FileText, CheckCircle2, ArrowRight, Loader2, AlertCircle, Package } from 'lucide-react';
 import { api } from '../../../lib/api';
@@ -31,6 +31,46 @@ const FindBatchModal = ({ isOpen, onClose }: FindBatchModalProps) => {
     const [isSearching, setIsSearching] = useState(false);
     const [traceData, setTraceData] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
+    const [availableIds, setAvailableIds] = useState<{ id: string; type: string; produce?: string }[]>([]);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const fetchIds = async () => {
+            try {
+                const [stockRes, batchRes] = await Promise.all([
+                    api.get('/stock'),
+                    api.get('/export-batches')
+                ]);
+                const stockData = stockRes.data?.data || stockRes.data || [];
+                const batchData = batchRes.data?.data || batchRes.data || [];
+
+                const ids = [
+                    ...stockData.map((s: any) => ({ id: s.stockId, type: 'Stock', produce: s.cropName })),
+                    ...batchData.map((b: any) => ({ id: b.batchId, type: 'Export Batch', produce: b.cropName }))
+                ].filter(item => item.id);
+                setAvailableIds(ids);
+            } catch (err) {
+                console.error('Failed to fetch available IDs', err);
+            }
+        };
+        if (isOpen) fetchIds();
+    }, [isOpen]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setShowDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const filteredOptions = availableIds.filter(opt => 
+        opt.id.toLowerCase().includes(query.toLowerCase()) || 
+        opt.produce?.toLowerCase().includes(query.toLowerCase())
+    ).slice(0, 5);
 
     if (!isOpen) return null;
 
@@ -106,13 +146,43 @@ const FindBatchModal = ({ isOpen, onClose }: FindBatchModalProps) => {
                             </p>
 
                             <form onSubmit={handleSearch} className="w-full max-w-sm space-y-4">
-                                <input
-                                    type="text"
-                                    placeholder="EB-XXXXXX or STK-XXXXXX"
-                                    value={query}
-                                    onChange={(e) => setQuery(e.target.value)}
-                                    className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-center text-base font-mono font-medium tracking-wider uppercase dark:text-white"
-                                />
+                                <div className="relative" ref={dropdownRef}>
+                                    <input
+                                        type="text"
+                                        placeholder="EB-XXXXXX or STK-XXXXXX"
+                                        value={query}
+                                        onFocus={() => setShowDropdown(true)}
+                                        onChange={(e) => {
+                                            setQuery(e.target.value);
+                                            setShowDropdown(true);
+                                        }}
+                                        className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-center text-base font-mono font-medium tracking-wider uppercase dark:text-white"
+                                    />
+
+                                    {showDropdown && query.trim() && filteredOptions.length > 0 && (
+                                        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                                            {filteredOptions.map((opt, i) => (
+                                                <button
+                                                    key={i}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setQuery(opt.id);
+                                                        setShowDropdown(false);
+                                                    }}
+                                                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors text-left border-b border-gray-50 dark:border-gray-700/50 last:border-0"
+                                                >
+                                                    <div>
+                                                        <p className="text-sm font-bold text-gray-900 dark:text-white font-mono">{opt.id}</p>
+                                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">{opt.produce || 'Unknown Produce'}</p>
+                                                    </div>
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${opt.type === 'Stock' ? 'bg-purple-100 text-purple-600' : 'bg-orange-100 text-orange-600'}`}>
+                                                        {opt.type}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
 
                                 {error && (
                                     <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl text-left">

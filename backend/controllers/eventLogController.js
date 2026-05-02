@@ -9,7 +9,11 @@ export const getAllLogs = async (req, res) => {
         const { module, action, actor, search } = req.query;
         let query = {};
 
-        if (module && module !== 'All') query.module = module;
+        if (module && module !== 'All') {
+            // Safely handle '&' encoding differences in URL parameters
+            const decodedModule = decodeURIComponent(module).replace(/\+/g, ' ');
+            query.module = { $regex: `^${decodedModule.replace(/&/g, '.*')}$`, $options: 'i' };
+        }
         if (action && action !== 'All') query.action = action;
         if (actor && actor !== 'All') query.actor = actor;
 
