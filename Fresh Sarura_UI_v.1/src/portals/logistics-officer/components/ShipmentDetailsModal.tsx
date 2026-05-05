@@ -1,5 +1,6 @@
-import { X, FileText, Download, Upload, Eye, CheckCircle, AlertTriangle, Clock, Plane, Package, Calendar, Loader2 } from 'lucide-react';
-import { useRef, useState, useEffect } from 'react';
+import { X, FileText, Upload, Eye, CheckCircle, AlertTriangle, Clock, 
+         Plane, Package, Calendar, Loader2, XCircle } from 'lucide-react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../../lib/api';
@@ -8,158 +9,217 @@ interface ShipmentDetailsModalProps {
     isOpen: boolean;
     onClose: () => void;
     shipment: any;
-    onDispatched?: () => void;
+    onStatusChange?: () => void;
 }
 
-const ShipmentDetailsModal = ({ isOpen, onClose, shipment, onDispatched }: ShipmentDetailsModalProps) => {
+// Status config — one source of truth
+const statusConfig: Record<string, { label: string; color: string; dot: string }> = {
+    PackingListGenerated: { label: 'Scheduled',   color: 'text-blue-600 dark:text-blue-400',   dot: 'bg-blue-500' },
+    Departed:             { label: 'In Transit',  color: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500 animate-pulse' },
+    Shipped:              { label: 'Shipped',      color: 'text-green-600 dark:text-green-400', dot: 'bg-green-500' },
+    Cancelled:            { label: 'Cancelled',   color: 'text-red-600 dark:text-red-400',     dot: 'bg-red-500' },
+    Draft:                { label: 'Draft',        color: 'text-gray-500',                      dot: 'bg-gray-400' },
+};
+
+const REQUIRED_DOC_TYPES = [
+    { label: 'Packing List',              key: 'PackingList' },
+    { label: 'Commercial Invoice',        key: 'CommercialInvoice' },
+    { label: 'Phytosanitary Certificate', key: 'PhytosanitaryCert' },
+    { label: 'Airway Bill (AWB)',          key: 'AWB' },
+];
+
+const ShipmentDetailsModal = ({ isOpen, onClose, shipment, onStatusChange }: ShipmentDetailsModalProps) => {
     const navigate = useNavigate();
-    const [isDispatching, setIsDispatching] = useState(false);
+    const [isActioning, setIsActioning] = useState(false);
     const [realDocs, setRealDocs] = useState<any[]>([]);
-    const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
+    const [eventLogs, setEventLogs] = useState<any[]>([]);
+    const [uploadingDocKey, setUploadingDocKey] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [pendingDocType, setPendingDocType] = useState<string | null>(null);
+    const [pendingDocKey, setPendingDocKey] = useState<string | null>(null);
+    const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+    const [cancelReason, setCancelReason] = useState('');
 
-    // State for documents to allow mock interaction
-    const [documents, setDocuments] = useState([
-        { id: '1', name: 'Packing List', status: 'generated', fileName: 'PL-2024-001.pdf' },
-        { id: '2', name: 'Commercial Invoice', status: 'missing', fileName: null },
-        { id: '3', name: 'Phytosanitary Certificate', status: 'missing', fileName: null },
-        { id: '4', name: 'Airway Bill (AWB)', status: 'uploaded', fileName: 'awb_scan_123.pdf' },
-    ]);
-
-    // Fetch real documents when shipment changes
     useEffect(() => {
         if (isOpen && shipment?._id) {
+            setShowCancelConfirm(false);
+            setCancelReason('');
+
+            // Fetch real documents
             api.get(`/export-documents?shipmentId=${shipment._id}`)
-                .then(res => setRealDocs(res.data || []))
+                .then(res => setRealDocs(res.data?.data || res.data || []))
+                .catch(console.error);
+
+            // Fetch real event logs for this shipment
+            api.get(`/event-logs?module=Export & Shipments`)
+                .then(res => {
+                    const all = res.data?.data || res.data || [];
+                    // Filter to logs mentioning this shipment's plNumber or _id
+                    const filtered = all.filter((log: any) =>
+                        log.metadata?.shipmentId === shipment._id ||
+                        log.description?.includes(shipment.plNumber)
+                    );
+                    setEventLogs(filtered.slice(0, 6)); // max 6 entries
+                })
                 .catch(console.error);
         }
     }, [isOpen, shipment]);
 
+    // Departure overdue — flight time has passed but still Scheduled
+    const isDepartureOverdue = useMemo(() => {
+        if (!shipment) return false;
+        if (!shipment.departureDate) return false;
+        if (shipment.status !== 'PackingListGenerated') return false;
+        const depDateTime = new Date(shipment.departureDate);
+        if (shipment.departureTime) {
+            const [h, m] = shipment.departureTime.split(':').map(Number);
+            depDateTime.setHours(h, m, 0, 0);
+        }
+        return depDateTime < new Date();
+    }, [shipment]);
+
+    // Arrival overdue — departure + flight hours has passed but still In Transit
+    const isArrivalOverdue = useMemo(() => {
+        if (!shipment) return false;
+        if (shipment.status !== 'Departed') return false;
+        if (!shipment.departedAt) return false;
+        const arrivalTime = new Date(shipment.departedAt);
+        arrivalTime.setHours(
+            arrivalTime.getHours() + (shipment.estimatedFlightHours || 8)
+        );
+        return arrivalTime < new Date();
+    }, [shipment]);
+
+    const cfg = (shipment && statusConfig[shipment.status]) || statusConfig.Draft;
+
     if (!isOpen || !shipment) return null;
 
-    const handleUpload = (id: string) => {
-        setDocuments(prev => prev.map(doc => {
-            if (doc.id === id) {
-                return { ...doc, status: 'uploaded', fileName: 'scanned_doc_v1.pdf' };
-            }
-            return doc;
-        }));
-    };
-
-    const handleManageDocuments = () => {
-        onClose();
-        navigate(`/logistics/documents?shipmentId=${shipment._id || shipment.id}`);
-    };
-
-    const handleDispatch = async () => {
-        setIsDispatching(true);
+    const handleDepart = async () => {
+        setIsActioning(true);
         try {
-            await api.patch(`/shipments/${shipment._id}/dispatch`, {});
-            onDispatched?.();
+            await api.patch(`/shipments/${shipment._id}/depart`, {});
+            onStatusChange?.();
             onClose();
-        } catch (err) {
-            console.error('Failed to dispatch:', err);
-        } finally {
-            setIsDispatching(false);
-        }
+        } catch (err) { console.error(err); }
+        finally { setIsActioning(false); }
     };
 
-    const handleRealUpload = (docType: string) => {
-        const typeMap: Record<string, string> = {
-            'Packing List': 'PackingList',
-            'Commercial Invoice': 'CommercialInvoice',
-            'Phytosanitary Certificate': 'PhytosanitaryCert',
-            'Airway Bill (AWB)': 'AWB'
-        };
-        setPendingDocType(typeMap[docType] || 'Other');
+    const handleShip = async () => {
+        setIsActioning(true);
+        try {
+            await api.patch(`/shipments/${shipment._id}/ship`, {});
+            onStatusChange?.();
+            onClose();
+        } catch (err) { console.error(err); }
+        finally { setIsActioning(false); }
+    };
+
+    const handleCancel = async () => {
+        if (!showCancelConfirm) { setShowCancelConfirm(true); return; }
+        setIsActioning(true);
+        try {
+            await api.patch(`/shipments/${shipment._id}/cancel`, { reason: cancelReason });
+            onStatusChange?.();
+            onClose();
+        } catch (err) { console.error(err); }
+        finally { setIsActioning(false); }
+    };
+
+    const handleRealUpload = (docKey: string) => {
+        setPendingDocKey(docKey);
         fileInputRef.current?.click();
     };
 
     const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !pendingDocType) return;
-        setUploadingDocId(pendingDocType);
+        if (!file || !pendingDocKey) return;
+        setUploadingDocKey(pendingDocKey);
         const reader = new FileReader();
         reader.onloadend = async () => {
             try {
                 await api.post('/export-documents', {
                     shipmentId: shipment._id,
-                    docType: pendingDocType,
+                    docType: pendingDocKey,
                     fileName: file.name,
                     fileUrl: reader.result as string,
                 });
-                // Refresh docs
                 const res = await api.get(`/export-documents?shipmentId=${shipment._id}`);
-                setRealDocs(res.data || []);
-            } catch (err) {
-                console.error('Upload failed:', err);
-            } finally {
-                setUploadingDocId(null);
-                setPendingDocType(null);
-            }
+                setRealDocs(res.data?.data || res.data || []);
+            } catch (err) { console.error('Upload failed:', err); }
+            finally { setUploadingDocKey(null); setPendingDocKey(null); }
         };
         reader.readAsDataURL(file);
         e.target.value = '';
     };
 
-    // Mock Audit Log
-    const auditLog = [
-        { time: 'Today, 09:00', event: 'Flight WB300 Departed KGL', icon: <Plane size={14} /> },
-        { time: 'Yesterday, 16:30', event: 'Phyto Cert uploaded by John D.', icon: <Upload size={14} /> },
-        { time: 'Yesterday, 14:00', event: 'Packing List generated automatically', icon: <FileText size={14} /> },
-        { time: 'Yesterday, 10:15', event: 'Shipment created', icon: <Clock size={14} /> },
-    ];
+    const logIconMap: Record<string, any> = {
+        'Flight Departed':       <Plane size={14} />,
+        'Shipment Shipped':      <CheckCircle size={14} />,
+        'Document Uploaded':     <Upload size={14} />,
+        'Shipment Created':      <Clock size={14} />,
+        'Shipment Cancelled':    <XCircle size={14} />,
+    };
+
+    const formatLogTime = (dateStr: string) => {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+        const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        if (diffDays === 0) return `Today, ${timeStr}`;
+        if (diffDays === 1) return `Yesterday, ${timeStr}`;
+        return `${date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}, ${timeStr}`;
+    };
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
-
-            {/* Modal Container */}
-            <div className="relative w-full max-w-4xl bg-white dark:bg-gray-900 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative w-full max-w-4xl bg-white dark:bg-gray-900 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
 
                 {/* Header */}
-                <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-white dark:bg-gray-900 z-10">
+                <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                     <div>
                         <div className="flex items-center gap-3 mb-1">
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Shipment Details</h2>
                             <span className="px-2.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-xs font-mono font-medium">
                                 AWB: {shipment.awbNumber || '—'}
                             </span>
+                            {/* Overdue alert */}
+                            {isDepartureOverdue && (
+                                <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-bold border border-red-200 dark:border-red-800/30">
+                                    <AlertTriangle size={11} />
+                                    Departure overdue — confirm flight status
+                                </span>
+                            )}
                         </div>
                         <div className="flex items-center gap-2 text-sm text-gray-500">
-                            <span className="font-medium text-gray-900 dark:text-white">{shipment.plNumber || shipment.id}</span>
+                            <span className="font-medium text-gray-900 dark:text-white">{shipment.plNumber}</span>
                             <span>•</span>
-                            <span>{shipment.clientName || shipment.client}</span>
+                            <span>{shipment.clientName || '—'}</span>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-4">
+                        {/* Real status */}
                         <div className="flex flex-col items-end">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Status</span>
-                            <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                {shipment.status === 'Dispatched' ? 'Dispatched' : 'Active'}
+                            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Status</span>
+                            <div className={`flex items-center gap-1.5 font-bold text-sm ${cfg.color}`}>
+                                <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
+                                {cfg.label}
                             </div>
                         </div>
-                        <button
-                            onClick={onClose}
-                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-500 dark:text-gray-400"
-                        >
+                        <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-500">
                             <X size={20} />
                         </button>
                     </div>
                 </div>
 
-                {/* Content - Scrollable */}
+                {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50 dark:bg-gray-900/50">
 
-                    {/* Section 1: Trip Summary Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                        {/* Route Card */}
+                    {/* Trip Summary Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        {/* Route */}
                         <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                            <div className="flex items-center gap-2 mb-3 text-gray-500 text-xs font-medium uppercase tracking-wider">
+                            <div className="flex items-center gap-2 mb-3 text-gray-400 text-xs font-semibold uppercase tracking-wide">
                                 <Plane size={14} /> Route Info
                             </div>
                             <div className="flex items-center justify-between">
@@ -167,42 +227,59 @@ const ShipmentDetailsModal = ({ isOpen, onClose, shipment, onDispatched }: Shipm
                                     <div className="text-2xl font-bold text-gray-900 dark:text-white">KGL</div>
                                     <div className="text-xs text-gray-400">Kigali</div>
                                 </div>
-                                <div className="flex-1 flex flex-col items-center px-4">
-                                    <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 font-bold mb-1">{shipment.flightNumber || '—'}</span>
+                                <div className="flex-1 flex flex-col items-center px-3">
+                                    <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 font-bold mb-1">
+                                        {shipment.flightNumber || '—'}
+                                    </span>
                                     <div className="w-full h-0.5 bg-gray-200 dark:bg-gray-700 relative">
                                         <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-600" />
                                     </div>
                                     <span className="text-[10px] text-gray-400 mt-1">Direct</span>
                                 </div>
                                 <div className="text-right">
-                                    <div className="text-2xl font-bold text-gray-900 dark:text-white">{shipment.destination?.slice(0,3).toUpperCase() || '—'}</div>
-                                    <div className="text-xs text-gray-400 font-bold truncate max-w-[80px]">{shipment.destination || '—'}</div>
+                                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                                        {shipment.destination?.slice(0, 3).toUpperCase() || '—'}
+                                    </div>
+                                    <div className="text-xs text-gray-400 truncate max-w-[80px]">{shipment.destination || '—'}</div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Timing Card */}
+                        {/* Schedule */}
                         <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                            <div className="flex items-center gap-2 mb-3 text-gray-500 text-xs font-medium uppercase tracking-wider">
+                            <div className="flex items-center gap-2 mb-3 text-gray-400 text-xs font-semibold uppercase tracking-wide">
                                 <Calendar size={14} /> Schedule
                             </div>
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center text-sm">
                                     <span className="text-gray-500">Departure</span>
                                     <span className="font-bold text-gray-900 dark:text-white">
-                                        {shipment.departureDate ? new Date(shipment.departureDate).toLocaleDateString() : '—'}
+                                        {shipment.departureDate
+                                            ? new Date(shipment.departureDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                                            : '—'}
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center text-sm">
                                     <span className="text-gray-500">Time</span>
-                                    <span className="font-bold text-gray-900 dark:text-white">{shipment.departureTime || '—'}</span>
+                                    <span className={`font-bold ${isDepartureOverdue ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>
+                                        {shipment.departureTime || '—'}
+                                        {isDepartureOverdue && ' ⚠'}
+                                    </span>
                                 </div>
+                                {shipment.departedAt && (
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-500">Departed</span>
+                                        <span className="font-bold text-amber-600 dark:text-amber-400">
+                                            {new Date(shipment.departedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
-                        {/* Cargo Card */}
+                        {/* Cargo */}
                         <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                            <div className="flex items-center gap-2 mb-3 text-gray-500 text-xs font-medium uppercase tracking-wider">
+                            <div className="flex items-center gap-2 mb-3 text-gray-400 text-xs font-semibold uppercase tracking-wide">
                                 <Package size={14} /> Cargo Check
                             </div>
                             <div className="flex items-center gap-4 mt-2">
@@ -212,75 +289,81 @@ const ShipmentDetailsModal = ({ isOpen, onClose, shipment, onDispatched }: Shipm
                                 </div>
                                 <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
                                 <div>
-                                    <span className="block text-2xl font-bold text-gray-900 dark:text-white">{shipment.totalWeightKg || 0} <small className="text-sm font-normal text-gray-400">kg</small></span>
+                                    <span className="block text-2xl font-bold text-gray-900 dark:text-white">
+                                        {shipment.totalWeightKg || 0}
+                                        <small className="text-sm font-normal text-gray-400 ml-1">kg</small>
+                                    </span>
                                     <span className="text-xs text-gray-500">Gross Weight</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
+                    {/* Cancellation reason (if cancelled) */}
+                    {shipment.status === 'Cancelled' && shipment.cancellationReason && (
+                        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 rounded-xl flex items-start gap-3">
+                            <XCircle size={18} className="text-red-500 flex-shrink-0 mt-0.5" />
+                            <div>
+                                <p className="text-sm font-bold text-red-700 dark:text-red-400">Shipment Cancelled</p>
+                                <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">{shipment.cancellationReason}</p>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="flex flex-col lg:flex-row gap-6">
 
-                        {/* Section 2: Document Checklist (Left - 60%) */}
+                        {/* Documents */}
                         <div className="flex-1">
                             <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                 <FileText size={18} className="text-indigo-600" />
                                 Required Export Documents
                             </h3>
                             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+                                <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileSelected} />
                                 <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
-                                    {/* Hidden file input */}
-                                    <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileSelected} />
-
-                                    {/* Checklist logic: merge real docs with required types */}
-                                    {['Packing List', 'Commercial Invoice', 'Phytosanitary Certificate', 'Airway Bill (AWB)'].map(type => {
-                                        const typeMap: Record<string, string> = {
-                                            'Packing List': 'PackingList',
-                                            'Commercial Invoice': 'CommercialInvoice',
-                                            'Phytosanitary Certificate': 'PhytosanitaryCert',
-                                            'Airway Bill (AWB)': 'AWB'
-                                        };
-                                        const dbType = typeMap[type];
-                                        const uploadedDoc = realDocs.find(d => d.docType === dbType);
-
+                                    {REQUIRED_DOC_TYPES.map(({ label, key }) => {
+                                        const uploaded = realDocs.find(d => d.docType === key);
+                                        const isUploading = uploadingDocKey === key;
                                         return (
-                                            <div key={type} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                                            <div key={key} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
                                                 <div className="flex items-center gap-4">
-                                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0
-                                                        ${uploadedDoc 
+                                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                                                        uploaded
                                                             ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'
-                                                            : 'bg-amber-100 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'}`}>
+                                                            : 'bg-amber-100 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'
+                                                    }`}>
                                                         <FileText size={20} />
                                                     </div>
                                                     <div>
-                                                        <div className="font-bold text-sm text-gray-900 dark:text-white">{type}</div>
-                                                        {uploadedDoc ? (
-                                                            <div className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
-                                                                <CheckCircle size={10} /> {uploadedDoc.fileName}
-                                                            </div>
+                                                        <p className="font-bold text-sm text-gray-900 dark:text-white">{label}</p>
+                                                        {uploaded ? (
+                                                            <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
+                                                                <CheckCircle size={10} /> {uploaded.fileName}
+                                                            </p>
                                                         ) : (
-                                                            <div className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5">
+                                                            <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5">
                                                                 <AlertTriangle size={10} /> Required
-                                                            </div>
+                                                            </p>
                                                         )}
                                                     </div>
                                                 </div>
-
-                                                <div>
-                                                    {uploadedDoc ? (
-                                                        <button onClick={() => window.open(uploadedDoc.fileUrl)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                                                            <Eye size={16} />
-                                                        </button>
-                                                    ) : (
-                                                        <button
-                                                            onClick={() => handleRealUpload(type)}
-                                                            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
-                                                        >
-                                                            {uploadingDocId === dbType ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                                                            Upload PDF
-                                                        </button>
-                                                    )}
-                                                </div>
+                                                {uploaded ? (
+                                                    <button
+                                                        onClick={() => window.open(uploaded.fileUrl)}
+                                                        className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                                    >
+                                                        <Eye size={16} />
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleRealUpload(key)}
+                                                        disabled={isUploading || shipment.status === 'Cancelled'}
+                                                        className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors disabled:opacity-40"
+                                                    >
+                                                        {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                                                        Upload PDF
+                                                    </button>
+                                                )}
                                             </div>
                                         );
                                     })}
@@ -288,63 +371,141 @@ const ShipmentDetailsModal = ({ isOpen, onClose, shipment, onDispatched }: Shipm
                             </div>
                         </div>
 
-                        {/* Section 3: Audit Log (Right - 40%) */}
+                        {/* Shipment Log — real data */}
                         <div className="w-full lg:w-96">
                             <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                 <Clock size={18} className="text-gray-400" />
                                 Shipment Log
                             </h3>
-                            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-fit">
-                                <div className="relative border-l border-gray-200 dark:border-gray-700 ml-3 space-y-8">
-                                    {auditLog.map((log, index) => (
-                                        <div key={index} className="relative pl-6">
-                                            <div className="absolute -left-[13px] top-0 w-7 h-7 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-400 z-10">
-                                                {log.icon}
+                            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
+                                {eventLogs.length === 0 ? (
+                                    <p className="text-sm text-gray-400 text-center py-4">No log entries yet.</p>
+                                ) : (
+                                    <div className="relative border-l border-gray-200 dark:border-gray-700 ml-3 space-y-6">
+                                        {eventLogs.map((log: any, i: number) => (
+                                            <div key={i} className="relative pl-6">
+                                                <div className="absolute -left-[13px] top-0 w-7 h-7 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-400 z-10">
+                                                    {logIconMap[log.action] || <Clock size={14} />}
+                                                </div>
+                                                <span className="text-xs font-bold text-gray-400 uppercase block mb-0.5">
+                                                    {formatLogTime(log.timestamp)}
+                                                </span>
+                                                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                                    {log.description}
+                                                </span>
+                                                {log.actor && (
+                                                    <span className="text-xs text-gray-400 block mt-0.5">by {log.actor}</span>
+                                                )}
                                             </div>
-                                            <div className="flex flex-col">
-                                                <span className="text-xs font-bold text-gray-400 uppercase mb-1">{log.time}</span>
-                                                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{log.event}</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
-
                     </div>
+
+                    {/* Cancel confirm panel */}
+                    {showCancelConfirm && (
+                        <div className="mt-6 p-4 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 rounded-xl">
+                            <p className="text-sm font-bold text-red-700 dark:text-red-400 mb-3">
+                                Cancelling this shipment will return all export batches to "Ready for Export". This cannot be undone.
+                            </p>
+                            <textarea
+                                value={cancelReason}
+                                onChange={e => setCancelReason(e.target.value)}
+                                placeholder="Reason for cancellation (e.g. Flight cancelled by airline)..."
+                                rows={2}
+                                className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-red-200 dark:border-red-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 mb-2 resize-none"
+                            />
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setShowCancelConfirm(false)}
+                                    className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                >
+                                    Keep Shipment
+                                </button>
+                                <button
+                                    onClick={handleCancel}
+                                    disabled={isActioning || !cancelReason.trim()}
+                                    className="flex-1 px-3 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {isActioning ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
+                                    Confirm Cancellation
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                {/* Footer Actions */}
-                <div className="p-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex justify-between gap-3 z-10">
-                    <button onClick={onClose} className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm">
-                        Close
-                    </button>
-                    <div className="flex items-center gap-3">
-                        <button onClick={handleManageDocuments} className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-lg text-sm font-bold transition-colors hover:bg-indigo-100">
-                            Manage Documents
+                {/* Footer */}
+                <div className="p-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex justify-between gap-3">
+                    <div className="flex gap-2">
+                        <button
+                            onClick={onClose}
+                            className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-50 transition-colors"
+                        >
+                            Close
                         </button>
-                        {shipment?.status === 'PackingListGenerated' && (
+                        {/* Cancel — only for non-terminal statuses */}
+                        {!['Shipped', 'Cancelled'].includes(shipment.status) && !showCancelConfirm && (
                             <button
-                                onClick={handleDispatch}
-                                disabled={isDispatching}
-                                className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${
-                                    isDispatching
-                                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-                                        : 'bg-green-600 hover:bg-green-700 text-white shadow-md'
-                                }`}
+                                onClick={handleCancel}
+                                className="px-4 py-2 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 rounded-lg text-sm font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                             >
-                                {isDispatching ? <Loader2 size={14} className="animate-spin" /> : <Plane size={14} />}
-                                {isDispatching ? 'Dispatching...' : 'Mark as Dispatched'}
+                                Cancel Shipment
                             </button>
                         )}
-                        {shipment?.status === 'Dispatched' && (
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => { onClose(); navigate(`/logistics/documents?shipmentId=${shipment._id}`); }}
+                            className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-lg text-sm font-bold hover:bg-indigo-100 transition-colors"
+                        >
+                            Manage Documents
+                        </button>
+
+                        {/* Scheduled → confirm departed */}
+                        {(shipment.status === 'PackingListGenerated') && (
+                            <button
+                                onClick={handleDepart}
+                                disabled={isActioning}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-md ${
+                                    isDepartureOverdue
+                                        ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-900/20'
+                                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-900/20'
+                                } disabled:opacity-50`}
+                            >
+                                {isActioning ? <Loader2 size={14} className="animate-spin" /> : <Plane size={14} />}
+                                {isActioning ? 'Updating...' : 'Confirm Flight Departed'}
+                            </button>
+                        )}
+
+                        {/* Departed → confirm cargo shipped */}
+                        {shipment.status === 'Departed' && (
+                            <button
+                                onClick={handleShip}
+                                disabled={isActioning}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-md disabled:opacity-50 ${
+                                    isArrivalOverdue
+                                        ? 'bg-green-600 hover:bg-green-700 text-white shadow-green-900/20'
+                                        : 'bg-green-600 hover:bg-green-700 text-white shadow-green-900/20'
+                                }`}
+                            >
+                                {isActioning
+                                    ? <Loader2 size={14} className="animate-spin" />
+                                    : <CheckCircle size={14} />}
+                                {isActioning ? 'Updating...' : 'Confirm Cargo Shipped'}
+                            </button>
+                        )}
+
+                        {shipment.status === 'Shipped' && (
                             <span className="px-4 py-2 rounded-lg text-sm font-bold bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 flex items-center gap-2">
-                                <CheckCircle size={14} /> Dispatched
+                                <CheckCircle size={14} /> Shipped
                             </span>
                         )}
                     </div>
                 </div>
-
             </div>
         </div>,
         document.body

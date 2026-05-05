@@ -4,10 +4,9 @@ import { useMemo } from 'react';
 const statusStyles: Record<string, string> = {
   'Draft':                  'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
   'PackingListGenerated':   'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  'Dispatched':             'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  'Shipped':                'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
   'Pending':                'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
   'ReadyForExport':         'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  'Shipped':                'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
   'RoomRequested':          'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   'Processing':             'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   'Done':                   'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',

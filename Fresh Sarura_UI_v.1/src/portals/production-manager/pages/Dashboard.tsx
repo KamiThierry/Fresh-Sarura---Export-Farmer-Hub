@@ -43,10 +43,10 @@ const Dashboard = ({
     const pendingRoomRequestsCount = (pendingRoomRequests || []).length;
     const [userName, setUserName] = useState<string>('Production Manager');
 
-    const coldRoomStockKg = (stock || []).reduce(
-        (sum: number, b: any) => sum + ((b.processedWeightKg || 0) - (b.rejectedWeightKg || 0)), 0
-    );
-    const coldRoomStockDisplay = `${(coldRoomStockKg / 1000).toFixed(1)} Tons`;
+    const totalStockKg = (stock || [])
+        .filter((b: any) => b.stockId) // Only count items that have officially entered inventory
+        .reduce((sum: number, b: any) => sum + (b.processedWeightKg || 0), 0);
+    const totalStockDisplay = `${(totalStockKg / 1000).toFixed(1)} Tons`;
 
     const scheduledShipments = (shipments || []).filter(s =>
         s.status === 'PackingListGenerated'
@@ -86,7 +86,7 @@ const Dashboard = ({
             <div className="mb-6">
                 <DashboardStats
                     todaysIntake={`${currentIntake.toLocaleString()} kg`}
-                    coldRoomStock={coldRoomStockDisplay}
+                    totalStock={totalStockDisplay}
                     activeCyclesCount={activeCyclesCount}
                     scheduledExports={`${(scheduledShipmentsWeightKg / 1000).toFixed(1)} Tons`}
                     pendingRoomRequestsCount={pendingRoomRequestsCount}

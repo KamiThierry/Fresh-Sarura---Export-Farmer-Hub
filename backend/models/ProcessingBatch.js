@@ -12,9 +12,10 @@ const schema = new mongoose.Schema({
     cropName: { type: String },
     status: {
         type: String,
-        enum: ['RoomRequested', 'Processing', 'Done'],
+        enum: ['RoomRequested', 'Processing', 'QCDone', 'Done', 'Spoiled'],
         default: 'RoomRequested'
     },
+    confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     stockId: { type: String, unique: true, sparse: true },
 }, { timestamps: true });
 

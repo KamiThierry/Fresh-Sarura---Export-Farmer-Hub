@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
+import jsPDF from 'jspdf';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Search, XCircle as XCircleIcon, ShieldCheck, Box, Thermometer, Plane, Download, ExternalLink, AlertTriangle, CheckCircle, XCircle, Clock, Printer, FileCheck, User, Loader2 } from 'lucide-react';
 import { api } from '../../../lib/api';
+import logo from '@/assets/sarura_logo_nav.png';
+import autoTable from 'jspdf-autotable';
 
 const Traceability = () => {
     const [searchParams] = useSearchParams();
@@ -145,6 +148,169 @@ const Traceability = () => {
         }
     };
 
+    const handleDownloadTraceabilityPDF = async () => {
+        if (!traceData) return;
+
+        const trace = traceData.nodes ? traceData : traceData.data;
+        if (!trace?.nodes?.length) return;
+
+        const doc       = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const timestamp = new Date().toLocaleString('en-GB', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+        const toTC = (s: string) =>
+            String(s).toLowerCase().split(' ')
+                .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+        // ── 1. Header (identical to Reports.tsx) ──
+        try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch {}
+        doc.setTextColor(21, 128, 61);
+        doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+        doc.text('Fresh Sarura', 28, 19);
+        doc.setTextColor(107, 114, 128);
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+        doc.text('Export & Farmer Hub', 28, 23);
+        doc.setFontSize(10);
+        doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+        doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+        doc.setDrawColor(229, 231, 235);
+        doc.line(15, 30, pageWidth - 15, 30);
+
+        // ── 2. Certificate Title Block ──
+        doc.setTextColor(17, 24, 39);
+        doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+        doc.text('TRACEABILITY CERTIFICATE', 15, 42);
+
+        // Summary fields — same style as Reports.tsx
+        const summaryFields = [
+            { label: 'Batch Reference',  value: trace.batchId },
+            { label: 'Total Stages',     value: `${trace.nodes.length} verified lifecycle stages` },
+            { label: 'Generated',        value: timestamp },
+            { label: 'Status',           value: 'VERIFIED — Complete farm-to-export chain' },
+        ];
+
+        let yPos = 50;
+        doc.setFontSize(9);
+        summaryFields.forEach(field => {
+            doc.setTextColor(107, 114, 128); doc.setFont('helvetica', 'normal');
+            doc.text(field.label, 15, yPos);
+            doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
+            doc.text(String(field.value), pageWidth - 15, yPos, { align: 'right' });
+            doc.setDrawColor(243, 244, 246);
+            doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+            yPos += 9;
+        });
+
+        yPos += 4;
+
+        // ── 3. Stages ──
+        const stageLabels: Record<string, string> = {
+            source:   'STAGE 1 — FARM ORIGIN',
+            intake:   'STAGE 2 — FIELD PICKUP & INTAKE',
+            stock:    'STAGE 3 — PACKHOUSE PROCESSING',
+            export:   'STAGE 4 — EXPORT BATCH',
+            shipment: 'STAGE 5 — SHIPMENT',
+        };
+
+        const headStyles: any  = {
+            textColor: [255, 255, 255],
+            fontSize: 8.5,
+            fontStyle: 'bold',
+            fillColor: [92, 184, 92]   // same green as Reports.tsx
+        };
+        const bodyStyles: any  = {
+            fontSize: 8,
+            textColor: [0, 0, 0],
+            cellPadding: { top: 3, bottom: 3, left: 2, right: 2 }
+        };
+        const altStyles: any   = { fillColor: [249, 250, 251] };
+
+        trace.nodes.forEach((node: any, index: number) => {
+            // Page break check
+            if (yPos > 240) { doc.addPage(); yPos = 20; }
+
+            const stageLabel = stageLabels[node.type] || `STAGE ${index + 1}`;
+
+            // Stage header — using autoTable for consistency
+            autoTable(doc, {
+                startY: yPos,
+                head: [[stageLabel, toTC(node.title)]],
+                body: node.details.map((d: any) => [
+                    String(d.label).toUpperCase(),
+                    String(d.value || 'N/A')
+                ]),
+                theme: 'striped',
+                headStyles,
+                bodyStyles,
+                alternateRowStyles: altStyles,
+                columnStyles: {
+                    0: { fontStyle: 'bold', textColor: [107, 114, 128], cellWidth: 55 },
+                    1: { textColor: [17, 24, 39] }
+                },
+                margin: { left: 15, right: 15, bottom: 10 },
+                didParseCell: (data) => {
+                    // Highlight Done/Dispatched/Shipped in green
+                    if (data.section === 'body' && data.column.index === 1) {
+                        const v = String(data.cell.raw).toLowerCase();
+                        if (['done', 'dispatched', 'shipped', 'active'].includes(v)) {
+                            data.cell.styles.textColor = [22, 163, 74];
+                            data.cell.styles.fontStyle = 'bold';
+                        }
+                    }
+                }
+            });
+
+            yPos = (doc as any).lastAutoTable.finalY;
+
+            // Divider between stages — simple spacing (stage headers are enough separator)
+            if (index < trace.nodes.length - 1) {
+                yPos += 12;
+            } else {
+                yPos += 8;
+            }
+        });
+
+        // ── 4. Verification Summary Box ──
+        if (yPos > 240) { doc.addPage(); yPos = 20; }
+
+        autoTable(doc, {
+            startY: yPos,
+            head: [['CERTIFICATE OF SUPPLY CHAIN INTEGRITY']],
+            body: [
+                [`This certificate verifies that batch ${trace.batchId} has completed ${trace.nodes.length} verified`],
+                [`lifecycle stages under Fresh Sarura's traceability framework,`],
+                [`ensuring full farm-to-export accountability.`],
+            ],
+            theme: 'plain',
+            headStyles: { ...headStyles, halign: 'center' },
+            bodyStyles: { ...bodyStyles, halign: 'center', textColor: [107, 114, 128] },
+            margin: { left: 15, right: 15 },
+        });
+
+        // ── 5. Footer (identical to Reports.tsx) ──
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setDrawColor(229, 231, 235);
+            doc.line(15, 275, pageWidth - 15, 275);
+            doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
+            doc.text(
+                'This is a computer generated report by Fresh Sarura. No signature required.',
+                pageWidth / 2, 280, { align: 'center' }
+            );
+            doc.text(
+                'Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw',
+                pageWidth / 2, 287, { align: 'center' }
+            );
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, 287, { align: 'right' });
+        }
+
+        doc.save(`FreshSarura_Traceability_${trace.batchId}_${new Date().toISOString().split('T')[0]}.pdf`);
+    };
+
     return (
         <div className="max-w-6xl mx-auto pb-20 space-y-8">
             {/* Header */}
@@ -229,10 +395,12 @@ const Traceability = () => {
                                 </button>
                                 <button
                                     type="button"
-                                    className="hidden md:flex items-center gap-2 px-6 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-r-2xl border-l border-gray-200 dark:border-gray-600 transition-colors"
+                                    onClick={handleDownloadTraceabilityPDF}
+                                    disabled={!traceData}
+                                    className="hidden md:flex items-center gap-2 px-6 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-r-2xl border-l border-gray-200 dark:border-gray-600 transition-colors disabled:opacity-40"
                                 >
-                                    <Printer size={20} />
-                                    <span className="text-sm">Export<br />Audit Rpt</span>
+                                    <FileCheck size={20} />
+                                    <span className="text-sm text-left">Export<br />Audit Rpt</span>
                                 </button>
                             </form>
                         </div>
@@ -265,6 +433,16 @@ const Traceability = () => {
 
                     {(searchActive && !isLoading && traceData) && (
                         <div className="relative max-w-3xl mx-auto animate-fade-in-up">
+                            <div className="mb-6">
+                                <button
+                                    onClick={handleDownloadTraceabilityPDF}
+                                    disabled={!traceData}
+                                    className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-300 dark:hover:border-green-800 text-gray-700 dark:text-gray-200 hover:text-green-700 dark:hover:text-green-400 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    <FileCheck size={16} />
+                                    Download Traceability Certificate
+                                </button>
+                            </div>
                             <div className="absolute left-8 top-10 bottom-10 w-0.5 bg-gradient-to-b from-green-500 via-blue-500 to-orange-500 opacity-30 dark:opacity-50 hidden md:block"></div>
 
                             <div className="space-y-8">

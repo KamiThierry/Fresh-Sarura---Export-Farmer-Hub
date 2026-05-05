@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { X, Search, QrCode, User, Scale, Plane, FileText, CheckCircle2, ArrowRight, Loader2, AlertCircle, Package } from 'lucide-react';
 import { api } from '../../../lib/api';
+import jsPDF from 'jspdf';
+import logo from '@/assets/sarura_logo_nav.png';
+import autoTable from 'jspdf-autotable';
 
 interface FindBatchModalProps {
     isOpen: boolean;
@@ -26,6 +30,7 @@ function NodeIcon({ type }: { type: string }) {
 }
 
 const FindBatchModal = ({ isOpen, onClose }: FindBatchModalProps) => {
+    const navigate = useNavigate();
     const [view, setView] = useState<'search' | 'timeline'>('search');
     const [query, setQuery] = useState('');
     const [isSearching, setIsSearching] = useState(false);
@@ -100,6 +105,169 @@ const FindBatchModal = ({ isOpen, onClose }: FindBatchModalProps) => {
         setQuery('');
         setTraceData(null);
         setError(null);
+    };
+
+    const handleDownloadTraceabilityPDF = async () => {
+        if (!traceData) return;
+
+        const trace = traceData.nodes ? traceData : traceData.data;
+        if (!trace?.nodes?.length) return;
+
+        const doc       = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const timestamp = new Date().toLocaleString('en-GB', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+        const toTC = (s: string) =>
+            String(s).toLowerCase().split(' ')
+                .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+        // ── 1. Header (identical to Reports.tsx) ──
+        try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch {}
+        doc.setTextColor(21, 128, 61);
+        doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+        doc.text('Fresh Sarura', 28, 19);
+        doc.setTextColor(107, 114, 128);
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+        doc.text('Export & Farmer Hub', 28, 23);
+        doc.setFontSize(10);
+        doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+        doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+        doc.setDrawColor(229, 231, 235);
+        doc.line(15, 30, pageWidth - 15, 30);
+
+        // ── 2. Certificate Title Block ──
+        doc.setTextColor(17, 24, 39);
+        doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+        doc.text('TRACEABILITY CERTIFICATE', 15, 42);
+
+        // Summary fields — same style as Reports.tsx
+        const summaryFields = [
+            { label: 'Batch Reference',  value: trace.batchId },
+            { label: 'Total Stages',     value: `${trace.nodes.length} verified lifecycle stages` },
+            { label: 'Generated',        value: timestamp },
+            { label: 'Status',           value: 'VERIFIED — Complete farm-to-export chain' },
+        ];
+
+        let yPos = 50;
+        doc.setFontSize(9);
+        summaryFields.forEach(field => {
+            doc.setTextColor(107, 114, 128); doc.setFont('helvetica', 'normal');
+            doc.text(field.label, 15, yPos);
+            doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
+            doc.text(String(field.value), pageWidth - 15, yPos, { align: 'right' });
+            doc.setDrawColor(243, 244, 246);
+            doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+            yPos += 9;
+        });
+
+        yPos += 4;
+
+        // ── 3. Stages ──
+        const stageLabels: Record<string, string> = {
+            source:   'STAGE 1 — FARM ORIGIN',
+            intake:   'STAGE 2 — FIELD PICKUP & INTAKE',
+            stock:    'STAGE 3 — PACKHOUSE PROCESSING',
+            export:   'STAGE 4 — EXPORT BATCH',
+            shipment: 'STAGE 5 — SHIPMENT',
+        };
+
+        const headStyles: any  = {
+            textColor: [255, 255, 255],
+            fontSize: 8.5,
+            fontStyle: 'bold',
+            fillColor: [92, 184, 92]   // same green as Reports.tsx
+        };
+        const bodyStyles: any  = {
+            fontSize: 8,
+            textColor: [0, 0, 0],
+            cellPadding: { top: 3, bottom: 3, left: 2, right: 2 }
+        };
+        const altStyles: any   = { fillColor: [249, 250, 251] };
+
+        trace.nodes.forEach((node: any, index: number) => {
+            // Page break check
+            if (yPos > 240) { doc.addPage(); yPos = 20; }
+
+            const stageLabel = stageLabels[node.type] || `STAGE ${index + 1}`;
+
+            // Stage header — using autoTable for consistency
+            autoTable(doc, {
+                startY: yPos,
+                head: [[stageLabel, toTC(node.title)]],
+                body: node.details.map((d: any) => [
+                    String(d.label).toUpperCase(),
+                    String(d.value || 'N/A')
+                ]),
+                theme: 'striped',
+                headStyles,
+                bodyStyles,
+                alternateRowStyles: altStyles,
+                columnStyles: {
+                    0: { fontStyle: 'bold', textColor: [107, 114, 128], cellWidth: 55 },
+                    1: { textColor: [17, 24, 39] }
+                },
+                margin: { left: 15, right: 15, bottom: 10 },
+                didParseCell: (data) => {
+                    // Highlight Done/Dispatched/Shipped in green
+                    if (data.section === 'body' && data.column.index === 1) {
+                        const v = String(data.cell.raw).toLowerCase();
+                        if (['done', 'dispatched', 'shipped', 'active'].includes(v)) {
+                            data.cell.styles.textColor = [22, 163, 74];
+                            data.cell.styles.fontStyle = 'bold';
+                        }
+                    }
+                }
+            });
+
+            yPos = (doc as any).lastAutoTable.finalY;
+
+            // Divider between stages — simple spacing (stage headers are enough separator)
+            if (index < trace.nodes.length - 1) {
+                yPos += 12;
+            } else {
+                yPos += 8;
+            }
+        });
+
+        // ── 4. Verification Summary Box ──
+        if (yPos > 240) { doc.addPage(); yPos = 20; }
+
+        autoTable(doc, {
+            startY: yPos,
+            head: [['CERTIFICATE OF SUPPLY CHAIN INTEGRITY']],
+            body: [
+                [`This certificate verifies that batch ${trace.batchId} has completed ${trace.nodes.length} verified`],
+                [`lifecycle stages under Fresh Sarura's traceability framework,`],
+                [`ensuring full farm-to-export accountability.`],
+            ],
+            theme: 'plain',
+            headStyles: { ...headStyles, halign: 'center' },
+            bodyStyles: { ...bodyStyles, halign: 'center', textColor: [107, 114, 128] },
+            margin: { left: 15, right: 15 },
+        });
+
+        // ── 5. Footer (identical to Reports.tsx) ──
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setDrawColor(229, 231, 235);
+            doc.line(15, 275, pageWidth - 15, 275);
+            doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
+            doc.text(
+                'This is a computer generated report by Fresh Sarura. No signature required.',
+                pageWidth / 2, 280, { align: 'center' }
+            );
+            doc.text(
+                'Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw',
+                pageWidth / 2, 287, { align: 'center' }
+            );
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, 287, { align: 'right' });
+        }
+
+        doc.save(`FreshSarura_Traceability_${trace.batchId}_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     return createPortal(
@@ -249,9 +417,17 @@ const FindBatchModal = ({ isOpen, onClose }: FindBatchModalProps) => {
                                                 ))}
                                             </div>
                                             {node.action && (
-                                                <p className="mt-2 text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                                                <button 
+                                                    onClick={() => {
+                                                        if (node.action.link) {
+                                                            navigate(node.action.link);
+                                                            onClose();
+                                                        }
+                                                    }}
+                                                    className="mt-2 text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1 hover:underline cursor-pointer"
+                                                >
                                                     <ArrowRight size={12} /> {node.action.label}
-                                                </p>
+                                                </button>
                                             )}
                                         </div>
                                     ))}
@@ -260,7 +436,10 @@ const FindBatchModal = ({ isOpen, onClose }: FindBatchModalProps) => {
 
                             {/* Footer */}
                             <div className="px-6 pb-6">
-                                <button className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-200 font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm">
+                                <button 
+                                    onClick={handleDownloadTraceabilityPDF}
+                                    className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-200 font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm"
+                                >
                                     <FileText size={16} /> Download Full Traceability Report
                                 </button>
                             </div>

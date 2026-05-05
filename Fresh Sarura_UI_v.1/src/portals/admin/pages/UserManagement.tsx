@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Users, Search, UserPlus, Edit2, PowerOff, Filter, CheckCircle, ShieldOff, Clock, Calendar, X, ChevronDown, Download, FileSpreadsheet, FileText } from 'lucide-react';
+import { Users, Search, UserPlus, Edit2, PowerOff, Filter, CheckCircle, ShieldOff, Clock, X, ChevronDown, Download, FileSpreadsheet, FileText } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AddUserModal from '../components/AddUserModal';
 import Toast from '../../shared/component/Toast';
@@ -20,6 +20,17 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const UserManagement = () => {
+    const formatOrdinalDate = (date: Date) => {
+        const d = new Date(date);
+        const day = d.getDate();
+        const month = d.toLocaleDateString('en-GB', { month: 'long' });
+        const year = d.getFullYear();
+        const s = ["th", "st", "nd", "rd"];
+        const v = day % 100;
+        const suffix = (v >= 11 && v <= 13) ? "th" : (s[v % 10] || s[0]);
+        return `${day}${suffix} ${month} ${year}`;
+    };
+
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -311,31 +322,34 @@ const UserManagement = () => {
                 <div className="relative">
                     <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                        className="pl-8 pr-8 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none">
+                        className="pl-8 pr-8 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer">
                         <option value="All">All Statuses</option>
                         <option value="Active">Active</option>
                         <option value="Inactive">Inactive</option>
                     </select>
+                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
                 </div>
                 <div className="relative">
                     <Users size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     <select value={roleFilter} onChange={e => { setRoleFilter(e.target.value); setCurrentPage(1); }}
-                        className="pl-8 pr-8 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none">
+                        className="pl-8 pr-8 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer">
                         <option value="All">All Roles</option>
                         {Object.entries(ROLE_LABELS).map(([val, label]) => (
                             <option key={val} value={val}>{label}</option>
                         ))}
                     </select>
+                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
                 </div>
                 <div className="relative">
-                    <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     <select value={dateFilter} onChange={e => { setDateFilter(e.target.value); setCurrentPage(1); }}
-                        className="pl-8 pr-8 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none">
+                        className="pl-8 pr-8 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer">
                         <option value="All">All Time</option>
                         <option value="Week">This Week</option>
                         <option value="Month">This Month</option>
                         <option value="3Months">Last 3 Months</option>
                     </select>
+                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
                 </div>
             </div>
 
@@ -376,7 +390,7 @@ const UserManagement = () => {
                                         </span>
                                     </td>
                                     <td className="px-5 py-4 text-xs text-gray-400">
-                                        {new Date(u.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                        {formatOrdinalDate(u.createdAt)}
                                     </td>
                                     <td className="px-5 py-4">
                                         <div className="flex items-center gap-2 text-gray-400">

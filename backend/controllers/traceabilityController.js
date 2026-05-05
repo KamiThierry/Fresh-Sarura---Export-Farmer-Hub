@@ -87,7 +87,7 @@ export const getTraceabilityData = async (req, res) => {
                 { label: 'Est. Weight', value: harvest?.estimatedWeightKg ? `${harvest.estimatedWeightKg} kg` : 'N/A' },
             ],
             badges: [{ label: 'Farmer Status', value: farmer?.status || 'Active' }],
-            action: { label: 'View Farmer Profile', link: '/pm/farmers' }
+            action: { label: 'View Farmer Profile', link: farmer?._id ? `/pm/farmers?profileId=${farmer._id}` : '/pm/farmers' }
         });
 
         // Node 2 — Intake

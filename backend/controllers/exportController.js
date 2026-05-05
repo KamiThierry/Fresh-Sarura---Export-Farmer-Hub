@@ -17,18 +17,21 @@ export const createExportBatch = async (req, res) => {
             targetShipmentDate,
         } = req.body;
 
-        if (!processingBatchId || !cycleId || !cropName || !clientName || !destination || !allocatedWeightKg || !boxCount || !weightPerBoxKg) {
-            return res.status(400).json({ status: 'error', message: 'processingBatchId, cycleId, cropName, clientName, destination, allocatedWeightKg, boxCount, weightPerBoxKg are required.' });
+        if (!processingBatchId || !cropName || !clientName || !destination || !allocatedWeightKg || !boxCount || !weightPerBoxKg) {
+            return res.status(400).json({ status: 'error', message: 'processingBatchId, cropName, clientName, destination, allocatedWeightKg, boxCount, weightPerBoxKg are required.' });
         }
 
         // Verify the processing batch exists and is Done
         const stock = await ProcessingBatch.findById(processingBatchId);
         if (!stock) return res.status(404).json({ status: 'error', message: 'Stock item not found.' });
-        if (stock.status !== 'Done') return res.status(400).json({ status: 'error', message: 'Stock item is not yet processed (status must be Done).' });
+        if (stock.status !== 'Done') return res.status(400).json({ status: 'error', message: 'Stock item is not yet processed.' });
+
+        // Use cycleId from the processing batch — don't require it from body
+        const resolvedCycleId = cycleId || stock.cycleId;
 
         const batch = await ExportBatch.create({
             processingBatchId,
-            cycleId,
+            cycleId: resolvedCycleId,
             cropName,
             clientName,
             destination,
@@ -115,7 +118,8 @@ export const createShipment = async (req, res) => {
     try {
         const {
             flightNumber, airlineCode, destination, clientName,
-            departureDate, departureTime, awbNumber, invoiceNumber,
+            departureDate, departureTime, estimatedFlightHours,
+            awbNumber, invoiceNumber,
             exportBatchIds, totalBoxes, totalWeightKg, skids, notes,
         } = req.body;
 
@@ -130,6 +134,7 @@ export const createShipment = async (req, res) => {
             clientName,
             departureDate: new Date(departureDate),
             departureTime,
+            estimatedFlightHours: Number(estimatedFlightHours) || 8,
             awbNumber,
             invoiceNumber,
             exportBatches: exportBatchIds,
@@ -216,39 +221,108 @@ export const getShipmentById = async (req, res) => {
     }
 };
 
-// PATCH /api/v1/shipments/:id/dispatch  ← LO marks as Dispatched
-export const dispatchShipment = async (req, res) => {
+// PATCH /api/v1/shipments/:id/ship  ← LO confirms cargo shipped/delivered
+export const shipShipment = async (req, res) => {
     try {
         const shipment = await Shipment.findByIdAndUpdate(
             req.params.id,
-            { status: 'Dispatched', dispatchedAt: new Date() },
+            { status: 'Shipped', shippedAt: new Date() },
             { new: true }
         );
         if (!shipment) return res.status(404).json({ status: 'error', message: 'Shipment not found.' });
 
-        // Notify PM
         await notifyByRole('production_manager', {
             sender: req.user._id,
-            type: 'SHIPMENT_DISPATCHED',
-            title: 'Shipment Dispatched',
-            message: `Shipment ${shipment.plNumber} — Flight ${shipment.flightNumber} has been dispatched to ${shipment.destination}.`,
+            type: 'SHIPMENT_SHIPPED',
+            title: 'Cargo Shipped',
+            message: `Shipment ${shipment.plNumber} — Flight ${shipment.flightNumber} cargo confirmed shipped to ${shipment.destination}.`,
             link: '/pm/inventory',
         });
 
-        res.json({ status: 'success', message: 'Shipment marked as dispatched.', data: shipment });
+        res.json({ status: 'success', message: 'Shipment marked as shipped.', data: shipment });
 
         await createEventLog({
             module: 'Export & Shipments',
-            action: 'Shipment Dispatched',
+            action: 'Shipment Shipped',
             severity: 'INFO',
-            description: `Shipment dispatched: ${shipment.plNumber} — Flight ${shipment.flightNumber} to ${shipment.destination}`,
+            description: `Cargo confirmed shipped: ${shipment.plNumber} — Flight ${shipment.flightNumber} to ${shipment.destination}`,
             actor: req.user.name,
-            metadata: {
-                shipmentId: shipment._id,
-                plNumber: shipment.plNumber,
-                destination: shipment.destination,
-                weightKg: shipment.totalWeightKg
-            }
+            metadata: { shipmentId: shipment._id, plNumber: shipment.plNumber }
+        });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// PATCH /api/v1/shipments/:id/depart  ← LO confirms flight departed
+export const departShipment = async (req, res) => {
+    try {
+        const shipment = await Shipment.findByIdAndUpdate(
+            req.params.id,
+            { status: 'Departed', departedAt: new Date() },
+            { new: true }
+        );
+        if (!shipment) return res.status(404).json({ status: 'error', message: 'Shipment not found.' });
+
+        await notifyByRole('production_manager', {
+            type: 'SHIPMENT_DEPARTED',
+            title: 'Flight Departed',
+            message: `Flight ${shipment.flightNumber} has departed KGL — ${shipment.plNumber} is in transit to ${shipment.destination}.`,
+            link: '/pm/inventory',
+        });
+
+        res.json({ status: 'success', message: 'Shipment marked as departed.', data: shipment });
+
+        await createEventLog({
+            module: 'Export & Shipments',
+            action: 'Flight Departed',
+            severity: 'INFO',
+            description: `Flight ${shipment.flightNumber} departed — ${shipment.plNumber} in transit to ${shipment.destination}`,
+            actor: req.user.name,
+            metadata: { shipmentId: shipment._id, plNumber: shipment.plNumber, flightNumber: shipment.flightNumber }
+        });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// PATCH /api/v1/shipments/:id/cancel  ← LO cancels shipment
+export const cancelShipment = async (req, res) => {
+    try {
+        const { reason } = req.body;
+        const shipment = await Shipment.findByIdAndUpdate(
+            req.params.id,
+            { 
+                status: 'Cancelled', 
+                cancelledAt: new Date(),
+                cancellationReason: reason || 'No reason provided'
+            },
+            { new: true }
+        );
+        if (!shipment) return res.status(404).json({ status: 'error', message: 'Shipment not found.' });
+
+        // Revert export batches back to ReadyForExport so PM can reassign
+        await ExportBatch.updateMany(
+            { _id: { $in: shipment.exportBatches } },
+            { status: 'ReadyForExport' }
+        );
+
+        await notifyByRole('production_manager', {
+            type: 'SHIPMENT_CANCELLED',
+            title: 'Shipment Cancelled',
+            message: `Shipment ${shipment.plNumber} — Flight ${shipment.flightNumber} has been cancelled. Export batches returned to ready state.`,
+            link: '/pm/inventory',
+        });
+
+        res.json({ status: 'success', message: 'Shipment cancelled. Export batches returned to ready state.', data: shipment });
+
+        await createEventLog({
+            module: 'Export & Shipments',
+            action: 'Shipment Cancelled',
+            severity: 'WARNING',
+            description: `Shipment cancelled: ${shipment.plNumber} — ${reason || 'No reason provided'}`,
+            actor: req.user.name,
+            metadata: { shipmentId: shipment._id, plNumber: shipment.plNumber, reason }
         });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });

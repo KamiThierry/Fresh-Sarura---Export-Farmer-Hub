@@ -12,6 +12,7 @@ interface PMContextType {
   pendingForecasts: any[];
   pendingReports: any[];
   pendingRoomRequests: any[];
+  exportBatches: any[];
   loading: boolean;
   error: string | null;
   refreshCycles: () => Promise<void>;
@@ -23,6 +24,7 @@ interface PMContextType {
   refreshPendingForecasts: () => Promise<void>;
   refreshPendingReports: () => Promise<void>;
   refreshPendingRoomRequests: () => Promise<void>;
+  refreshExportBatches: () => Promise<void>;
   refreshAll: () => Promise<void>;
 }
 
@@ -38,6 +40,7 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [pendingForecasts, setPendingForecasts] = useState<any[]>([]);
   const [pendingReports, setPendingReports] = useState<any[]>([]);
   const [pendingRoomRequests, setPendingRoomRequests] = useState<any[]>([]);
+  const [exportBatches, setExportBatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,6 +138,16 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   }, []);
 
+  const refreshExportBatches = useCallback(async () => {
+    try {
+      const res = await api.get('/export-batches');
+      const data = res.data?.data ?? res?.data ?? res ?? [];
+      setExportBatches(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error('PMContext: Failed to fetch export batches', err);
+    }
+  }, []);
+
   const refreshAll = useCallback(async () => {
     setLoading(true);
     await Promise.all([
@@ -147,9 +160,10 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       refreshShipments(),
       refreshStock(),
       refreshIntakeLogs(),
+      refreshExportBatches(),
     ]);
     setLoading(false);
-  }, [refreshCycles, refreshFarmers, refreshPendingRequests, refreshPendingForecasts, refreshPendingReports, refreshPendingRoomRequests, refreshShipments, refreshStock, refreshIntakeLogs]);
+  }, [refreshCycles, refreshFarmers, refreshPendingRequests, refreshPendingForecasts, refreshPendingReports, refreshPendingRoomRequests, refreshShipments, refreshStock, refreshIntakeLogs, refreshExportBatches]);
 
   useEffect(() => {
     refreshAll();
@@ -166,6 +180,7 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       pendingForecasts,
       pendingReports,
       pendingRoomRequests,
+      exportBatches,
       loading,
       error,
       refreshCycles,
@@ -177,6 +192,7 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       refreshPendingForecasts,
       refreshPendingReports,
       refreshPendingRoomRequests,
+      refreshExportBatches,
       refreshAll
     }}>
       {children}

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Search, Filter, Plus, Download,
-  Users, UserCheck, Map, FileWarning, MapPin, ChevronDown, FileSpreadsheet, FileText,
-  Pencil, Trash2
+  Users, UserCheck, Map, MapPin, ChevronDown, FileSpreadsheet, FileText,
+  Pencil, Trash2, Trophy
 } from 'lucide-react';
 import FarmerRegistrationModal from '../components/FarmerRegistrationModal';
 import FarmNetworkMap from '../components/FarmNetworkMap';
@@ -17,6 +18,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import logo from '@/assets/sarura_logo_nav.png';
 import * as XLSX from 'xlsx';
+import { api } from '@/lib/api';
 
 const FarmerManagement = () => {
   // State
@@ -35,9 +37,29 @@ const FarmerManagement = () => {
     loading, 
     refreshFarmers 
   } = usePMContext();
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-500">Loading farmers...</div>;
 
-  // Filter Logic
+  // Harvest declarations for leaderboard & profile metrics
+  const [harvestDeclarations, setHarvestDeclarations] = useState<any[]>([]);
+  useEffect(() => {
+    api.get('/harvest-declarations')
+      .then((res) => {
+        const data = res.data?.data ?? res.data ?? [];
+        setHarvestDeclarations(Array.isArray(data) ? data : []);
+      })
+      .catch((err) => console.error('Failed to fetch harvest declarations:', err));
+  }, []);
+
+  // Deep-link: open a specific farmer profile when ?profileId= is in the URL (from Traceability)
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const profileId = searchParams.get('profileId');
+    if (profileId && farmers.length > 0) {
+      const match = farmers.find((f) => String(f._id) === profileId);
+      if (match) setSelectedFarmer(match);
+    }
+  }, [searchParams, farmers]);
+
+  // Filter Logic (must be before early return — used in stats below)
   const filteredFarmers = farmers.filter(farmer =>
     (statusFilter === 'all' || farmer.status.toLowerCase() === statusFilter.toLowerCase()) &&
     ((farmer.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
@@ -45,6 +67,25 @@ const FarmerManagement = () => {
       (farmer.sector?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
       (farmer.produce_types?.some((p: string) => p.toLowerCase().includes(searchQuery.toLowerCase())) || false))
   );
+
+  // Top suppliers leaderboard — sourced from HarvestDeclaration.estimatedWeightKg
+  const topSuppliers = useMemo(() => {
+    return farmers
+      .map((f) => ({
+        farmer: f,
+        totalKg: harvestDeclarations
+          .filter((d: any) => {
+            const fid = d.farmerId?._id ?? d.farmerId;
+            return String(fid) === String(f._id);
+          })
+          .reduce((s: number, d: any) => s + (d.estimatedWeightKg || 0), 0),
+      }))
+      .sort((a, b) => b.totalKg - a.totalKg)
+      .slice(0, 5);
+  }, [farmers, harvestDeclarations]);
+  const maxKg = topSuppliers[0]?.totalKg || 1;
+
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-500">Loading farmers...</div>;
 
   // Stats — derived from filteredFarmers so they react to the filter & search
   const totalHa = filteredFarmers
@@ -54,7 +95,6 @@ const FarmerManagement = () => {
     { label: 'Total Farmers', value: String(filteredFarmers.length), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
     { label: 'Active Suppliers', value: String(filteredFarmers.filter(f => f.status === 'Active').length), icon: UserCheck, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
     { label: 'Total Hectares', value: `${totalHa} Ha`, icon: Map, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
-    { label: 'Pending Certs', value: String(filteredFarmers.filter(f => f.status === 'Auditing').length), icon: FileWarning, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20', alert: true },
   ];
 
   // ─── Export Logic ────────────────────────────────────────────────
@@ -141,8 +181,7 @@ const FarmerManagement = () => {
     const summaryFields = [
       { label: 'Total Registered Farmers', value: String(filteredFarmers.length) },
       { label: 'Active Farmers', value: String(farmers.filter(f => f.status.toLowerCase() === 'active').length) },
-      { label: 'Total Farm Land', value: `${totalHa} Ha` },
-      { label: 'Pending Certifications', value: String(filteredFarmers.filter(f => f.status.toLowerCase() === 'auditing').length) }
+      { label: 'Total Farm Land', value: `${totalHa} Ha` }
     ];
 
     let yPos = 52;
@@ -161,11 +200,31 @@ const FarmerManagement = () => {
     const commonBodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } };
     const alternateRowStyles: any = { fillColor: [249, 250, 251] };
 
-    // 3. Farmers Table
-    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-    doc.text('REGISTERED FARMERS', 15, yPos + 10);
+    // ── Top Suppliers Section ──
+    const top4 = topSuppliers.slice(0, 4);
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+    doc.text('TOP SUPPLIERS BY VOLUME', 15, yPos + 10);
+    
     autoTable(doc, {
       startY: yPos + 15,
+      head: [['RANK', 'FARMER', 'FARM NAME', 'TOTAL VOLUME']],
+      body: top4.map((s, i) => [
+        `${i + 1}${i === 0 ? 'st' : i === 1 ? 'nd' : i === 2 ? 'rd' : 'th'}`,
+        toTitleCase(s.farmer.full_name),
+        toTitleCase(s.farmer.farm_name || 'Individual'),
+        s.totalKg >= 1000 ? `${(s.totalKg / 1000).toFixed(2)} T` : `${s.totalKg} kg`
+      ]),
+      theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+      margin: { left: 15, right: 15 },
+    });
+
+    yPos = (doc as any).lastAutoTable.finalY + 15;
+
+    // ── Registered Farmers Table ──
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+    doc.text('REGISTERED FARMERS', 15, yPos);
+    autoTable(doc, {
+      startY: yPos + 5,
       head: [['FARMER / FARM', 'NATIONAL ID', 'CONTACT INFO', 'PHYSICAL ADDRESS', 'MAIN CROP', 'SIZE', 'STATUS']],
       body: filteredFarmers.map(f => [
         `${toTitleCase(f.full_name)}\n${toTitleCase(f.farm_name || 'Individual')}`,
@@ -277,13 +336,13 @@ const FarmerManagement = () => {
       {selectedFarmer === null ? (
         <>
           {/* Stats Row */}
-          <div className="grid grid-cols-4 gap-6">
+          <div className="grid grid-cols-3 gap-6">
             {stats.map((stat, index) => (
               <div key={index} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{stat.label}</p>
-                    <div className={`text-2xl font-bold mt-1 ${stat.alert ? 'text-red-600' : 'text-gray-900 dark:text-white'}`}>
+                    <div className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">
                       {stat.value}
                     </div>
                   </div>
@@ -297,6 +356,54 @@ const FarmerManagement = () => {
 
           {/* ── Geospatial Farm Map ── */}
           <FarmNetworkMap farmers={farmers} />
+
+          {/* ── Top Suppliers Leaderboard ── */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Trophy size={16} className="text-amber-500" />
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Top Suppliers by Volume</h3>
+              <span className="ml-auto text-[10px] text-gray-400 font-medium uppercase tracking-wider">Total Intake Received</span>
+            </div>
+            {topSuppliers.length === 0 || maxKg === 0 ? (
+              <p className="text-sm text-gray-400 italic text-center py-4">No supply intake data yet</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                {topSuppliers.map(({ farmer, totalKg }, i) => {
+                  const barWidth = maxKg > 0 ? Math.round((totalKg / maxKg) * 100) : 0;
+                  const label = totalKg >= 1000 ? `${(totalKg / 1000).toFixed(2)} T` : `${totalKg.toLocaleString()} kg`;
+                  const medals = ['🥇', '🥈', '🥉', '4th', '5th'];
+                  const colors = [
+                    'from-yellow-400 to-amber-500',
+                    'from-slate-300 to-slate-400',
+                    'from-orange-300 to-orange-400',
+                    'from-green-400 to-emerald-500',
+                    'from-teal-400 to-cyan-500',
+                  ];
+                  return (
+                    <button
+                      key={farmer._id}
+                      onClick={() => setSelectedFarmer(farmer)}
+                      className="flex flex-col gap-2 p-3 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-green-300 dark:hover:border-green-700 hover:bg-green-50 dark:hover:bg-green-900/10 transition-all text-left group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{medals[i]}</span>
+                        <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 flex-1 truncate group-hover:text-green-700 dark:group-hover:text-green-400 transition-colors">
+                          {farmer.full_name}
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full bg-gradient-to-r ${colors[i]} transition-all duration-700`}
+                          style={{ width: `${barWidth}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-bold text-gray-600 dark:text-gray-300">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Main Content: Filters & Table */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
@@ -452,6 +559,8 @@ const FarmerManagement = () => {
         <FarmerProfile
           farmer={selectedFarmer}
           onBack={() => setSelectedFarmer(null)}
+          allFarmers={farmers}
+          allStock={harvestDeclarations}
         />
       )}
 

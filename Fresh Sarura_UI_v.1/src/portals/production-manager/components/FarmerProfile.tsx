@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Pencil, ShieldOff, Phone, Mail, MapPin, Leaf, Ruler, Star, BadgeCheck, Sprout, PackageCheck, Plus, Loader2 } from 'lucide-react';
+import { ArrowLeft, Pencil, ShieldOff, Phone, Mail, MapPin, Leaf, Ruler, Star, BadgeCheck, Sprout, PackageCheck, Loader2 } from 'lucide-react';
 import { Farmer } from '@/types';
-import AddCertificateModal from './AddCertificateModal';
 import EditFarmerModal from './EditFarmerModal';
 import DeleteFarmerModal from './DeleteFarmerModal';
 import { api } from '@/lib/api';
@@ -10,6 +8,8 @@ import { api } from '@/lib/api';
 interface FarmerProfileProps {
   farmer: Farmer;
   onBack: () => void;
+  allFarmers?: Farmer[];
+  allStock?: any[];
 }
 
 const CROP_CYCLES: Record<string, { block: string; crop: string; planted: string; estYield: string; daysLeft: number }[]> = {
@@ -60,14 +60,6 @@ const HARVESTS: Record<string, { date: string; qty: string; crop: string; grade:
   ],
 };
 
-const CERTS: Record<string, string[]> = {
-  1: ['GlobalG.A.P.', 'Organic RW'],
-  2: ['GlobalG.A.P.', 'Fair Trade', 'Rainforest Alliance'],
-  3: ['Organic RW'],
-  4: ['GlobalG.A.P.'],
-  5: ['GlobalG.A.P.', 'Organic RW'],
-  6: ['GlobalG.A.P.', 'Organic RW', 'ISO 22000'],
-};
 
 const STATUS_STYLE: Record<string, string> = {
   Active: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
@@ -85,17 +77,40 @@ const InfoRow = ({ icon, label, value }: { icon: React.ReactNode; label: string;
   </div>
 );
 
-const FarmerProfile = ({ farmer: initialFarmer, onBack }: FarmerProfileProps) => {
-  const navigate = useNavigate();
+const FarmerProfile = ({ farmer: initialFarmer, onBack, allFarmers = [], allStock = [] }: FarmerProfileProps) => {
   // Local copy so edits update the UI immediately without a full page refetch
   const [farmer, setFarmer] = useState<Farmer>(initialFarmer);
-  const [isAddCertOpen, setIsAddCertOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [cycles, setCycles] = useState<any[]>([]);
   const [cyclesLoading, setCyclesLoading] = useState(true);
   const harvests = HARVESTS[farmer._id] ?? [];
-  const certs = CERTS[farmer._id] ?? [];
+
+  // ── Performance metrics ──
+  // Total kg declared by this farmer across all harvest declarations
+  const farmerDeclarations = allStock.filter((d: any) => {
+    const fid = d.farmerId?._id ?? d.farmerId;
+    return String(fid) === String(farmer._id);
+  });
+  const totalSuppliedKg = farmerDeclarations.reduce((s: number, d: any) => s + (d.estimatedWeightKg || 0), 0);
+
+  // Supply rank among all farmers
+  const farmerVolumes = allFarmers.map((f) => ({
+    id: f._id,
+    kg: allStock
+      .filter((d: any) => {
+        const fid = d.farmerId?._id ?? d.farmerId;
+        return String(fid) === String(f._id);
+      })
+      .reduce((s: number, d: any) => s + (d.estimatedWeightKg || 0), 0),
+  })).sort((a, b) => b.kg - a.kg);
+  const rankIndex = farmerVolumes.findIndex((r) => String(r.id) === String(farmer._id));
+  const supplyRank = rankIndex >= 0 ? rankIndex + 1 : null;
+
+  // Star rating from supply vs capacity (1–5 stars)
+  const capacityKg = (farmer.production_capacity_tons || 0) * 1000;
+  const ratingRaw = capacityKg > 0 ? Math.min(totalSuppliedKg / capacityKg, 1) * 5 : 0;
+  const rating = Math.max(1, Math.round(ratingRaw * 2) / 2); // round to nearest 0.5
 
   // Sync if parent swaps to a different farmer
   useEffect(() => { setFarmer(initialFarmer); }, [initialFarmer._id]);
@@ -109,15 +124,6 @@ const FarmerProfile = ({ farmer: initialFarmer, onBack }: FarmerProfileProps) =>
       .finally(() => setCyclesLoading(false));
   }, [farmer._id]);
 
-  const handleCertClick = (certLabel: string) => {
-    const params = new URLSearchParams({
-      farmerId: String(farmer._id),
-      farmerName: farmer.full_name,
-      docType: 'Certification',
-      certLabel,
-    });
-    navigate(`/traceability?${params.toString()}`);
-  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -196,39 +202,35 @@ const FarmerProfile = ({ farmer: initialFarmer, onBack }: FarmerProfileProps) =>
         {/* Performance */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5 space-y-4">
           <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Performance</h3>
-          <InfoRow
-            icon={<Star size={15} className="text-yellow-400 fill-yellow-400" />}
-            label="Overall Rating"
-            value={<span className="font-bold">{farmer.grade !== '-' ? `⭐ ${farmer.grade}` : '—'}</span>}
-          />
-          <div>
-            <p className="text-[11px] uppercase tracking-wider text-gray-400 mb-2">Active Certifications</p>
-            {certs.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {certs.map(c => (
-                  <button
-                    key={c}
-                    onClick={() => handleCertClick(c)}
-                    title={`View ${c} records in Compliance Matrix`}
-                    className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/40 hover:shadow-sm transition-all cursor-pointer"
-                  >
-                    {c} ↗
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-400 italic">No certifications on file</p>
-            )}
+
+          {/* Star Rating */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Star
+                  key={i}
+                  size={15}
+                  className={i < Math.floor(rating) ? 'text-yellow-400 fill-yellow-400' : i < rating ? 'text-yellow-400 fill-yellow-200' : 'text-gray-200 fill-gray-200 dark:text-gray-600 dark:fill-gray-600'}
+                />
+              ))}
+            </div>
+            <span className="text-xs text-gray-400 font-medium">{rating.toFixed(1)} / 5</span>
           </div>
 
-          {/* Add New Certificate */}
-          <button
-            className="w-full mt-1 py-2 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 text-xs font-semibold hover:border-green-400 hover:text-green-600 dark:hover:border-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/10 transition-all flex items-center justify-center gap-1.5"
-            onClick={() => setIsAddCertOpen(true)}
-          >
-            <Plus size={13} />
-            Add New Certificate
-          </button>
+          {/* Metric rows */}
+          <div className="space-y-3 pt-1">
+            {[
+              { label: 'Total Supplied', value: totalSuppliedKg >= 1000 ? `${(totalSuppliedKg / 1000).toFixed(2)} Tons` : `${totalSuppliedKg.toLocaleString()} kg` },
+              { label: 'Active Crop Cycles', value: cyclesLoading ? '…' : String(cycles.filter(c => c.status === 'active' || c.status === 'harvesting').length) },
+              { label: 'Yield Goal (Current)', value: (() => { const ac = cycles.find(c => c.status === 'active' || c.status === 'harvesting'); return ac?.yield_goal_kg ? `${ac.yield_goal_kg.toLocaleString()} kg` : '—'; })() },
+              { label: 'Supply Rank', value: supplyRank ? `#${supplyRank} of ${allFarmers.length} farmers` : '—' },
+            ].map(({ label, value }) => (
+              <div key={label} className="flex items-center justify-between text-sm">
+                <span className="text-gray-500 dark:text-gray-400 text-xs">{label}</span>
+                <span className="font-semibold text-gray-800 dark:text-gray-200 text-xs">{value}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -326,17 +328,6 @@ const FarmerProfile = ({ farmer: initialFarmer, onBack }: FarmerProfileProps) =>
           )}
         </div>
       </div>
-
-      {/* Add Certificate Modal */}
-      <AddCertificateModal
-        isOpen={isAddCertOpen}
-        onClose={() => setIsAddCertOpen(false)}
-        defaultFarmer={farmer.full_name}
-        onSubmit={(data) => {
-          console.log('New certificate recorded:', data);
-          setIsAddCertOpen(false);
-        }}
-      />
 
       {/* Edit Farmer Modal */}
       <EditFarmerModal

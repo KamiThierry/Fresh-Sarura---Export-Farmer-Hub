@@ -3,7 +3,7 @@ import { Scale, Thermometer, Plane, Sprout } from 'lucide-react';
 
 interface DashboardStatsProps {
   todaysIntake?: string;
-  coldRoomStock?: string;
+  totalStock?: string;
   activeCyclesCount?: number;
   scheduledExports?: string;
   pendingRoomRequestsCount?: number;
@@ -13,7 +13,7 @@ interface DashboardStatsProps {
 
 const DashboardStats = ({
   todaysIntake = "0 kg",
-  coldRoomStock = "0 Tons",
+  totalStock = "0 Tons",
   activeCyclesCount = 0,
   scheduledExports = "0 Tons",
   pendingRoomRequestsCount = 0,
@@ -31,8 +31,8 @@ const DashboardStats = ({
     },
     {
       icon: Thermometer,
-      label: 'Cold Room Stock',
-      value: coldRoomStock,
+      label: 'Total Stock',
+      value: totalStock,
       sub: pendingRoomRequestsCount > 0
         ? `${pendingRoomRequestsCount} Room Requests Pending`
         : '4 Tons expiring soon',

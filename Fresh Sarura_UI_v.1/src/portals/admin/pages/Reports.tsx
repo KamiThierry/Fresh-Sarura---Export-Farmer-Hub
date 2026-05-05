@@ -162,6 +162,7 @@ const Reports = () => {
     const [users,     setUsers]     = useState<any[]>([]);
     const [farmers,   setFarmers]   = useState<any[]>([]);
     const [cycles,    setCycles]    = useState<any[]>([]);
+    const [harvestDeclarations, setHarvestDeclarations] = useState<any[]>([]);
     const [loading,   setLoading]   = useState(true);
     const [isExportOpen, setIsExportOpen] = useState(false);
 
@@ -170,15 +171,16 @@ const Reports = () => {
             setLoading(true);
             try {
                 const q = `?startDate=${startDate}&endDate=${endDate}`;
-                const [stockRes, shipmentsRes, usersRes, farmersRes, cyclesRes] = await Promise.all([
+                const [stockRes, shipmentsRes, usersRes, farmersRes, cyclesRes, harvestRes] = await Promise.all([
                     api.get(`/stock${q}`), api.get(`/shipments${q}`), api.get(`/auth/users${q}`),
-                    api.get(`/farmers${q}`), api.get(`/crop-cycles${q}`),
+                    api.get(`/farmers${q}`), api.get(`/crop-cycles${q}`), api.get(`/harvest-declarations`),
                 ]);
                 setStock(stockRes.data?.data         ?? stockRes?.data         ?? []);
                 setShipments(shipmentsRes.data?.data ?? shipmentsRes?.data     ?? []);
                 setUsers(usersRes.data?.data          ?? usersRes?.data        ?? []);
                 setFarmers(farmersRes.farmers         ?? farmersRes.data?.farmers ?? farmersRes.data ?? []);
                 setCycles(cyclesRes.data?.data        ?? cyclesRes?.data       ?? []);
+                setHarvestDeclarations(harvestRes.data?.data ?? harvestRes.data ?? []);
             } catch (err) {
                 console.error('Failed to fetch report data', err);
             } finally { setLoading(false); }
@@ -437,7 +439,6 @@ const Reports = () => {
             : activeTab === 'farmers' ? [
                 { label: 'Total Registered Farmers', value: String(farmers.length) },
                 { label: 'Active Farmers',           value: String(farmers.filter(f => f.status === 'Active' || f.status === 'active').length) },
-                { label: 'Crop Cycles in Period',    value: String(filteredCycles.length) },
                 { label: 'Avg Farm Size',            value: farmers.length ? `${(farmers.reduce((s, f) => s + (f.farm_size_hectares || 0), 0) / farmers.length).toFixed(1)} ha` : '0 ha' },
             ]
             : activeTab === 'production' ? [
@@ -525,10 +526,44 @@ const Reports = () => {
             });
 
         } else if (activeTab === 'farmers') {
+            // ── Top Suppliers Section ──
+            const topSuppliers = farmers
+                .map((f) => ({
+                    name: f.full_name,
+                    farm: f.farm_name || 'Individual',
+                    totalKg: harvestDeclarations
+                        .filter((d: any) => {
+                            const fid = d.farmerId?._id ?? d.farmerId;
+                            return String(fid) === String(f._id);
+                        })
+                        .reduce((s: number, d: any) => s + (d.estimatedWeightKg || 0), 0),
+                }))
+                .sort((a, b) => b.totalKg - a.totalKg)
+                .slice(0, 4);
+
             doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
-            doc.text('REGISTERED FARMERS', 15, yPos + 10);
+            doc.text('TOP SUPPLIERS BY VOLUME', 15, yPos + 10);
+            
             autoTable(doc, {
                 startY: yPos + 15,
+                head: [['RANK', 'FARMER', 'FARM NAME', 'TOTAL VOLUME']],
+                body: topSuppliers.map((s, i) => [
+                    `${i + 1}${i === 0 ? 'st' : i === 1 ? 'nd' : i === 2 ? 'rd' : 'th'}`,
+                    toTitleCase(s.name),
+                    toTitleCase(s.farm),
+                    s.totalKg >= 1000 ? `${(s.totalKg / 1000).toFixed(2)} T` : `${s.totalKg} kg`
+                ]),
+                theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+                margin: { left: 15, right: 15 },
+            });
+
+            yPos = (doc as any).lastAutoTable.finalY + 15;
+
+            // ── Registered Farmers Table ──
+            doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+            doc.text('REGISTERED FARMERS', 15, yPos);
+            autoTable(doc, {
+                startY: yPos + 5,
                 head: [['FARMER / FARM', 'NATIONAL ID', 'CONTACT INFO', 'PHYSICAL ADDRESS', 'MAIN CROP', 'SIZE', 'STATUS']],
                 body: farmers.map(f => [
                     `${toTitleCase(f.full_name)}\n${toTitleCase(f.farm_name || 'Individual')}`,

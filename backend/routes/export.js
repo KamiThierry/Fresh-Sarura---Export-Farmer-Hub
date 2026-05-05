@@ -2,7 +2,8 @@ import express from 'express';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 import {
     createExportBatch, getExportBatches, markReadyForExport,
-    createShipment, getShipments, getShipmentById, dispatchShipment,
+    createShipment, getShipments, getShipmentById, shipShipment,
+    departShipment, cancelShipment,
     uploadDocument, getDocuments,
 } from '../controllers/exportController.js';
 
@@ -18,7 +19,9 @@ router.patch('/export-batches/:id/ready', restrictTo('production_manager', 'admi
 router.post('/shipments', restrictTo('logistic_officer', 'admin'), createShipment);
 router.get('/shipments', restrictTo('logistic_officer', 'production_manager', 'admin'), getShipments);
 router.get('/shipments/:id', restrictTo('logistic_officer', 'production_manager', 'admin'), getShipmentById);
-router.patch('/shipments/:id/dispatch', restrictTo('logistic_officer', 'admin'), dispatchShipment);
+router.patch('/shipments/:id/ship', restrictTo('logistic_officer', 'admin'), shipShipment);
+router.patch('/shipments/:id/depart',  restrictTo('logistic_officer', 'admin'), departShipment);
+router.patch('/shipments/:id/cancel',  restrictTo('logistic_officer', 'admin'), cancelShipment);
 
 // Export Documents
 router.post('/export-documents', restrictTo('logistic_officer', 'admin'), uploadDocument);
