@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { X, Printer, CheckCircle2, Loader2, Package, MapPin, Calendar, Tag, Weight, Plane } from 'lucide-react';
+import { X, CheckCircle2, Loader2, Package, MapPin, Calendar, Tag, Weight, Plane, Download } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { api } from '../../../lib/api';
+import jsPDF from 'jspdf';
+import logo from '@/assets/sarura_logo_nav.png';
 
 interface BatchDetailModalProps {
     isOpen: boolean;
@@ -18,6 +20,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
 
 const BatchDetailModal = ({ isOpen, onClose, batch, onStatusChange }: BatchDetailModalProps) => {
     const [isMarking, setIsMarking] = useState(false);
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [linkedShipment, setLinkedShipment] = useState<any>(null);
 
@@ -48,6 +51,101 @@ const BatchDetailModal = ({ isOpen, onClose, batch, onStatusChange }: BatchDetai
             setError(err.message || 'Failed to mark as ready.');
         } finally {
             setIsMarking(false);
+        }
+    };
+
+    const handleDownloadReport = async () => {
+        if (!batch) return;
+        setIsGeneratingPdf(true);
+        try {
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const timestamp = new Date().toLocaleString('en-GB', {
+                day: '2-digit', month: 'short', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+
+            // ── 1. Header ──────────────────────────────────────────────
+            try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch {}
+            doc.setTextColor(21, 128, 61);
+            doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+            doc.text('Fresh Sarura', 28, 19);
+            doc.setTextColor(107, 114, 128);
+            doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+            doc.text('Export & Farmer Hub', 28, 23);
+            doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+            doc.setTextColor(17, 24, 39);
+            doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+            doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+            doc.setTextColor(107, 114, 128);
+            doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+            doc.setDrawColor(229, 231, 235);
+            doc.line(15, 30, pageWidth - 15, 30);
+
+            // ── 2. Title ───────────────────────────────────────────────
+            doc.setTextColor(17, 24, 39);
+            doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+            doc.text(`EXPORT BATCH REPORT — ${batch.batchId}`, 15, 42);
+
+            // ── 3. Summary Fields ─────────────────────────────────────
+            const summaryFields = [
+                { label: 'Crop',            value: batch.cropName },
+                { label: 'Grade',           value: batch.gradeLabel || 'Grade A' },
+                { label: 'Client',          value: batch.clientName },
+                { label: 'Destination',     value: batch.destination },
+                { label: 'Allocated Weight',value: `${batch.allocatedWeightKg?.toLocaleString()} kg` },
+                { label: 'Box Count',       value: `${batch.boxCount} boxes` },
+                { label: 'Weight per Box',  value: `${batch.weightPerBoxKg} kg` },
+                { label: 'Target Date',     value: batch.targetShipmentDate ? new Date(batch.targetShipmentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
+                { label: 'Status',          value: batch.status === 'ReadyForExport' ? 'Ready for Export' : batch.status },
+            ];
+
+            let yPos = 52;
+            doc.setFontSize(9);
+            summaryFields.forEach(field => {
+                doc.setTextColor(107, 114, 128); doc.setFont('helvetica', 'normal');
+                doc.text(field.label, 15, yPos);
+                doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
+                doc.text(String(field.value || '—'), pageWidth - 15, yPos, { align: 'right' });
+                doc.setDrawColor(243, 244, 246);
+                doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+                yPos += 10;
+            });
+
+            // ── 4. Shipment Section ───────────────────────────────────
+            if (linkedShipment) {
+                yPos += 5;
+                doc.setFillColor(249, 250, 251);
+                doc.roundedRect(15, yPos, pageWidth - 30, 25, 3, 3, 'F');
+                
+                doc.setTextColor(79, 70, 229); doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+                doc.text('ASSIGNED SHIPMENT', 20, yPos + 7);
+                
+                doc.setTextColor(17, 24, 39); doc.setFontSize(10);
+                doc.text(linkedShipment.plNumber, 20, yPos + 14);
+                
+                doc.setTextColor(107, 114, 128); doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+                doc.text(`${linkedShipment.flightNumber} → ${linkedShipment.destination} | ${new Date(linkedShipment.departureDate).toLocaleDateString('en-GB')}`, 20, yPos + 20);
+                
+                yPos += 35;
+            }
+
+            // ── 5. Footer ─────────────────────────────────────────────
+            const pageCount = (doc as any).internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setDrawColor(229, 231, 235);
+                doc.line(15, 275, pageWidth - 15, 275);
+                doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
+                doc.text('Confidential Export Document — Fresh Sarura Hub', pageWidth / 2, 280, { align: 'center' });
+                doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, 280, { align: 'right' });
+            }
+
+            doc.save(`Sarura_Batch_${batch.batchId}_Report.pdf`);
+        } catch (err) {
+            console.error('Failed to generate batch report:', err);
+        } finally {
+            setIsGeneratingPdf(false);
         }
     };
 
@@ -137,10 +235,14 @@ const BatchDetailModal = ({ isOpen, onClose, batch, onStatusChange }: BatchDetai
                 {/* Footer */}
                 <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-between gap-3">
                     <button
-                        onClick={() => window.print()}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-200 hover:bg-gray-50 text-sm font-bold shadow-sm transition-colors"
+                        onClick={handleDownloadReport}
+                        disabled={isGeneratingPdf}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-200 hover:bg-gray-50 text-sm font-bold shadow-sm transition-colors disabled:opacity-50"
                     >
-                        <Printer size={16} /> Print Labels
+                        {isGeneratingPdf
+                            ? <><Loader2 size={16} className="animate-spin" /> Generating...</>
+                            : <><Download size={16} /> Download Report</>
+                        }
                     </button>
 
                     {batch.status === 'Pending' && (

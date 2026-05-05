@@ -131,6 +131,7 @@ const AnalyticsReporting = () => {
     const [shipments, setShipments] = useState<any[]>([]);
     const [farmers,   setFarmers]   = useState<any[]>([]);
     const [cycles,    setCycles]    = useState<any[]>([]);
+    const [exportBatches, setExportBatches] = useState<any[]>([]);
     const [loading,   setLoading]   = useState(true);
 
     useEffect(() => {
@@ -138,16 +139,18 @@ const AnalyticsReporting = () => {
             setLoading(true);
             try {
                 const q = `?startDate=${startDate}&endDate=${endDate}`;
-                const [stockRes, shipmentsRes, farmersRes, cyclesRes] = await Promise.all([
+                const [stockRes, shipmentsRes, farmersRes, cyclesRes, batchesRes] = await Promise.all([
                     api.get(`/stock${q}`),
                     api.get(`/shipments${q}`),
                     api.get(`/farmers${q}`),
                     api.get(`/crop-cycles${q}`),
+                    api.get(`/export-batches`), // Always get all batches for true allocation math
                 ]);
                 setStock(stockRes.data?.data         ?? stockRes?.data         ?? []);
                 setShipments(shipmentsRes.data?.data ?? shipmentsRes?.data     ?? []);
                 setFarmers(farmersRes.farmers         ?? farmersRes.data?.farmers ?? farmersRes.data ?? []);
                 setCycles(cyclesRes.data?.data        ?? cyclesRes?.data       ?? []);
+                setExportBatches(batchesRes.data?.data ?? batchesRes?.data     ?? []);
             } catch (err) {
                 console.error('Failed to fetch analytics data', err);
             } finally { setLoading(false); }
@@ -155,11 +158,43 @@ const AnalyticsReporting = () => {
         fetchAll();
     }, [startDate, endDate]);
 
-    // ── Computed values ──
+    // Compute inventoryItems for allocation math
+    const inventoryItems = useMemo(() => {
+        const allocationMap: Record<string, number> = {};
+        exportBatches.forEach(b => {
+            const id = b.processingBatchId?._id || b.processingBatchId;
+            if (!id) return;
+            allocationMap[id] = (allocationMap[id] || 0) + (b.allocatedWeightKg || 0);
+        });
+
+        return stock
+            .filter(s => s.stockId && s.stockId.startsWith('STK-'))
+            .map(s => {
+                const allocated = allocationMap[s._id] || 0;
+                const available = Math.max(0, (s.processedWeightKg || 0) - allocated);
+                return {
+                    ...s,
+                    processedKg: s.processedWeightKg || 0,
+                    availableKg: available,
+                };
+            });
+    }, [stock, exportBatches]);
+
     const totalReceived   = stock.reduce((s, b) => s + (b.receivedWeightKg  || 0), 0);
     const totalProcessed  = stock.reduce((s, b) => s + (b.processedWeightKg || 0), 0);
     const totalRejected   = stock.reduce((s, b) => s + (b.rejectedWeightKg  || 0), 0);
-    const coldRoomStockKg = stock.reduce((s, b) => s + ((b.processedWeightKg || 0) - (b.rejectedWeightKg || 0)), 0);
+    
+    // Unified coldRoomStockKg uses available weight
+    const coldRoomStockKg = inventoryItems.reduce((sum, i) => sum + i.availableKg, 0);
+    
+    const nearlyEmptyCount = inventoryItems.filter(i => 
+        i.availableKg > 0 && i.availableKg < i.processedKg * 0.2
+    ).length;
+
+    const fullyDepletedCount = inventoryItems.filter(i => 
+        i.availableKg === 0 && i.status !== 'Spoiled'
+    ).length;
+
     const lossRate        = totalReceived > 0 ? ((totalRejected / totalReceived) * 100).toFixed(1) : '0';
     const shippedCount      = shipments.filter(s => s.status === 'Shipped');
     const totalExportedKg = shippedCount.reduce((s, sh) => s + (sh.totalWeightKg || 0), 0);
@@ -501,7 +536,48 @@ const AnalyticsReporting = () => {
                         <KpiCard label="Total Exported"   value={`${(totalExportedKg / 1000).toFixed(1)} Tons`}  icon={Plane}        iconBg="bg-purple-50 text-purple-600" trend="up"      trendLabel={`${shippedCount.length} shipped`} />
                         <KpiCard label="Active Farmers"   value={String(farmers.filter(f => f.status === 'Active').length)} icon={Leaf} iconBg="bg-emerald-50 text-emerald-600" trend="neutral" trendLabel="Supplying this season" />
                         <KpiCard label="Crop Cycles"      value={String(cycles.length)}                           icon={Leaf}         iconBg="bg-teal-50 text-teal-600"     trend="neutral" trendLabel="In selected period" />
-                        <KpiCard label="Cold Room Stock"  value={`${(coldRoomStockKg / 1000).toFixed(1)} Tons`}  icon={Thermometer}  iconBg="bg-cyan-50 text-cyan-600"     trend="neutral" trendLabel="Available in storage" />
+                        
+                        {/* Unified Cold Room Stock Card */}
+                        <div className={`bg-white dark:bg-gray-800 rounded-2xl border p-5 flex flex-col gap-3 transition-colors ${
+                            fullyDepletedCount > 0 ? 'border-red-200 dark:border-red-900/40' : 
+                            nearlyEmptyCount > 0 ? 'border-amber-200 dark:border-amber-900/40' : 
+                            'border-gray-100 dark:border-gray-700 shadow-sm'
+                        }`}>
+                            <div className="flex items-start justify-between">
+                                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Cold Room Stock</p>
+                                <div className={`p-2 rounded-xl ${
+                                    fullyDepletedCount > 0 ? 'bg-red-50 text-red-600' :
+                                    nearlyEmptyCount > 0 ? 'bg-amber-50 text-amber-600' :
+                                    'bg-cyan-50 text-cyan-600'
+                                }`}>
+                                    <Package size={18} className="opacity-80" />
+                                </div>
+                            </div>
+                            <div>
+                                <p className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+                                    {(coldRoomStockKg / 1000).toFixed(1)} Tons
+                                </p>
+                                <p className="text-[10px] text-gray-400 mt-0.5">Available only</p>
+                            </div>
+                            
+                            {(fullyDepletedCount > 0 || nearlyEmptyCount > 0) && (
+                                <div className="space-y-1">
+                                    {fullyDepletedCount > 0 && (
+                                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-red-500">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                            {fullyDepletedCount} item{fullyDepletedCount > 1 ? 's' : ''} depleted
+                                        </div>
+                                    )}
+                                    {nearlyEmptyCount > 0 && (
+                                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-500">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                            {nearlyEmptyCount} item{nearlyEmptyCount > 1 ? 's' : ''} nearly empty
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
                         <KpiCard label="Shipments"        value={String(shipments.length)}                        icon={Plane}        iconBg="bg-amber-50 text-amber-600"   trend="neutral" trendLabel="In selected period" />
                     </div>
 

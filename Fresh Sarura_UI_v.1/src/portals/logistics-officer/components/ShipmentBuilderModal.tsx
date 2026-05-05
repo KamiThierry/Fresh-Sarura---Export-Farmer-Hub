@@ -73,6 +73,17 @@ const ShipmentBuilderModal = ({ isOpen, onClose, onSuccess }: ShipmentBuilderMod
     const totalBoxes = selectedBatches.reduce((sum, b) => sum + (b.boxCount || 0), 0);
     const totalWeightKg = selectedBatches.reduce((sum, b) => sum + (b.allocatedWeightKg || 0), 0) + (pallets * 15);
 
+    // 1. Group batches by "clientName — destination"
+    const groupedBatches = useMemo(() => {
+        const groups: Record<string, any[]> = {};
+        filteredBatches.forEach(b => {
+            const key = `${b.clientName} — ${b.destination}`;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(b);
+        });
+        return groups;
+    }, [filteredBatches]);
+
     // Derived client and destination from selected batches
     const derivedClient = useMemo(() => {
         if (selectedBatches.length === 0) return '';
@@ -194,35 +205,64 @@ const ShipmentBuilderModal = ({ isOpen, onClose, onSuccess }: ShipmentBuilderMod
                                             <p className="text-sm text-gray-400 font-medium">No batches ready for export.</p>
                                             <p className="text-xs text-gray-400 mt-1">Ask the PM to mark export batches as "Ready for Export" first.</p>
                                         </div>
-                                    ) : filteredBatches.map(batch => {
-                                        const isSelected = selectedBatchIds.includes(batch._id);
-                                        return (
-                                            <div
-                                                key={batch._id}
-                                                className={`grid grid-cols-12 gap-2 px-4 py-3 items-center rounded-lg transition-all cursor-pointer ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/20 shadow-sm' : 'hover:bg-white dark:hover:bg-gray-800'}`}
-                                                onClick={() => toggleBatch(batch._id)}
-                                            >
-                                                <div className="col-span-1 flex justify-center">
-                                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'}`}>
-                                                        {isSelected && <Check size={12} className="text-white" />}
-                                                    </div>
-                                                </div>
-                                                <div className="col-span-4">
-                                                    <p className="font-bold text-gray-900 dark:text-white text-sm">{batch.cropName}</p>
-                                                    <p className="text-xs text-gray-500 font-mono">{batch.batchId}</p>
-                                                </div>
-                                                <div className="col-span-3 text-xs text-gray-600 dark:text-gray-400">{batch.clientName}</div>
-                                                <div className="col-span-2 text-center">
-                                                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{batch.boxCount}</span>
-                                                </div>
-                                                <div className="col-span-2 text-right">
-                                                    <span className="text-xs font-medium text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
-                                                        {batch.allocatedWeightKg?.toLocaleString()} kg
+                                    ) : (
+                                        Object.entries(groupedBatches).map(([groupKey, batches]) => (
+                                            <div key={groupKey} className="mb-4 last:mb-0">
+                                                {/* Group header */}
+                                                <div className="px-4 py-2 flex items-center justify-between bg-gray-100/50 dark:bg-gray-800/30 rounded-t-lg border-b border-gray-200/50 dark:border-gray-700/50">
+                                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                                        {groupKey}
                                                     </span>
+                                                    {/* Select all in group button */}
+                                                    <button
+                                                        onClick={() => {
+                                                            const allSelected = batches.every(b => selectedBatchIds.includes(b._id));
+                                                            if (allSelected) {
+                                                                setSelectedBatchIds(prev => prev.filter(id => !batches.find(b => b._id === id)));
+                                                            } else {
+                                                                setSelectedBatchIds(prev => [...new Set([...prev, ...batches.map(b => b._id)])]);
+                                                            }
+                                                        }}
+                                                        className="text-[11px] text-indigo-500 hover:text-indigo-700 font-semibold transition-colors"
+                                                    >
+                                                        {batches.every(b => selectedBatchIds.includes(b._id)) ? 'Deselect all' : 'Select all'}
+                                                    </button>
+                                                </div>
+
+                                                <div className="space-y-1 mt-1">
+                                                    {batches.map(batch => {
+                                                        const isSelected = selectedBatchIds.includes(batch._id);
+                                                        return (
+                                                            <div
+                                                                key={batch._id}
+                                                                className={`grid grid-cols-12 gap-2 px-4 py-3 items-center rounded-lg transition-all cursor-pointer ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/20 shadow-sm' : 'hover:bg-white dark:hover:bg-gray-800'}`}
+                                                                onClick={() => toggleBatch(batch._id)}
+                                                            >
+                                                                <div className="col-span-1 flex justify-center">
+                                                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'}`}>
+                                                                        {isSelected && <Check size={12} className="text-white" />}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="col-span-4">
+                                                                    <p className="font-bold text-gray-900 dark:text-white text-sm">{batch.cropName}</p>
+                                                                    <p className="text-xs text-gray-500 font-mono">{batch.batchId}</p>
+                                                                </div>
+                                                                <div className="col-span-3 text-xs text-gray-600 dark:text-gray-400">{batch.clientName}</div>
+                                                                <div className="col-span-2 text-center">
+                                                                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{batch.boxCount}</span>
+                                                                </div>
+                                                                <div className="col-span-2 text-right">
+                                                                    <span className="text-xs font-medium text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
+                                                                        {batch.allocatedWeightKg?.toLocaleString()} kg
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
-                                        );
-                                    })}
+                                        ))
+                                    )}
                                 </div>
                             </div>
 

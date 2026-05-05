@@ -38,15 +38,10 @@ const Dashboard = ({
     onIntakeSubmit,
     onCloseTraceability
 }: DashboardProps) => {
-    const { cycles, pendingRoomRequests, shipments, stock } = usePMContext();
+    const { cycles, pendingRoomRequests, shipments, stock, inventoryItems } = usePMContext();
     const activeCyclesCount = cycles.filter(c => c.status !== 'completed').length;
     const pendingRoomRequestsCount = (pendingRoomRequests || []).length;
     const [userName, setUserName] = useState<string>('Production Manager');
-
-    const totalStockKg = (stock || [])
-        .filter((b: any) => b.stockId) // Only count items that have officially entered inventory
-        .reduce((sum: number, b: any) => sum + (b.processedWeightKg || 0), 0);
-    const totalStockDisplay = `${(totalStockKg / 1000).toFixed(1)} Tons`;
 
     const scheduledShipments = (shipments || []).filter(s =>
         s.status === 'PackingListGenerated'
@@ -86,12 +81,12 @@ const Dashboard = ({
             <div className="mb-6">
                 <DashboardStats
                     todaysIntake={`${currentIntake.toLocaleString()} kg`}
-                    totalStock={totalStockDisplay}
                     activeCyclesCount={activeCyclesCount}
                     scheduledExports={`${(scheduledShipmentsWeightKg / 1000).toFixed(1)} Tons`}
                     pendingRoomRequestsCount={pendingRoomRequestsCount}
                     userName={userName}
                     scheduledShipments={scheduledShipments}
+                    inventoryItems={inventoryItems}
                 />
             </div>
 

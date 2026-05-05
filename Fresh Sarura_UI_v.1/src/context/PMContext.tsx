@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { CropCycle, Farmer, BudgetRequest } from '@/types';
 
@@ -25,6 +25,7 @@ interface PMContextType {
   refreshPendingReports: () => Promise<void>;
   refreshPendingRoomRequests: () => Promise<void>;
   refreshExportBatches: () => Promise<void>;
+  inventoryItems: any[];
   refreshAll: () => Promise<void>;
 }
 
@@ -43,6 +44,43 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [exportBatches, setExportBatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Compute inventoryItems with availableKg
+  const inventoryItems = useMemo(() => {
+    // 1. Map allocations
+    const allocationMap: Record<string, number> = {};
+    exportBatches.forEach(b => {
+      const id = b.processingBatchId?._id || b.processingBatchId;
+      if (!id) return;
+      allocationMap[id] = (allocationMap[id] || 0) + (b.allocatedWeightKg || 0);
+    });
+
+    // 2. Map stock to inventoryItems
+    return stock
+      .filter(s => s.stockId && s.stockId.startsWith('STK-'))
+      .map(s => {
+        const allocated = allocationMap[s._id] || 0;
+        const available = Math.max(0, (s.processedWeightKg || 0) - allocated);
+        const processed = s.processedWeightKg || 0;
+
+        const statusLabel = allocated === 0 ? 'Available'
+          : available === 0 ? 'Fully Allocated'
+          : 'Partially Allocated';
+
+        return {
+          ...s,
+          id: s.stockId,
+          produce: s.cropName,
+          processedKg: processed,
+          availableKg: available,
+          totalAllocated: allocated,
+          storageLocation: s.assignedRoom,
+          status: statusLabel,
+          grade: s.gradeLabel,
+          dateInStock: new Date(s.updatedAt || s.createdAt)
+        };
+      });
+  }, [stock, exportBatches]);
 
   const refreshCycles = useCallback(async () => {
     try {
@@ -181,6 +219,7 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       pendingReports,
       pendingRoomRequests,
       exportBatches,
+      inventoryItems,
       loading,
       error,
       refreshCycles,

@@ -23,11 +23,11 @@ interface SelectedLine {
 interface CreateExportBatchModalProps {
     isOpen: boolean;
     onClose: () => void;
-    stock: any[];
+    inventoryItems: any[];
     onSuccess: () => void;
 }
 
-const CreateExportBatchModal = ({ isOpen, onClose, stock, onSuccess }: CreateExportBatchModalProps) => {
+const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: CreateExportBatchModalProps) => {
     const [clientName, setClientName] = useState('');
     const [destination, setDestination] = useState('');
     const [targetShipmentDate, setTargetShipmentDate] = useState('');
@@ -50,21 +50,19 @@ const CreateExportBatchModal = ({ isOpen, onClose, stock, onSuccess }: CreateExp
 
     if (!isOpen) return null;
 
-    // Only show available stock (not fully allocated, must have STK- id)
-    const availableStock: StockItem[] = stock
-        .filter((s: any) => s.stockId && s.stockId.startsWith('STK-'))
-        .map((s: any) => ({
-            _id: s._id,
-            stockId: s.stockId,
-            cropName: s.cropName,
-            processedWeightKg: s.processedWeightKg || 0,
-            assignedRoom: s.assignedRoom,
-            gradeLabel: s.gradeLabel || 'Grade A',
+    // Only show available stock (not fully allocated)
+    const availableStock: StockItem[] = inventoryItems
+        .filter((i: any) => i.availableKg > 0)
+        .map((i: any) => ({
+            _id: i.rawId,
+            stockId: i.id,
+            cropName: i.produce,
+            processedWeightKg: i.availableKg,
+            assignedRoom: i.storageLocation,
+            gradeLabel: i.grade,
         }));
 
-    // Compute how much is already allocated per stock item from selectedLines
-    const getAllocatedForStock = (stockId: string) =>
-        selectedLines.find(l => l.stockItem.stockId === stockId)?.allocateKg || 0;
+
 
     const isSelected = (stockId: string) =>
         selectedLines.some(l => l.stockItem.stockId === stockId);

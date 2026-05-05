@@ -3,7 +3,7 @@ import {
     Search, Filter, Download, Plus, MoreHorizontal,
     Package, Layers,
     Leaf, Clock, ClipboardCheck,
-    ChevronDown, FileSpreadsheet, FileText
+    ChevronDown, FileSpreadsheet, FileText, User
 } from 'lucide-react';
 import CreateExportBatchModal from '../components/CreateExportBatchModal';
 import BatchDetailModal from '../components/BatchDetailModal';
@@ -21,6 +21,7 @@ const InventoryManagement = () => {
     const { 
         stock, refreshStock, 
         exportBatches, refreshExportBatches, 
+        inventoryItems,
         shipments, refreshShipments
     } = usePMContext();
 
@@ -57,6 +58,8 @@ const InventoryManagement = () => {
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [eventTypeFilter, setEventTypeFilter] = useState<string>('all');
     const [timeRangeFilter, setTimeRangeFilter] = useState<string>('all');
+    const [exportClientFilter, setExportClientFilter] = useState<string>('all');
+    const [exportStatusFilter, setExportStatusFilter] = useState<string>('all');
     
     // Pagination
     const [inventoryPage, setInventoryPage] = useState(1);
@@ -311,49 +314,16 @@ const InventoryManagement = () => {
     }, []);
 
     // --- DERIVED / FILTERED DATA ---
-    
-    // 1. Build a map: processingBatchId._id → total allocated kg across all export batches
-    const allocationMap = exportBatches.reduce((map: Record<string, number>, eb: any) => {
-        const pbId = eb.processingBatchId?._id || eb.processingBatchId;
-        if (pbId) {
-            map[pbId] = (map[pbId] || 0) + (eb.allocatedWeightKg || 0);
-        }
-        return map;
-    }, {} as Record<string, number>);
-
-
-
-    // Tab 2: Inventory (Stock)
-    const inventoryItems = stock.map(item => {
-        const totalAllocated = allocationMap[item._id] || 0;
-        const processedKg    = item.processedWeightKg || 0;
-        const availableKg    = Math.max(processedKg - totalAllocated, 0);
-        const dateInStock    = new Date(item.updatedAt); // when PM confirmed → status became Done
-
-        const status = totalAllocated === 0        ? 'Available'
-                     : availableKg   === 0         ? 'Fully Allocated'
-                     :                               'Partially Allocated';
-
-        return {
-            id:             item.stockId || null,   // null = no STK- yet, hide row
-            rawId:          item._id,
-            produce:        item.cropName,
-            farmerSource:   item.cycleId?.farmer_id?.full_name
-                            || item.cycleId?.farmer_id?.cooperative_name
-                            || item.cycleId?.farm_name
-                            || '—',
-            grade:          item.gradeLabel || 'Grade A',
-            processedKg,
-            rejectedKg:     item.rejectedWeightKg || 0,
-            totalAllocated,
-            availableKg,
-            storageLocation: item.assignedRoom || '—',
-            dateInStock,
-            status,
-        };
-    }).filter(item => item.id !== null);
+    const mappedInventoryItems = inventoryItems.map((item: any) => ({
+        ...item,
+        farmerSource:   item.cycleId?.farmer_id?.full_name
+                        || item.cycleId?.farmer_id?.cooperative_name
+                        || item.cycleId?.farm_name
+                        || '—',
+    }));
 
     // Filtered Lists
+
 
 
     const filteredActivity = activityFeed.filter(a => {
@@ -397,7 +367,7 @@ const InventoryManagement = () => {
         return matchesSearch && matchesEvent && matchesTime;
     });
 
-    const filteredInventory = inventoryItems.filter(i => {
+    const filteredInventory = mappedInventoryItems.filter((i: any) => {
         const matchesSearch =
             i.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             i.produce.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -437,21 +407,62 @@ const InventoryManagement = () => {
         return matchesSearch && matchesProduce && matchesRoom && matchesTime;
     });
 
-    const filteredExportBatches = exportBatches
-        .filter(b =>
+    const filteredExportBatches = exportBatches.filter(b => {
+        const matchesSearch =
             b.batchId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             b.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            b.cropName?.toLowerCase().includes(searchTerm.toLowerCase())
-        );
+            b.cropName?.toLowerCase().includes(searchTerm.toLowerCase());
+
+        const matchesClient = exportClientFilter === 'all' || b.clientName === exportClientFilter;
+        const matchesStatus = exportStatusFilter === 'all' || b.status === exportStatusFilter;
+
+        let matchesTime = true;
+        if (timeRangeFilter !== 'all') {
+            const now = new Date();
+            now.setHours(23, 59, 59, 999);
+            const batchDate = new Date(b.createdAt);
+
+            if (!isNaN(batchDate.getTime())) {
+                if (timeRangeFilter === 'week') {
+                    const weekAgo = new Date();
+                    weekAgo.setDate(now.getDate() - 7);
+                    weekAgo.setHours(0, 0, 0, 0);
+                    matchesTime = batchDate.getTime() >= weekAgo.getTime();
+                } else if (timeRangeFilter === 'month') {
+                    const monthAgo = new Date();
+                    monthAgo.setMonth(now.getMonth() - 1);
+                    monthAgo.setHours(0, 0, 0, 0);
+                    matchesTime = batchDate.getTime() >= monthAgo.getTime();
+                } else if (timeRangeFilter === '3months') {
+                    const threeMonthsAgo = new Date();
+                    threeMonthsAgo.setMonth(now.getMonth() - 3);
+                    threeMonthsAgo.setHours(0, 0, 0, 0);
+                    matchesTime = batchDate.getTime() >= threeMonthsAgo.getTime();
+                }
+            } else {
+                matchesTime = false;
+            }
+        }
+
+        return matchesSearch && matchesClient && matchesStatus && matchesTime;
+    });
 
 
 
     // Stats
-    const totalStockKg = inventoryItems.reduce((sum, i) => sum + i.processedKg, 0);
+    const totalStockKg = inventoryItems.reduce((sum: number, i: any) => sum + i.availableKg, 0);
     const totalStockTons = (totalStockKg / 1000).toFixed(1);
     const intakeTodayKg = stock
         .filter(i => new Date(i.createdAt).toDateString() === new Date().toDateString())
         .reduce((sum, i) => sum + (i.receivedWeightKg || 0), 0);
+
+    const nearlyEmptyCount = inventoryItems.filter((i: any) => 
+        i.availableKg > 0 && i.availableKg < i.processedKg * 0.2
+    ).length;
+
+    const fullyDepletedCount = inventoryItems.filter((i: any) => 
+        i.availableKg === 0 && i.status !== 'Spoiled'
+    ).length;
 
     const summaryStats = [
         { label: 'Total Stock', value: `${totalStockTons} Tons`, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
@@ -508,7 +519,7 @@ const InventoryManagement = () => {
         } else if (activeTab === 'active_inventory') {
             XLSX.utils.book_append_sheet(wb, makeSheet(
                 ['Stock ID', 'Produce', 'Weight (kg)', 'Storage', 'Status', 'Days in Stock'],
-                inventoryItems.map(i => [
+                mappedInventoryItems.map((i: any) => [
                     i.id, 
                     i.produce, 
                     i.processedKg, 
@@ -685,7 +696,56 @@ const InventoryManagement = () => {
 
             {/* Summary Cards */}
             <div className="grid grid-cols-4 gap-6">
-                {summaryStats.map((stat, index) => (
+                {/* Total Stock — custom card with alert */}
+                <div className={`bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border transition-colors ${
+                    fullyDepletedCount > 0
+                        ? 'border-red-200 dark:border-red-800/40'
+                        : nearlyEmptyCount > 0
+                        ? 'border-amber-200 dark:border-amber-800/40'
+                        : 'border-gray-100 dark:border-gray-700'
+                }`}>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Stock</p>
+                            <div className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">
+                                {totalStockTons} Tons
+                            </div>
+                            <p className="text-xs text-gray-400 mt-0.5">Available only</p>
+
+                            {/* Alert line */}
+                            {fullyDepletedCount > 0 && (
+                                <p className="text-xs text-red-500 font-semibold mt-2 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+                                    {fullyDepletedCount} item{fullyDepletedCount > 1 ? 's' : ''} fully depleted
+                                </p>
+                            )}
+                            {nearlyEmptyCount > 0 && (
+                                <p className="text-xs text-amber-500 font-semibold mt-1 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+                                    {nearlyEmptyCount} item{nearlyEmptyCount > 1 ? 's' : ''} nearly empty
+                                </p>
+                            )}
+                        </div>
+                        <div className={`p-3 rounded-lg ${
+                            fullyDepletedCount > 0
+                                ? 'bg-red-50 dark:bg-red-900/20'
+                                : nearlyEmptyCount > 0
+                                ? 'bg-amber-50 dark:bg-amber-900/20'
+                                : 'bg-blue-50 dark:bg-blue-900/20'
+                        }`}>
+                            <Package className={
+                                fullyDepletedCount > 0
+                                    ? 'text-red-500'
+                                    : nearlyEmptyCount > 0
+                                    ? 'text-amber-500'
+                                    : 'text-blue-600'
+                            } size={24} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Remaining 3 cards unchanged */}
+                {summaryStats.slice(1).map((stat, index) => (
                     <div key={index} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                         <div className="flex justify-between items-start">
                             <div>
@@ -836,6 +896,54 @@ const InventoryManagement = () => {
                                 <select
                                     value={timeRangeFilter}
                                     onChange={(e) => { setTimeRangeFilter(e.target.value); setInventoryPage(1); }}
+                                    className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm"
+                                >
+                                    <option value="all">All Time</option>
+                                    <option value="week">This Week</option>
+                                    <option value="month">This Month</option>
+                                    <option value="3months">Last 3 Months</option>
+                                </select>
+                                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                            </div>
+                        </>
+                    )}
+                    {activeTab === 'export_batches' && (
+                        <>
+                            <div className="relative">
+                                <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                <select
+                                    value={exportClientFilter}
+                                    onChange={(e) => { setExportClientFilter(e.target.value); setExportPage(1); }}
+                                    className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm"
+                                >
+                                    <option value="all">All Clients</option>
+                                    {[...new Set(exportBatches.map(b => b.clientName))].filter(Boolean).map(name => (
+                                        <option key={name} value={name}>{name}</option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                            </div>
+
+                            <div className="relative">
+                                <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                <select
+                                    value={exportStatusFilter}
+                                    onChange={(e) => { setExportStatusFilter(e.target.value); setExportPage(1); }}
+                                    className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm"
+                                >
+                                    <option value="all">All Statuses</option>
+                                    <option value="Pending">Pending</option>
+                                    <option value="ReadyForExport">Ready for Export</option>
+                                    <option value="Shipped">Shipped</option>
+                                </select>
+                                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                            </div>
+
+                            <div className="relative">
+                                <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                <select
+                                    value={timeRangeFilter}
+                                    onChange={(e) => { setTimeRangeFilter(e.target.value); setExportPage(1); }}
                                     className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm"
                                 >
                                     <option value="all">All Time</option>
@@ -1014,13 +1122,43 @@ const InventoryManagement = () => {
 
                                                     {/* Available (what's left) */}
                                                     <td className="px-6 py-4">
-                                                        <span className={`text-sm font-bold ${
-                                                            item.availableKg === 0
-                                                                ? 'text-gray-400'
-                                                                : 'text-gray-900 dark:text-white'
-                                                        }`}>
-                                                            {item.availableKg.toLocaleString()} kg
-                                                        </span>
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className={`text-sm font-bold ${
+                                                                item.availableKg === 0
+                                                                    ? 'text-gray-400'
+                                                                    : item.availableKg < item.processedKg * 0.2
+                                                                    ? 'text-red-600 dark:text-red-400'
+                                                                    : item.availableKg < item.processedKg * 0.5
+                                                                    ? 'text-amber-600 dark:text-amber-400'
+                                                                    : 'text-gray-900 dark:text-white'
+                                                            }`}>
+                                                                {item.availableKg.toLocaleString()} kg
+                                                            </span>
+
+                                                            {/* Progress bar */}
+                                                            <div className="w-20 h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                                                                <div
+                                                                    className={`h-full rounded-full transition-all ${
+                                                                        item.availableKg === 0
+                                                                            ? 'bg-gray-300'
+                                                                            : item.availableKg < item.processedKg * 0.2
+                                                                            ? 'bg-red-500'
+                                                                            : item.availableKg < item.processedKg * 0.5
+                                                                            ? 'bg-amber-400'
+                                                                            : 'bg-green-500'
+                                                                    }`}
+                                                                    style={{ width: `${Math.min((item.availableKg / item.processedKg) * 100, 100)}%` }}
+                                                                />
+                                                            </div>
+
+                                                            {/* Alert label */}
+                                                            {item.availableKg > 0 && item.availableKg < item.processedKg * 0.2 && (
+                                                                <span className="text-[10px] text-red-500 font-semibold">Nearly empty</span>
+                                                            )}
+                                                            {item.availableKg === 0 && item.status !== 'Fully Allocated' && (
+                                                                <span className="text-[10px] text-gray-400">All allocated</span>
+                                                            )}
+                                                        </div>
                                                     </td>
 
                                                     {/* Location */}
@@ -1129,7 +1267,7 @@ const InventoryManagement = () => {
                                     <th className="px-6 py-4">Client / Destination</th>
                                     <th className="px-6 py-4">Composition</th>
                                     <th className="px-6 py-4">Shipment Date</th>
-                                    <th className="px-6 py-4">Shipment</th>
+                                    <th className="px-6 py-4">PL Number</th>
                                     <th className="px-6 py-4">Status</th>
                                     <th className="px-6 py-4 text-right">Action</th>
                                 </tr>
@@ -1145,27 +1283,53 @@ const InventoryManagement = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                                            {item.cropName} — {item.boxCount} boxes ({item.allocatedWeightKg?.toLocaleString()} kg)
+                                            {item.cropName} — {item.boxCount} {item.boxCount === 1 ? 'box' : 'boxes'} ({item.allocatedWeightKg?.toLocaleString()} kg)
                                         </td>
                                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                                            {item.targetShipmentDate ? new Date(item.targetShipmentDate).toLocaleDateString() : '—'}
+                                            {(() => {
+                                                const shipment = getShipmentForBatch(item._id);
+                                                const confirmedDate = shipment?.departureDate;
+                                                const plannedDate = item.targetShipmentDate;
+
+                                                if (confirmedDate) {
+                                                    return (
+                                                        <div className="flex flex-col">
+                                                            <span className="font-medium text-gray-900 dark:text-white">
+                                                                {new Date(confirmedDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                            </span>
+                                                            <span className="text-[10px] text-green-600 dark:text-green-400 font-medium mt-0.5">
+                                                                Confirmed flight
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                if (plannedDate) {
+                                                    return (
+                                                        <div className="flex flex-col">
+                                                            <span className="text-gray-600 dark:text-gray-300">
+                                                                {new Date(plannedDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                            </span>
+                                                            <span className="text-[10px] text-amber-500 font-medium mt-0.5">
+                                                                Target — not yet booked
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                return <span className="text-gray-400">—</span>;
+                                            })()}
                                         </td>
                                         <td className="px-6 py-4">
                                             {(() => {
                                                 const shipment = getShipmentForBatch(item._id);
-                                                if (!shipment) return <span className="text-xs text-gray-400 italic">Not assigned</span>;
-                                                const statusColor = shipment.status === 'Shipped'
-                                                    ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                                    : 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+                                                if (!shipment) return (
+                                                    <span className="text-xs text-gray-400">Awaiting shipment</span>
+                                                );
                                                 return (
-                                                    <div className="flex flex-col gap-1">
-                                                        <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                                                            {shipment.plNumber}
-                                                        </span>
-                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold w-fit ${statusColor}`}>
-                                                            {shipment.status === 'Shipped' ? '✈ Shipped' : '📋 Scheduled'}
-                                                        </span>
-                                                    </div>
+                                                    <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                                                        {shipment.plNumber}
+                                                    </span>
                                                 );
                                             })()}
                                         </td>
@@ -1181,9 +1345,13 @@ const InventoryManagement = () => {
                                         <td className="px-6 py-4 text-right">
                                             <button
                                                 onClick={() => { setSelectedBatch(item); setIsBatchModalOpen(true); }}
-                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 text-xs font-semibold rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+                                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                                                    item.status === 'Pending'
+                                                        ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50'
+                                                        : 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50'
+                                                }`}
                                             >
-                                                Manage Batch
+                                                {item.status === 'Pending' ? 'Mark Ready' : 'View Details'}
                                             </button>
                                         </td>
                                     </tr>
@@ -1297,7 +1465,7 @@ const InventoryManagement = () => {
             <CreateExportBatchModal
                 isOpen={isExportBatchOpen}
                 onClose={() => setIsExportBatchOpen(false)}
-                stock={stock}  // raw ProcessingBatch array from /stock endpoint — already correct
+                inventoryItems={inventoryItems}
                 onSuccess={() => {
                     setIsExportBatchOpen(false);
                     refreshExportBatches();
