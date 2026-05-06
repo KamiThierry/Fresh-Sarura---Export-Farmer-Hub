@@ -10,6 +10,7 @@ import EvidenceViewModal from './EvidenceViewModal';
 import BudgetLedgerModal from './BudgetLedgerModal';
 import BudgetRejectionModal from './BudgetRejectionModal';
 import { api } from '@/lib/api';
+import { usePMContext } from '@/context/PMContext';
 import Toast from '../../shared/component/Toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -55,6 +56,13 @@ const CropCycleDetailModal = ({
   const [replyText, setReplyText] = useState<{ [id: string]: string }>({});
   const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
+
+  const {
+    refreshPendingRequests,
+    refreshPendingForecasts,
+    refreshPendingReports,
+    refreshCycles
+  } = usePMContext();
 
   // ─── Fetch all cycle data ──────────────────────────────────────────
   const fetchFull = async () => {
@@ -132,6 +140,9 @@ const CropCycleDetailModal = ({
       await api.patch(`/crop-cycles/budget-requests/${requestId}/approve`, { forceApprove });
       setOverdraftWarning(null);
       fetchFull();
+      refreshPendingRequests();
+      refreshCycles();
+      if (onCycleUpdated) onCycleUpdated();
     } catch (err: any) {
       if (err.code === 'BUDGET_OVERDRAFT') {
         setOverdraftWarning({ requestId, details: err.overdraftDetails });
@@ -147,6 +158,9 @@ const CropCycleDetailModal = ({
     try {
       await api.patch(`/crop-cycles/budget-requests/${requestId}/reject`, { pmNote });
       fetchFull();
+      refreshPendingRequests();
+      refreshCycles();
+      if (onCycleUpdated) onCycleUpdated();
     } catch (err) { console.error(err); }
   };
 
@@ -158,6 +172,8 @@ const CropCycleDetailModal = ({
     try {
       await api.patch(`/crop-cycles/yield-forecasts/${forecastId}/verify`, { pmReply });
       fetchFull();
+      refreshPendingForecasts();
+      if (onCycleUpdated) onCycleUpdated();
     } catch (err) { console.error(err); }
   };
 
@@ -165,7 +181,9 @@ const CropCycleDetailModal = ({
     try {
       await api.patch(`/crop-cycles/field-reports/${reportId}/flag`, { reason });
       fetchFull();
+      refreshPendingReports();
       setSelectedFieldReport(null);
+      if (onCycleUpdated) onCycleUpdated();
     } catch (err) { console.error(err); }
   };
 
@@ -178,6 +196,7 @@ const CropCycleDetailModal = ({
       if (onCloseCycle) onCloseCycle(finalYield);
       if (onCycleUpdated) onCycleUpdated();
       fetchFull();
+      refreshCycles();
     } catch (err) { console.error(err); }
   };
 
@@ -185,7 +204,9 @@ const CropCycleDetailModal = ({
     try {
       await api.patch(`/crop-cycles/${cycle._id}/adjust-budget`, { categoryName, newAllocated });
       fetchFull();
+      refreshCycles();
       setIsAdjustBudgetOpen(false);
+      if (onCycleUpdated) onCycleUpdated();
     } catch (err) { console.error(err); }
   };
 

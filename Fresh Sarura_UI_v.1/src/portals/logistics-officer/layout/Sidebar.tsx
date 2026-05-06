@@ -21,7 +21,6 @@ const Sidebar = () => {
             title: 'Operations',
             items: [
                 { path: '/logistics/pickups', icon: PackageCheck, label: 'Pending Pickups' },
-                { path: '/logistics/collections', icon: Truck, label: 'Collection Routes' },
                 { path: '/logistics/shipments', icon: Plane, label: 'Export Shipments' },
                 { path: '/logistics/fleet', icon: Users, label: 'Fleet & Drivers' },
                 { path: '/logistics/documents', icon: FileText, label: 'Documents' },

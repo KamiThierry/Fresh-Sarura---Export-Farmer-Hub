@@ -1,38 +1,64 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Wrench, Calendar, AlertTriangle, CheckCircle } from 'lucide-react';
+import { X, Wrench, AlertTriangle, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
+import { api } from '../../../lib/api';
 
 interface LogMaintenanceModalProps {
     isOpen: boolean;
     onClose: () => void;
+    vehicleId: string;
     vehiclePlate: string;
+    onSuccess: () => void;
 }
 
-const LogMaintenanceModal = ({ isOpen, onClose, vehiclePlate }: LogMaintenanceModalProps) => {
+const LogMaintenanceModal = ({ isOpen, onClose, vehicleId, vehiclePlate, onSuccess }: LogMaintenanceModalProps) => {
     const [formData, setFormData] = useState({
         reason: '',
         returnDate: '',
         cost: '',
         markAsMaintenance: true
     });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     if (!isOpen) return null;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        console.log(`Logging Maintenance for ${vehiclePlate}:`, formData);
-        onClose();
+        setIsSubmitting(true);
+        setError(null);
+
+        try {
+            // Update vehicle status and set next maintenance date
+            await api.patch(`/fleet/vehicles/${vehicleId}`, {
+                status: formData.markAsMaintenance ? 'Maintenance' : 'Available',
+                nextMaintenanceDate: formData.returnDate
+            });
+            onSuccess();
+            onClose();
+            setFormData({
+                reason: '',
+                returnDate: '',
+                cost: '',
+                markAsMaintenance: true
+            });
+        } catch (err: any) {
+            console.error('Error logging maintenance:', err);
+            setError(err.message || 'Failed to log maintenance');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in" onClick={onClose} />
-            <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-gray-100 dark:border-gray-700">
+            <div className="relative bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200">
 
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-700 bg-amber-50 dark:bg-amber-900/10">
+                <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-700 bg-amber-50/50 dark:bg-amber-900/10">
                     <div className="flex items-center gap-3">
-                        <div className="bg-amber-100 dark:bg-amber-900/20 p-2 rounded-lg text-amber-600 dark:text-amber-400">
+                        <div className="bg-amber-100 dark:bg-amber-900/20 p-2.5 rounded-xl text-amber-600 dark:text-amber-400">
                             <Wrench size={24} />
                         </div>
                         <div>
@@ -49,15 +75,21 @@ const LogMaintenanceModal = ({ isOpen, onClose, vehiclePlate }: LogMaintenanceMo
                 </div>
 
                 {/* Warning Banner */}
-                <div className="bg-amber-50 dark:bg-amber-900/20 px-6 py-3 flex items-start gap-3 border-b border-amber-100 dark:border-amber-900/10">
+                <div className="bg-amber-50/50 dark:bg-amber-900/10 px-6 py-4 flex items-start gap-3 border-b border-amber-100 dark:border-amber-900/10">
                     <AlertTriangle size={18} className="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-                    <p className="text-sm text-amber-800 dark:text-amber-200">
-                        Submitting this log will automatically mark the vehicle as <strong>Unavailable</strong> in the Dispatch Board until the return date.
+                    <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                        Submitting this log will mark the vehicle as <strong className="text-amber-900 dark:text-amber-100 uppercase">Maintenance</strong> and remove it from the available pool.
                     </p>
                 </div>
 
                 {/* Body */}
                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                    {error && (
+                        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-2xl flex items-center gap-3 text-red-600 dark:text-red-400 text-sm font-medium">
+                            <AlertCircle size={20} />
+                            {error}
+                        </div>
+                    )}
 
                     {/* Reason */}
                     <div className="space-y-2">
@@ -68,7 +100,7 @@ const LogMaintenanceModal = ({ isOpen, onClose, vehiclePlate }: LogMaintenanceMo
                             placeholder="e.g. Brake pad replacement and oil change..."
                             value={formData.reason}
                             onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-                            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all resize-none"
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all resize-none font-medium"
                         />
                     </div>
 
@@ -81,7 +113,7 @@ const LogMaintenanceModal = ({ isOpen, onClose, vehiclePlate }: LogMaintenanceMo
                                 required
                                 value={formData.returnDate}
                                 onChange={(e) => setFormData({ ...formData, returnDate: e.target.value })}
-                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all"
+                                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-medium"
                             />
                         </div>
 
@@ -93,19 +125,19 @@ const LogMaintenanceModal = ({ isOpen, onClose, vehiclePlate }: LogMaintenanceMo
                                 placeholder="0"
                                 value={formData.cost}
                                 onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
-                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all"
+                                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-bold"
                             />
                         </div>
                     </div>
 
                     {/* Action Toggle */}
-                    <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700">
+                    <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700">
                         <input
                             type="checkbox"
                             checked={formData.markAsMaintenance}
                             onChange={(e) => setFormData({ ...formData, markAsMaintenance: e.target.checked })}
                             id="markMaintenance"
-                            className="mt-1 w-4 h-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
+                            className="mt-1 w-5 h-5 text-amber-600 rounded-lg border-gray-300 focus:ring-amber-500 cursor-pointer"
                         />
                         <label htmlFor="markMaintenance" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                             <span className="font-bold block mb-0.5">Mark as 'Maintenance' Status</span>
@@ -124,10 +156,11 @@ const LogMaintenanceModal = ({ isOpen, onClose, vehiclePlate }: LogMaintenanceMo
                         </button>
                         <button
                             type="submit"
-                            className="flex items-center gap-2 px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold shadow-lg shadow-amber-900/20 transition-all hover:scale-105 active:scale-95"
+                            disabled={isSubmitting}
+                            className="flex items-center gap-2 px-8 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-lg shadow-amber-900/20 transition-all hover:scale-105 active:scale-95"
                         >
-                            <CheckCircle size={18} />
-                            Confirm Service
+                            {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle size={18} />}
+                            {isSubmitting ? 'Syncing...' : 'Confirm Service'}
                         </button>
                     </div>
                 </form>

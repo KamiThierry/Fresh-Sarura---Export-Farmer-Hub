@@ -35,13 +35,15 @@ export const useUniversalSearch = (query: string, role: string): { results: Sear
         fetchedRef.current = true;
         setLoading(true);
 
-        const endpoints = [
-            api.get('/farmers'),
-            api.get('/crop-cycles'),
-        ];
+        const endpoints: Promise<any>[] = [];
+
+        if (['admin', 'production_manager', 'quality_officer'].includes(role)) {
+            endpoints.push(api.get('/farmers'));
+            endpoints.push(api.get('/crop-cycles'));
+        }
 
         // Add role-specific data fetching
-        if (['admin', 'logistics_officer'].includes(role)) {
+        if (['admin', 'logistic_officer'].includes(role)) {
             endpoints.push(api.get('/shipments'));
         }
         if (['admin', 'production_manager', 'quality_officer'].includes(role)) {
@@ -69,7 +71,7 @@ export const useUniversalSearch = (query: string, role: string): { results: Sear
                             if (offsetIdx === 0) cacheRef.current.shipments = data ?? [];
                             if (offsetIdx === 1) cacheRef.current.batches = data ?? [];
                             if (offsetIdx === 2) cacheRef.current.users = data ?? [];
-                        } else if (role === 'logistics_officer') {
+                        } else if (role === 'logistic_officer') {
                             if (offsetIdx === 0) cacheRef.current.shipments = data ?? [];
                         } else if (role === 'quality_officer') {
                             if (offsetIdx === 0) cacheRef.current.batches = data ?? [];
@@ -121,7 +123,7 @@ export const useUniversalSearch = (query: string, role: string): { results: Sear
         });
 
         // 3. Shipments
-        if (['admin', 'logistics_officer'].includes(role)) {
+        if (['admin', 'logistic_officer'].includes(role)) {
             shipments.filter(s => 
                 s.plNumber?.toLowerCase().includes(q) || 
                 s.destination?.toLowerCase().includes(q)
@@ -132,7 +134,7 @@ export const useUniversalSearch = (query: string, role: string): { results: Sear
                     title: `Packing List: ${s.plNumber}`,
                     subtitle: `${s.destination} · ${s.totalWeightKg}kg`,
                     badge: s.status,
-                    url: role === 'admin' ? '/admin/reports' : '/logistics/shipments'
+                url: role === 'admin' ? '/admin/reports' : '/logistics/shipments'
                 });
             });
         }

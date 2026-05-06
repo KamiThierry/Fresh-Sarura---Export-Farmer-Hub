@@ -1,8 +1,9 @@
-import { User, Bell, Settings as SettingsIcon, Radio, Save, Shield, Mail, Smartphone, Plane, Truck, Activity, Key, Globe, CheckCircle, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import { User, Bell, Save, Shield, Mail, Smartphone } from 'lucide-react';
 import Toast from '../../shared/component/Toast';
 
 const Settings = () => {
-    const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'defaults' | 'integrations'>('profile');
+    const [activeTab, setActiveTab] = useState<'profile' | 'notifications'>('profile');
     const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
 
     const handleSaveNotification = (msg: string, sub: string) => {
@@ -33,18 +34,6 @@ const Settings = () => {
                     >
                         <Bell size={18} /> Notifications
                     </button>
-                    <button
-                        onClick={() => setActiveTab('defaults')}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'defaults' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                    >
-                        <SettingsIcon size={18} /> Operational Defaults
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('integrations')}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'integrations' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                    >
-                        <Radio size={18} /> Integrations & APIs
-                    </button>
                 </div>
 
                 {/* Right Column: Content */}
@@ -53,7 +42,6 @@ const Settings = () => {
 
                         {activeTab === 'profile' && <ProfilePanel onSave={() => handleSaveNotification('Profile Updated', 'Your changes have been saved successfully.')} />}
                         {activeTab === 'notifications' && <NotificationsPanel onSave={() => handleSaveNotification('Preferences Saved', 'Notification settings updated.')} />}
-                        {activeTab === 'defaults' && <DefaultsPanel onSave={() => handleSaveNotification('Defaults Saved', 'Operational system defaults updated.')} />}
                     </div>
                 </div>
 
@@ -162,7 +150,7 @@ const NotificationsPanel = ({ onSave }: { onSave: () => void }) => {
                 {/* Event Rows */}
                 <NotificationRow
                     title="New Harvest Ready"
-                    desc="When Farm Manager submits a collection request."
+                    desc="When Farm Manager submits a pickup request."
                     app={true}
                     email={true}
                 />
@@ -214,121 +202,5 @@ const NotificationRow = ({ title, desc, app, email, sms }: { title: string, desc
         </div>
     </div>
 );
-
-// Panel C: Operational Defaults
-const DefaultsPanel = ({ onSave }: { onSave: () => void }) => {
-    return (
-        <div className="space-y-8 animate-fade-in">
-            <div>
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">System Defaults</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Pre-filled values for builders and planners.</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Default Origin Airport</label>
-                    <div className="relative">
-                        <Plane size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <select className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none cursor-pointer">
-                            <option>Kigali International (KGL)</option>
-                            <option>Kamembe (KME)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Preferred Export Airline</label>
-                    <div className="relative">
-                        <Globe size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <select className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none cursor-pointer">
-                            <option>RwandAir (WB)</option>
-                            <option>Ethiopian Airlines (ET)</option>
-                            <option>Qatar Airways (QR)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Default Weight Unit</label>
-                    <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900 p-2 rounded-xl border border-gray-200 dark:border-gray-700 w-fit">
-                        <button className="px-4 py-1.5 bg-white dark:bg-gray-700 shadow-sm rounded-lg text-sm font-bold text-gray-900 dark:text-white">KG</button>
-                        <button className="px-4 py-1.5 text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">LBS</button>
-                    </div>
-                </div>
-
-                <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Pallet Max Weight Limit (kg)</label>
-                    <input type="number" defaultValue={1000} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
-                </div>
-
-            </div>
-
-            <div className="flex justify-end pt-6 border-t border-gray-100 dark:border-gray-700">
-                <button 
-                    onClick={onSave}
-                    className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 transition-all hover:scale-105 active:scale-95"
-                >
-                    <Save size={18} />
-                    Save Defaults
-                </button>
-            </div>
-        </div>
-    );
-};
-
-// Panel D: Integrations
-const IntegrationsPanel = () => {
-    return (
-        <div className="space-y-6 animate-fade-in">
-            <div>
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">External Services</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Manage connections to third-party tools.</p>
-            </div>
-
-            <div className="space-y-4">
-
-                {/* SMS Gateway */}
-                <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-full">
-                            <CheckCircle size={24} />
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                SMS Gateway
-                                <span className="px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs rounded-full">Connected</span>
-                            </h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Twilio / Africa's Talking. Powers Magic Link dispatch.</p>
-                        </div>
-                    </div>
-                    <button className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-all text-sm">
-                        Manage Keys
-                    </button>
-                </div>
-
-                {/* GPS Telematics */}
-                <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full">
-                            <AlertTriangle size={24} />
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                GPS Telematics
-                                <span className="px-2 py-0.5 bg-gray-200 text-gray-600 dark:bg-gray-800 dark:text-gray-400 text-xs rounded-full">Disconnected</span>
-                            </h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Fleetmatics. Live tracking for Active Operations Map.</p>
-                        </div>
-                    </div>
-                    <button className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg transition-all text-sm shadow-sm">
-                        Connect Account
-                    </button>
-                </div>
-
-            </div>
-        </div>
-    );
-};
 
 export default Settings;

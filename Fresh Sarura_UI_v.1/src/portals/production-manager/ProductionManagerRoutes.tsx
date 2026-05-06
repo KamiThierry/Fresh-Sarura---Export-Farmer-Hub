@@ -133,8 +133,8 @@ const ProductionManagerApp = () => {
                     <Route path="/communication" element={<ClientRequests />} />
                     <Route path="/rooms" element={<RoomManagement />} />
 
-                    {/* Catch all - redirect to home */}
-                    <Route path="*" element={<Navigate to="/" replace />} />
+                    {/* Catch all - redirect to dashboard */}
+                    <Route path="*" element={<Navigate to="/pm" replace />} />
                 </Route>
             </Routes>
 

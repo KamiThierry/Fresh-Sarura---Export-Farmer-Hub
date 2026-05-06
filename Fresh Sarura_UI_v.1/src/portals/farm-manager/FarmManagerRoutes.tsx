@@ -23,7 +23,7 @@ const FarmManagerRoutes = () => {
           <Route path="yield-forecast" element={<YieldForecasting />} />
           <Route path="performance" element={<Performance />} />
           <Route path="settings" element={<Settings />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/farm-manager" replace />} />
         </Route>
       </Routes>
     </RequireAuth>

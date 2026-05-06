@@ -58,7 +58,7 @@ const AdminRoutes = () => (
             <Route path="logistics/pickup" element={<LogPendingPickups />} />
             <Route path="logistics/shipments" element={<LogShipments />} />
             <Route path="logistics/documents" element={<LogDocuments />} />
-            <Route path="*" element={<Navigate to="dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
         </Route>
     </Routes>
 );

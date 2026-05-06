@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
-import { Sprout, Plus, AlertTriangle, ChevronRight, BarChart2, AlertCircle, Thermometer } from 'lucide-react';
+import { Sprout, Plus, AlertTriangle, ChevronRight, BarChart2, AlertCircle } from 'lucide-react';
 import CreateCropCycleModal from '../components/CreateCropCycleModal';
 import CropCycleDetailModal from '../components/CropCycleDetailModal';
 import BudgetRejectionModal from '../components/BudgetRejectionModal';
-import AssignRoomModal from '../components/AssignRoomModal';
 import Toast from '../../shared/component/Toast';
 import { usePMContext } from '@/context/PMContext';
 
@@ -365,6 +364,12 @@ const CropPlanning = () => {
                     initialTab={initialTab}
                     initialItemId={selectedItemId}
                     initialAdjust={initialAdjust}
+                    onCycleUpdated={() => {
+                        refreshCycles();
+                        refreshPendingRequests();
+                        refreshPendingForecasts();
+                        refreshPendingReports();
+                    }}
                     onCloseCycle={(finalYield) => handleCloseCycle(selectedCycle._id, finalYield)}
                 />
             )}
@@ -404,7 +409,6 @@ const CropPlanning = () => {
 
 // ── Local Component: CycleCard ──────────────────────────────────────────
 const CycleCard = ({ cycle, onSelect, calculateProgress, pendingCount = 0 }: { cycle: any, onSelect: () => void, calculateProgress: any, pendingCount?: number }) => {
-    const spent = cycle.spent ?? 0;
     const total = cycle.total_budget ?? 0;
     const approved = cycle.approved ?? 0;
     const progress = calculateProgress(approved, total);

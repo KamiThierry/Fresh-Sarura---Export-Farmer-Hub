@@ -1,27 +1,11 @@
-import { useState } from 'react';
-import { Users, Truck, Wrench, Search, Filter, Plus, Calendar, Phone, MoreVertical, Eye } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, Truck, Wrench, Search, Filter, Plus, Calendar, Phone, MoreVertical, Eye, Loader2 } from 'lucide-react';
 import AddVehicleModal from '../components/AddVehicleModal';
 import LogMaintenanceModal from '../components/LogMaintenanceModal';
 import AddDriverModal from '../components/AddDriverModal';
 import AssignTruckModal from '../components/AssignTruckModal';
 import Pagination from '../../shared/component/Pagination';
-
-// Mock Data - Matches Dispatch Board Context
-const MOCK_VEHICLES = [
-    { id: 'V001', plate: 'RAC 123 A', type: 'Refrigerated Truck', capacity: '5,000 kg', driver: 'John Mugisha', nextService: 'Nov 15, 2026', status: 'Available' },
-    { id: 'V002', plate: 'RAC 456 B', type: 'Standard Truck', capacity: '3,000 kg', driver: 'Peter Nioroge', nextService: 'Oct 20, 2026', status: 'On Trip' },
-    { id: 'V003', plate: 'RAC 789 C', type: 'Refrigerated Truck', capacity: '7,000 kg', driver: 'Sarah Uwase', nextService: 'Dec 05, 2026', status: 'Available' },
-    { id: 'V004', plate: 'RAC 990 D', type: 'Van', capacity: '1,500 kg', driver: 'Unassigned', nextService: 'Sep 30, 2026', status: 'Maintenance' },
-    { id: 'V005', plate: 'RAC 555 E', type: 'Refrigerated Truck', capacity: '10,000 kg', driver: 'David Kwizera', nextService: 'Jan 12, 2027', status: 'Available' },
-];
-
-const MOCK_DRIVERS = [
-    { id: 'D001', name: 'John Mugisha', contact: '+250 788 123 456', license: 'Cat B, C • Exp: Dec 2026', vehicle: 'RAC 123 A', status: 'Idle' },
-    { id: 'D002', name: 'Peter Nioroge', contact: '+250 788 234 567', license: 'Cat C, E • Exp: Nov 2025', vehicle: 'RAC 456 B', status: 'Driving' },
-    { id: 'D003', name: 'Sarah Uwase', contact: '+250 788 345 678', license: 'Cat B, C • Exp: Oct 2026', vehicle: 'RAC 789 C', status: 'Idle' },
-    { id: 'D004', name: 'David Kwizera', contact: '+250 788 456 789', license: 'Cat C • Exp: Jan 2024 (Expiring)', vehicle: 'RAC 555 E', status: 'Idle' },
-    { id: 'D005', name: 'Eric Manzi', contact: '+250 788 567 890', license: 'Cat B • Exp: Mar 2027', vehicle: 'Unassigned', status: 'Off Duty' },
-];
+import { api } from '../../../lib/api';
 
 const Fleet = () => {
     const [activeTab, setActiveTab] = useState<'vehicles' | 'drivers'>('vehicles');
@@ -29,15 +13,19 @@ const Fleet = () => {
     const [filterStatus, setFilterStatus] = useState('All');
     const [vehiclePage, setVehiclePage] = useState(1);
     const [driverPage, setDriverPage] = useState(1);
-    const itemsPerPage = 3;
+    const itemsPerPage = 10; // Increased from mock 3
+
+    const [vehicles, setVehicles] = useState<any[]>([]);
+    const [drivers, setDrivers] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
 
     // Modal State
     const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
     const [isMaintenanceOpen, setIsMaintenanceOpen] = useState(false);
-    const [selectedVehicleForMaintenance, setSelectedVehicleForMaintenance] = useState<string>('');
+    const [selectedVehicleForMaintenance, setSelectedVehicleForMaintenance] = useState<{ id: string, plate: string } | null>(null);
 
-    const handleOpenMaintenance = (plate: string) => {
-        setSelectedVehicleForMaintenance(plate);
+    const handleOpenMaintenance = (vehicle: any) => {
+        setSelectedVehicleForMaintenance({ id: vehicle._id, plate: vehicle.plateNumber });
         setIsMaintenanceOpen(true);
     };
 
@@ -50,40 +38,65 @@ const Fleet = () => {
         setIsAssignTruckOpen(true);
     };
 
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const [vehiclesRes, driversRes] = await Promise.all([
+                api.get('/fleet/vehicles'),
+                api.get('/fleet/drivers')
+            ]);
+            setVehicles(vehiclesRes.data || []);
+            setDrivers(driversRes.data || []);
+        } catch (error) {
+            console.error('Error fetching fleet data:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []);
+
     // Filter Data
-    const filteredVehicles = MOCK_VEHICLES.filter(v => {
-        const matchesSearch = v.plate.toLowerCase().includes(searchTerm.toLowerCase()) || v.type.toLowerCase().includes(searchTerm.toLowerCase());
+    const filteredVehicles = (vehicles || []).filter(v => {
+        const matchesSearch = (v?.plateNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) || (v?.type || '').toLowerCase().includes(searchTerm.toLowerCase());
         const isVehicleTab = activeTab === 'vehicles';
         const matchesStatus = !isVehicleTab || filterStatus === 'All' || v.status === filterStatus;
         return matchesSearch && matchesStatus;
     });
 
-    const filteredDrivers = MOCK_DRIVERS.filter(d => {
-        const matchesSearch = d.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const filteredDrivers = (drivers || []).filter(d => {
+        const name = `${d?.firstName || ''} ${d?.lastName || ''}`;
+        const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase());
         const isDriverTab = activeTab === 'drivers';
         const matchesStatus = !isDriverTab || filterStatus === 'All' || d.status === filterStatus;
         return matchesSearch && matchesStatus;
     });
 
     // Available Vehicles for Assignment (Excluding Maintenance/On Trip)
-    const availableVehiclesForAssignment = MOCK_VEHICLES.filter(v => v.status === 'Available');
+    const availableVehiclesForAssignment = (vehicles || []).filter(v => v.status === 'Available');
 
     // Stats Calculations
     const vehicleStats = {
-        total: filteredVehicles.length,
-        active: filteredVehicles.filter(v => v.status === 'Available' || v.status === 'On Trip').length,
-        maintenance: filteredVehicles.filter(v => v.status === 'Maintenance').length
+        total: (vehicles || []).length,
+        active: (vehicles || []).filter(v => v.status === 'Available' || v.status === 'On Trip').length,
+        maintenance: (vehicles || []).filter(v => v.status === 'Maintenance').length
     };
 
     const driverStats = {
-        total: filteredDrivers.length,
-        onShift: filteredDrivers.filter(d => d.status === 'Driving' || d.status === 'Idle').length,
-        offDuty: filteredDrivers.filter(d => d.status === 'Off Duty').length
+        total: (drivers || []).length,
+        onShift: (drivers || []).filter(d => d.status === 'Driving' || d.status === 'Idle').length,
+        offDuty: (drivers || []).filter(d => d.status === 'Off Duty').length
     };
 
-    const maintenanceAlerts = filteredVehicles.filter(v => {
-        // Simple mock logic for "Due" based on string check or status
-        return v.status === 'Maintenance' || v.nextService.includes('2024'); // Mock expiring
+    const maintenanceAlerts = (vehicles || []).filter(v => {
+        if (v.status === 'Maintenance') return true;
+        if (!v.nextMaintenanceDate) return false;
+        const nextDate = new Date(v.nextMaintenanceDate);
+        const now = new Date();
+        const diffDays = Math.ceil((nextDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        return diffDays < 7; // Alert if less than 7 days
     }).length;
 
     const getStatusColor = (status: string) => {
@@ -101,17 +114,25 @@ const Fleet = () => {
     return (
         <div className="space-y-6 pb-20 md:pb-0 relative animate-fade-in">
             {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Fleet & Drivers</h1>
-                <p className="text-gray-500 dark:text-gray-400">Manage vehicle assets, driver profiles, and assignments.</p>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Fleet & Drivers</h1>
+                    <p className="text-gray-500 dark:text-gray-400">Manage vehicle assets, driver profiles, and assignments.</p>
+                </div>
+                {loading && (
+                    <div className="flex items-center gap-2 text-indigo-600 font-medium bg-indigo-50 dark:bg-indigo-900/20 px-4 py-2 rounded-xl">
+                        <Loader2 className="animate-spin" size={18} />
+                        Syncing...
+                    </div>
+                )}
             </div>
 
             {/* Top Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[
                     { label: 'Total Vehicles', value: vehicleStats.total, icon: Truck, color: 'text-indigo-600', bg: 'bg-indigo-50 dark:bg-indigo-900/20', sub: `${vehicleStats.active} Active • ${vehicleStats.maintenance} Maintenance` },
-                    { label: 'Active Drivers', value: driverStats.total, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20', sub: `${driverStats.onShift} On Shift` },
-                    { label: 'Maintenance Alerts', value: `${maintenanceAlerts} Due`, icon: Wrench, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20', sub: 'Check immediately' },
+                    { label: 'Total Drivers', value: driverStats.total, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20', sub: `${driverStats.onShift} Active` },
+                    { label: 'Maintenance Alerts', value: `${maintenanceAlerts} Alert${maintenanceAlerts !== 1 ? 's' : ''}`, icon: Wrench, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20', sub: 'Due or in service' },
                 ].map((stat, i) => (
                     <div key={i} className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                         <div className="flex justify-between items-start">
@@ -202,7 +223,7 @@ const Fleet = () => {
                 </div>
 
                 {/* Content Table */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm min-h-[400px]">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
                             <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-500 uppercase tracking-wider text-xs">
@@ -229,101 +250,130 @@ const Fleet = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                {activeTab === 'vehicles' ? (
-                                    filteredVehicles.slice((vehiclePage - 1) * itemsPerPage, vehiclePage * itemsPerPage).map(vehicle => (
-                                        <tr key={vehicle.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
-                                            <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">{vehicle.plate}</td>
-                                            <td className="px-6 py-4">
-                                                <div className="text-gray-900 dark:text-white font-medium">{vehicle.type}</div>
-                                                <div className="text-xs text-gray-500">{vehicle.capacity}</div>
-                                            </td>
-                                            <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
-                                                {vehicle.driver === 'Unassigned' ? (
-                                                    <span className="text-gray-400 italic">Unassigned</span>
-                                                ) : (
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-600 dark:text-gray-300">
-                                                            {vehicle.driver.substring(0, 1)}
-                                                        </div>
-                                                        {vehicle.driver}
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
-                                                <div className="flex items-center gap-1.5">
-                                                    <Calendar size={14} className="text-gray-400" />
-                                                    {vehicle.nextService}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border border-transparent ${getStatusColor(vehicle.status)}`}>
-                                                    {vehicle.status}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        onClick={() => handleOpenMaintenance(vehicle.plate)}
-                                                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                                                        title="Log Service"
-                                                    >
-                                                        <Wrench size={16} />
-                                                    </button>
-                                                    <button className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Edit">
-                                                        <MoreVertical size={16} />
-                                                    </button>
-                                                </div>
-                                            </td>
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={6} className="px-6 py-20 text-center">
+                                            <div className="flex flex-col items-center gap-2 text-gray-500">
+                                                <Loader2 className="animate-spin h-8 w-8 text-indigo-600" />
+                                                <p className="font-medium">Loading fleet data...</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : activeTab === 'vehicles' ? (
+                                    filteredVehicles.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={6} className="px-6 py-10 text-center text-gray-500">No vehicles found.</td>
                                         </tr>
-                                    ))
+                                    ) : (
+                                        filteredVehicles.slice((vehiclePage - 1) * itemsPerPage, vehiclePage * itemsPerPage).map(vehicle => (
+                                            <tr key={vehicle._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
+                                                <td className="px-6 py-4 font-bold text-gray-900 dark:text-white font-mono">{vehicle.plateNumber}</td>
+                                                <td className="px-6 py-4">
+                                                    <div className="text-gray-900 dark:text-white font-medium">{vehicle.type}</div>
+                                                    <div className="text-xs text-gray-500">{vehicle.capacityKg} kg</div>
+                                                </td>
+                                                <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
+                                                    {(() => {
+                                                        const assignedDriver = (drivers || []).find((d: any) =>
+                                                            d.assignedVehicle?._id === vehicle._id || d.assignedVehicle === vehicle._id
+                                                        );
+                                                        return assignedDriver ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                                                                    {assignedDriver.firstName?.substring(0, 1) ?? '?'}
+                                                                </div>
+                                                                {assignedDriver.firstName} {assignedDriver.lastName}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-gray-400 italic">Unassigned</span>
+                                                        );
+                                                    })()}
+                                                </td>
+                                                <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Calendar size={14} className="text-gray-400" />
+                                                        {vehicle.nextMaintenanceDate ? new Date(vehicle.nextMaintenanceDate).toLocaleDateString() : 'Not set'}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border border-transparent ${getStatusColor(vehicle.status)}`}>
+                                                        {vehicle.status}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            onClick={() => handleOpenMaintenance(vehicle)}
+                                                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                                            title="Log Service"
+                                                        >
+                                                            <Wrench size={16} />
+                                                        </button>
+                                                        <button className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Edit">
+                                                            <MoreVertical size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )
                                 ) : (
-                                    filteredDrivers.slice((driverPage - 1) * itemsPerPage, driverPage * itemsPerPage).map(driver => (
-                                        <tr key={driver.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
-                                            <td className="px-6 py-4">
-                                                <div className="font-bold text-gray-900 dark:text-white">{driver.name}</div>
-                                            </td>
-                                            <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
-                                                <div className="flex items-center gap-1.5 font-mono text-xs">
-                                                    <Phone size={14} className="text-gray-400" />
-                                                    {driver.contact}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className={`text-sm ${driver.license.includes('Expiring') ? 'text-amber-600 font-bold' : 'text-gray-600 dark:text-gray-300'}`}>
-                                                    {driver.license}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {driver.vehicle === 'Unassigned' ? (
-                                                    <span className="text-gray-400 italic text-xs">Unassigned</span>
-                                                ) : (
-                                                    <div className="flex items-center gap-1.5 text-gray-900 dark:text-white font-medium bg-gray-50 dark:bg-gray-900/50 px-2 py-1 rounded w-fit text-xs">
-                                                        <Truck size={12} className="text-indigo-500" />
-                                                        {driver.vehicle}
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border border-transparent ${getStatusColor(driver.status)}`}>
-                                                    {driver.status}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="View Profile">
-                                                        <Eye size={16} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleOpenAssignTruck(driver)}
-                                                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                                                        title="Assign Truck"
-                                                    >
-                                                        <Truck size={16} />
-                                                    </button>
-                                                </div>
-                                            </td>
+                                    filteredDrivers.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={6} className="px-6 py-10 text-center text-gray-500">No drivers found.</td>
                                         </tr>
-                                    ))
+                                    ) : (
+                                        filteredDrivers.slice((driverPage - 1) * itemsPerPage, driverPage * itemsPerPage).map(driver => (
+                                            <tr key={driver._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
+                                                <td className="px-6 py-4">
+                                                    <div className="font-bold text-gray-900 dark:text-white">{driver.firstName} {driver.lastName}</div>
+                                                </td>
+                                                <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
+                                                    <div className="flex items-center gap-1.5 font-mono text-xs">
+                                                        <Phone size={14} className="text-gray-400" />
+                                                        {driver.phoneNumber}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="text-sm text-gray-600 dark:text-gray-300">
+                                                        <span className="font-medium">{driver.licenseType}</span>
+                                                        {driver.licenseExpiry && (
+                                                            <span className="text-xs text-gray-400 ml-2">Exp: {new Date(driver.licenseExpiry).toLocaleDateString()}</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    {driver.assignedVehicle ? (
+                                                        <div className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-900/30 px-2.5 py-1 rounded-lg w-fit text-xs font-mono">
+                                                            <Truck size={12} />
+                                                            {driver.assignedVehicle.plateNumber}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-gray-400 italic text-xs">Unassigned</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border border-transparent ${getStatusColor(driver.status)}`}>
+                                                        {driver.status}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="View Profile">
+                                                            <Eye size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleOpenAssignTruck(driver)}
+                                                            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                                            title="Assign Truck"
+                                                        >
+                                                            <Truck size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )
                                 )}
                             </tbody>
                         </table>
@@ -339,26 +389,30 @@ const Fleet = () => {
             <AddVehicleModal
                 isOpen={isAddVehicleOpen}
                 onClose={() => setIsAddVehicleOpen(false)}
+                onSuccess={fetchData}
             />
 
             <LogMaintenanceModal
                 isOpen={isMaintenanceOpen}
                 onClose={() => setIsMaintenanceOpen(false)}
-                vehiclePlate={selectedVehicleForMaintenance}
+                vehicleId={selectedVehicleForMaintenance?.id || ''}
+                vehiclePlate={selectedVehicleForMaintenance?.plate || ''}
+                onSuccess={fetchData}
             />
 
             <AddDriverModal
                 isOpen={isAddDriverOpen}
                 onClose={() => setIsAddDriverOpen(false)}
+                onSuccess={fetchData}
             />
 
             {selectedDriverForAssignment && (
                 <AssignTruckModal
                     isOpen={isAssignTruckOpen}
                     onClose={() => { setIsAssignTruckOpen(false); setSelectedDriverForAssignment(null); }}
-                    driverName={selectedDriverForAssignment.name}
-                    licenseStatus={selectedDriverForAssignment.license.includes('Expiring') ? 'Expiring Soon' : 'Valid'}
+                    driver={selectedDriverForAssignment}
                     availableVehicles={availableVehiclesForAssignment}
+                    onSuccess={fetchData}
                 />
             )}
 

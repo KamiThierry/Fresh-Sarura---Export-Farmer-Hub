@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Truck, CheckCircle2, Scale, AlertCircle } from 'lucide-react';
+import { X, Truck, CheckCircle2, Scale, AlertCircle, Loader2 } from 'lucide-react';
 import { api } from '../../../lib/api';
 
 interface LogPickupModalProps {
@@ -15,18 +15,37 @@ interface LogPickupModalProps {
     onSuccess: () => void;
 }
 
-// Fleet options (Mocked, aligned with Collections.tsx)
-const TRUCKS = [
-    { id: 'T1', label: 'RAC 123 A (John Mugisha)' },
-    { id: 'T2', label: 'RAB 456 B (Peter Nioroge)' },
-    { id: 'T3', label: 'RAC 789 C (Sarah Uwase)' },
-];
-
 const LogPickupModal = ({ isOpen, onClose, declaration, onSuccess }: LogPickupModalProps) => {
     const [weight, setWeight] = useState('');
-    const [truckId, setTruckId] = useState(TRUCKS[0].id);
+    const [truckId, setTruckId] = useState('');
+    const [vehicles, setVehicles] = useState<any[]>([]);
+    const [loadingVehicles, setLoadingVehicles] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (isOpen) {
+            fetchVehicles();
+        }
+    }, [isOpen]);
+
+    const fetchVehicles = async () => {
+        setLoadingVehicles(true);
+        try {
+            const res = await api.get('/fleet/vehicles');
+            // Filter for vehicles that are available or already on a trip (to allow flexibility)
+            // But ideally "Available" is best.
+            const available = res.data.filter((v: any) => v.status === 'Available' || v.status === 'On Trip');
+            setVehicles(available);
+            if (available.length > 0) {
+                setTruckId(available[0]._id);
+            }
+        } catch (err) {
+            console.error('Failed to fetch vehicles:', err);
+        } finally {
+            setLoadingVehicles(false);
+        }
+    };
 
     useEffect(() => {
         if (declaration && isOpen) {
@@ -39,6 +58,10 @@ const LogPickupModal = ({ isOpen, onClose, declaration, onSuccess }: LogPickupMo
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!truckId) {
+            setError('Please select a vehicle');
+            return;
+        }
         setIsSubmitting(true);
         setError(null);
 
@@ -72,7 +95,7 @@ const LogPickupModal = ({ isOpen, onClose, declaration, onSuccess }: LogPickupMo
                             <Truck size={20} />
                         </div>
                         <div>
-                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Log Collection Pickup</h2>
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Log Pickup</h2>
                             <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold uppercase tracking-wider mt-0.5">Logistics Hub</p>
                         </div>
                     </div>
@@ -130,11 +153,20 @@ const LogPickupModal = ({ isOpen, onClose, declaration, onSuccess }: LogPickupMo
                                     <select
                                         value={truckId}
                                         onChange={e => setTruckId(e.target.value)}
+                                        disabled={loadingVehicles}
                                         className="w-full pl-10 pr-10 py-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium appearance-none"
                                     >
-                                        {TRUCKS.map(t => (
-                                            <option key={t.id} value={t.id}>{t.label}</option>
-                                        ))}
+                                        {loadingVehicles ? (
+                                            <option>Loading vehicles...</option>
+                                        ) : vehicles.length === 0 ? (
+                                            <option>No available vehicles</option>
+                                        ) : (
+                                            vehicles.map(v => (
+                                                <option key={v._id} value={v._id}>
+                                                    {v.plateNumber} ({v.currentDriver ? `${v.currentDriver.firstName} ${v.currentDriver.lastName}` : 'No Driver'})
+                                                </option>
+                                            ))
+                                        )}
                                     </select>
                                 </div>
                             </div>
@@ -159,15 +191,15 @@ const LogPickupModal = ({ isOpen, onClose, declaration, onSuccess }: LogPickupMo
                         </button>
                         <button
                             type="submit"
-                            disabled={isSubmitting || !weight}
+                            disabled={isSubmitting || !weight || !truckId}
                             className={`px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg flex items-center gap-2 transition-all ${
-                                isSubmitting || !weight
+                                isSubmitting || !weight || !truckId
                                 ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
                                 : 'bg-blue-600 hover:bg-blue-500 text-white active:scale-95 shadow-blue-900/20'
                             }`}
                         >
                             {isSubmitting ? (
-                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                <Loader2 className="w-4 h-4 animate-spin" />
                             ) : (
                                 <CheckCircle2 size={18} />
                             )}

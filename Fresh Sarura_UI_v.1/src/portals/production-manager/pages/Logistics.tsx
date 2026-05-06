@@ -96,11 +96,6 @@ const Logistics = ({ onCreatePackingList }: LogisticsProps) => {
         }
     ];
 
-    // Mock Data for Collection Routes
-    const routes = [
-        { id: 'RT-A', name: 'Route A - Nyagatare', driver: 'Bosco', stops: 4, status: 'In Transit', progress: 65 },
-        { id: 'RT-B', name: 'Route B - Bugesera', driver: 'Eric', stops: 2, status: 'Loading', progress: 30 },
-    ];
 
     const docs = [
         {
@@ -172,7 +167,6 @@ const Logistics = ({ onCreatePackingList }: LogisticsProps) => {
                 <nav className="-mb-px flex space-x-8">
                     {[
                         { id: 'shipments', label: 'Airport Shipments' },
-                        { id: 'collection', label: 'Collection Routes' },
                         { id: 'supply', label: 'Supply Forecasts' },
                         { id: 'docs', label: 'Documentation' }
                     ].map((tab) => (
@@ -263,55 +257,6 @@ const Logistics = ({ onCreatePackingList }: LogisticsProps) => {
                     </div>
                 )}
 
-                {/* TAB 2: COLLECTION ROUTES */}
-                {activeTab === 'collection' && (
-                    <div className="space-y-4">
-                        <div className="flex justify-end">
-                            <button className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-                                <Map size={16} />
-                                Map View
-                            </button>
-                        </div>
-                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                            <table className="w-full text-left">
-                                <thead>
-                                    <tr className="bg-gray-50 dark:bg-gray-900/50 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                                        <th className="px-6 py-4">Route Name</th>
-                                        <th className="px-6 py-4">Driver</th>
-                                        <th className="px-6 py-4">Stops</th>
-                                        <th className="px-6 py-4">Status</th>
-                                        <th className="px-6 py-4 text-right">Progress</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                    {routes.map((route) => (
-                                        <tr key={route.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                            <td className="px-6 py-4">
-                                                <span className="text-sm font-bold text-gray-900 dark:text-white block">{route.name}</span>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                                                {route.driver}
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                                                {route.stops} Co-ops
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className={`text-sm font-medium ${route.status === 'Completed' ? 'text-green-600' :
-                                                    route.status === 'In Transit' ? 'text-blue-600' : 'text-orange-600'
-                                                    }`}>{route.status}</span>
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="w-32 ml-auto bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
-                                                    <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${route.progress}%` }}></div>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
 
                 {/* TAB 3: SUPPLY OUTLOOK */}
                 {activeTab === 'supply' && (

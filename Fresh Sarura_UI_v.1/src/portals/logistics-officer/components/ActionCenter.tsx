@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Clock, FileWarning, ArrowRight, Truck, Upload, Eye, Package, Plane, TrendingUp, Loader2 } from 'lucide-react';
+import { AlertTriangle, Clock, ArrowRight, Truck, Eye, Package, Plane, TrendingUp, Loader2, Scale } from 'lucide-react';
 import NotificationsModal from '../../shared/component/NotificationsModal';
 import { api } from '../../../lib/api';
 
@@ -58,14 +58,16 @@ const ActionCenter = () => {
 
     const getTypeConfig = (type: string) => {
         switch (type) {
+            case 'HARVEST_DECLARED':
+                return { icon: Scale, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20', actionLabel: 'Log Pickup', actionIcon: Truck, link: '/logistics/pickups' };
             case 'EXPORT_READY':
-                return { icon: Package, color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20', actionLabel: 'Build Shipment', actionIcon: Plane };
+                return { icon: Package, color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20', actionLabel: 'Build Shipment', actionIcon: Plane, link: '/logistics/shipments' };
             case 'SHIPMENT_SCHEDULED':
-                return { icon: Clock, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20', actionLabel: 'View Shipment', actionIcon: Eye };
+                return { icon: Clock, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20', actionLabel: 'View Shipment', actionIcon: Eye, link: '/logistics/shipments' };
             case 'SHIPMENT_DISPATCHED':
-                return { icon: Plane, color: 'text-green-600 bg-green-50 dark:bg-green-900/20', actionLabel: 'Track Flight', actionIcon: TrendingUp };
+                return { icon: Plane, color: 'text-green-600 bg-green-50 dark:bg-green-900/20', actionLabel: 'Track Flight', actionIcon: TrendingUp, link: '/logistics/shipments' };
             default:
-                return { icon: AlertTriangle, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20', actionLabel: 'View Details', actionIcon: Eye };
+                return { icon: AlertTriangle, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20', actionLabel: 'View Details', actionIcon: Eye, link: '/logistics/dashboard' };
         }
     };
 
@@ -113,7 +115,7 @@ const ActionCenter = () => {
                                             <p className="text-xs text-gray-500 line-clamp-2 mt-0.5">{n.message}</p>
 
                                             <button
-                                                onClick={() => handleAction(n._id, n.link)}
+                                                onClick={() => handleAction(n._id, n.link || config.link)}
                                                 className="mt-3 w-full flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg text-xs font-bold transition-all bg-gray-50 hover:bg-indigo-600 hover:text-white dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-indigo-600 transition-colors border border-gray-100 dark:border-gray-600"
                                             >
                                                 <ActionIcon size={14} />

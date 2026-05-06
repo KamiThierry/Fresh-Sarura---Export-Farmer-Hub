@@ -1,37 +1,61 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Truck, Calendar, Save } from 'lucide-react';
+import { X, Truck, Calendar, Save, Loader2, AlertCircle } from 'lucide-react';
+import { api } from '../../../lib/api';
 
 interface AddVehicleModalProps {
     isOpen: boolean;
     onClose: () => void;
+    onSuccess: () => void;
 }
 
-const AddVehicleModal = ({ isOpen, onClose }: AddVehicleModalProps) => {
+const AddVehicleModal = ({ isOpen, onClose, onSuccess }: AddVehicleModalProps) => {
     const [formData, setFormData] = useState({
-        plate: '',
+        plateNumber: '',
         type: 'Refrigerated Truck',
-        capacity: '',
+        capacityKg: '',
         status: 'Available',
-        nextService: ''
+        nextMaintenanceDate: ''
     });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     if (!isOpen) return null;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // In a real app, this would make an API call
-        console.log('Submitting Vehicle:', formData);
-        onClose();
+        setIsSubmitting(true);
+        setError(null);
+
+        try {
+            await api.post('/fleet/vehicles', {
+                ...formData,
+                capacityKg: Number(formData.capacityKg)
+            });
+            onSuccess();
+            onClose();
+            setFormData({
+                plateNumber: '',
+                type: 'Refrigerated Truck',
+                capacityKg: '',
+                status: 'Available',
+                nextMaintenanceDate: ''
+            });
+        } catch (err: any) {
+            console.error('Error adding vehicle:', err);
+            setError(err.message || 'Failed to add vehicle');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in" onClick={onClose} />
-            <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-gray-100 dark:border-gray-700">
+            <div className="relative bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200">
 
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50">
                     <div>
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white">Register New Vehicle</h2>
                         <p className="text-sm text-gray-500 dark:text-gray-400">Add a new asset to the fleet.</p>
@@ -46,6 +70,13 @@ const AddVehicleModal = ({ isOpen, onClose }: AddVehicleModalProps) => {
 
                 {/* Body */}
                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                    {error && (
+                        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-2xl flex items-center gap-3 text-red-600 dark:text-red-400 text-sm font-medium">
+                            <AlertCircle size={20} />
+                            {error}
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                         {/* Plate Number */}
@@ -55,9 +86,9 @@ const AddVehicleModal = ({ isOpen, onClose }: AddVehicleModalProps) => {
                                 type="text"
                                 required
                                 placeholder="e.g. RAB 123 C"
-                                value={formData.plate}
-                                onChange={(e) => setFormData({ ...formData, plate: e.target.value })}
-                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-mono"
+                                value={formData.plateNumber}
+                                onChange={(e) => setFormData({ ...formData, plateNumber: e.target.value.toUpperCase() })}
+                                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-mono font-bold"
                             />
                         </div>
 
@@ -69,7 +100,7 @@ const AddVehicleModal = ({ isOpen, onClose }: AddVehicleModalProps) => {
                                 <select
                                     value={formData.type}
                                     onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all appearance-none cursor-pointer"
+                                    className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none cursor-pointer font-medium"
                                 >
                                     <option value="Refrigerated Truck">Refrigerated Truck</option>
                                     <option value="Standard Truck">Standard Truck</option>
@@ -86,11 +117,10 @@ const AddVehicleModal = ({ isOpen, onClose }: AddVehicleModalProps) => {
                                 type="number"
                                 required
                                 placeholder="e.g. 5000"
-                                value={formData.capacity}
-                                onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
-                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                                value={formData.capacityKg}
+                                onChange={(e) => setFormData({ ...formData, capacityKg: e.target.value })}
+                                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold"
                             />
-                            <p className="text-xs text-amber-600 dark:text-amber-500 font-medium">Critical for overload protection.</p>
                         </div>
 
                         {/* Initial Status */}
@@ -99,7 +129,7 @@ const AddVehicleModal = ({ isOpen, onClose }: AddVehicleModalProps) => {
                             <select
                                 value={formData.status}
                                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all cursor-pointer"
+                                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer font-medium"
                             >
                                 <option value="Available">Available</option>
                                 <option value="Maintenance">Maintenance</option>
@@ -114,9 +144,9 @@ const AddVehicleModal = ({ isOpen, onClose }: AddVehicleModalProps) => {
                                 <input
                                     type="date"
                                     required
-                                    value={formData.nextService}
-                                    onChange={(e) => setFormData({ ...formData, nextService: e.target.value })}
-                                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all accent-emerald-500"
+                                    value={formData.nextMaintenanceDate}
+                                    onChange={(e) => setFormData({ ...formData, nextMaintenanceDate: e.target.value })}
+                                    className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all accent-indigo-500 font-medium"
                                 />
                             </div>
                         </div>
@@ -134,10 +164,11 @@ const AddVehicleModal = ({ isOpen, onClose }: AddVehicleModalProps) => {
                         </button>
                         <button
                             type="submit"
-                            className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 transition-all hover:scale-105 active:scale-95"
+                            disabled={isSubmitting}
+                            className="flex items-center gap-2 px-8 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-lg shadow-indigo-900/20 transition-all hover:scale-105 active:scale-95"
                         >
-                            <Save size={18} />
-                            Save Vehicle
+                            {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                            {isSubmitting ? 'Registering...' : 'Save Vehicle'}
                         </button>
                     </div>
                 </form>
