@@ -42,7 +42,7 @@ export const getActivityStats = async (req, res) => {
 export const getCycleStats = async (req, res) => {
     try {
         const active = await CropCycle.countDocuments({ status: 'active' });
-        const harvesting = await CropCycle.countDocuments({ status: 'harvesting' });
+        const harvesting = await CropCycle.countDocuments({ status: 'in_progress' });
         const planned = await CropCycle.countDocuments({ status: 'planned' });
         const completed = await CropCycle.countDocuments({ status: 'completed' });
 

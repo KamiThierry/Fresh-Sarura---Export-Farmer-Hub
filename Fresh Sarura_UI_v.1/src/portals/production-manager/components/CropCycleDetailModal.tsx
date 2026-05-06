@@ -4,13 +4,17 @@ import {
   X, ClipboardList, FileText, CheckCircle2,
   AlertCircle, TrendingUp,
   Target, Coins, Activity, Sprout, ThumbsUp, ThumbsDown,
-  ListChecks, Lock, Plus, Loader2, Download, ChevronDown
+  ListChecks, Lock, Plus, Loader2, Download, ChevronDown, FileSpreadsheet
 } from 'lucide-react';
 import EvidenceViewModal from './EvidenceViewModal';
 import BudgetLedgerModal from './BudgetLedgerModal';
 import BudgetRejectionModal from './BudgetRejectionModal';
 import { api } from '@/lib/api';
 import Toast from '../../shared/component/Toast';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import logo from '@/assets/sarura_logo_nav.png';
 
 interface CropCycleDetailModalProps {
   isOpen: boolean;
@@ -197,246 +201,209 @@ const CropCycleDetailModal = ({
     setIsConfirmCloseOpen(true);
   };
 
-  const handleExportCSV = () => {
-    let csvContent = '';
-    let filename = `${displayCycleId}_${activeTab}.csv`;
+  // ─── Export Logic ────────────────────────────────────────────────
+  const handleExportXLSX = () => {
+    const wb = XLSX.utils.book_new();
+    const toTitleCase = (str: string) => str?.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || 'N/A';
 
-    if (activeTab === 'overview') {
-      csvContent = [
-        ['Field', 'Value'],
+    // Helper: create a styled worksheet
+    const makeSheet = (headers: string[], rows: (string | number)[][]) => {
+      const data = [headers, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      ws['!cols'] = headers.map((h, i) => {
+        const maxLen = Math.max(h.length, ...rows.map(r => String(r[i] ?? '').length));
+        return { wch: Math.min(maxLen + 4, 40) };
+      });
+      return ws;
+    };
+
+    // Sheet 1: Overview
+    const overviewWs = makeSheet(
+      ['Metric', 'Value'],
+      [
         ['Cycle ID', displayCycleId],
         ['Crop', displayCrop],
         ['Farmer', displayFarmer],
-        ['Status', cycleStatus],
+        ['Status', toTitleCase(cycleStatus)],
         ['Land Size', displayLandSize],
         ['Start Date', displayStartDate],
-        ['Expected Harvest', displayEndDate],
+        ['Harvest Date', displayEndDate],
         ['Yield Goal', displayYieldGoal],
-        ['Total Budget (Rwf)', fmt(displayBudget)],
-        ['Total Approved (Rwf)', fmt(totalApproved)],
-        ['Total Spent (Rwf)', fmt(totalSpent)],
-        ['Cycle Progress (%)', displayBudget > 0 ? Math.round((totalApproved / displayBudget) * 100) : 0],
-        ['Field Reports', fieldReports.length],
-        ['Budget Requests', budgetRequests.length],
-        ['Pending Requests', budgetRequests.filter((r: any) => r.approvalStatus === 'Pending').length],
-      ].map(row => row.join(',')).join('\n');
-    } else if (activeTab === 'financials') {
-      csvContent = [
-        ['Category', 'Allocated (Rwf)', 'Approved (Rwf)', 'Actual Spent (Rwf)', 'Variance (Rwf)'],
-        ...budgetCategories.map((c: any) => [
-          c.name,
-          c.allocated || 0,
-          c.approved || 0,
-          c.spent || 0,
-          (c.allocated || 0) - (c.spent || 0),
-        ]),
-        [],
-        ['TOTAL', totalAllocated, totalApproved, totalSpent, globalVariance],
-      ].map(row => row.join(',')).join('\n');
-    } else if (activeTab === 'requests') {
-      csvContent = [
-        ['Submitted By', 'Status', 'Period Start', 'Period End', 'Activities', 'Total Requested (Rwf)', 'Submitted At', 'PM Note'],
-        ...budgetRequests.map((r: any) => [
-          r.submittedByName || 'Farm Manager',
-          r.approvalStatus,
-          fmtDate(r.startDate),
-          fmtDate(r.endDate),
-          `"${r.lineItems?.map((i: any) => i.activityName).join('; ') || ''}"`,
-          r.totalRequestedRwf || 0,
-          new Date(r.createdAt).toLocaleString(),
-          `"${r.pmNote || ''}"`,
-        ]),
-      ].map(row => row.join(',')).join('\n');
-    } else if (activeTab === 'forecasts') {
-      csvContent = [
-        ['Submitted By', 'Status', 'Expected Harvest', 'Predicted (kg)', 'Confidence', 'Notes', 'PM Reply'],
-        ...forecasts.map((f: any) => [
-          f.submittedByName || 'Farm Manager',
-          f.status,
+        ['Total Budget', `${displayBudget.toLocaleString()} Rwf`],
+        ['Approved Budget', `${totalApproved.toLocaleString()} Rwf`],
+        ['Total Spent', `${totalSpent.toLocaleString()} Rwf`],
+        ['Progress (%)', `${displayBudget > 0 ? Math.round((totalApproved / displayBudget) * 100) : 0}%`]
+      ]
+    );
+    XLSX.utils.book_append_sheet(wb, overviewWs, 'Overview');
+
+    // Sheet 2: Budget Categories
+    const catWs = makeSheet(
+      ['Category Name', 'Allocated (Rwf)', 'Approved (Rwf)', 'Spent (Rwf)', 'Variance (Rwf)'],
+      budgetCategories.map((c: any) => [
+        c.name,
+        c.allocated || 0,
+        c.approved || 0,
+        c.spent || 0,
+        (c.allocated || 0) - (c.spent || 0)
+      ])
+    );
+    XLSX.utils.book_append_sheet(wb, catWs, 'Financials');
+
+    // Sheet 3: Budget Requests
+    const reqWs = makeSheet(
+      ['Date', 'Submitted By', 'Period', 'Activities', 'Amount (Rwf)', 'Status', 'PM Note'],
+      budgetRequests.map((r: any) => [
+        new Date(r.createdAt).toLocaleDateString('en-GB'),
+        r.submittedByName || 'Farm Manager',
+        `${fmtDate(r.startDate)} - ${fmtDate(r.endDate)}`,
+        (r.lineItems?.map((li: any) => li.activityName) || []).join('; '),
+        r.totalRequestedRwf || 0,
+        toTitleCase(r.approvalStatus),
+        r.pmNote || ''
+      ])
+    );
+    XLSX.utils.book_append_sheet(wb, reqWs, 'Budget Requests');
+
+    // Sheet 4: Yield Forecasts
+    if (forecasts.length > 0) {
+      const forecastWs = makeSheet(
+        ['Submission Date', 'Harvest Date', 'Predicted (kg)', 'Confidence', 'Status', 'Notes'],
+        forecasts.map((f: any) => [
+          new Date(f.createdAt).toLocaleDateString('en-GB'),
           fmtDate(f.harvestDate),
           f.predictionKg || 0,
           f.confidence || '',
-          `"${(f.notes || '').replace(/"/g, '""')}"`,
-          `"${(f.pmReply || '').replace(/"/g, '""')}"`,
-        ]),
-      ].map(row => row.join(',')).join('\n');
+          toTitleCase(f.status),
+          f.notes || ''
+        ])
+      );
+      XLSX.utils.book_append_sheet(wb, forecastWs, 'Yield Forecasts');
     }
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+    XLSX.writeFile(wb, `Sarura_Cycle_${displayCycleId}_Report.xlsx`);
     setShowExportMenu(false);
   };
 
-  const handleExportPDF = () => {
-    // All display vars are closures from render scope — safe to use here
-    const cycleProgress = displayBudget > 0
-      ? Math.min(Math.round((totalApproved / displayBudget) * 100), 100)
-      : 0;
+  const handleExportPDF = async () => {
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const timestamp = new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const toTitleCase = (str: string) => str?.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || 'N/A';
 
-    const categoryRows = budgetCategories.map((c: any) => {
-      const variance = (c.allocated || 0) - (c.spent || 0);
-      const approvedPct = c.allocated > 0 ? Math.round(((c.approved || 0) / c.allocated) * 100) : 0;
-      return `<tr>
-        <td>${c.name}</td>
-        <td class="num">${(c.allocated || 0).toLocaleString()}</td>
-        <td class="num">${(c.approved || 0).toLocaleString()}</td>
-        <td class="num">${(c.spent || 0).toLocaleString()}</td>
-        <td class="num ${variance < 0 ? 'over' : 'under'}">${variance >= 0 ? '+' : ''}${variance.toLocaleString()}</td>
-        <td class="num">${approvedPct}%</td>
-      </tr>`;
-    }).join('');
+    // 1. Standard Branded Header
+    try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch { }
+    doc.setTextColor(21, 128, 61); // Sarura Green
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('Fresh Sarura', 28, 19);
+    doc.setTextColor(107, 114, 128); // Gray
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+    doc.text('Export & Farmer Hub', 28, 23);
+    
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(17, 24, 39);
+    doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+    
+    doc.setDrawColor(229, 231, 235);
+    doc.line(15, 30, pageWidth - 15, 30);
 
-    const requestRows = budgetRequests.map((r: any) => `<tr>
-      <td>${r.submittedByName || 'Farm Manager'}</td>
-      <td>${fmtDate(r.startDate)} – ${fmtDate(r.endDate)}</td>
-      <td>${(r.lineItems?.map((i: any) => i.activityName) || []).join(', ') || '—'}</td>
-      <td class="num">${(r.totalRequestedRwf || 0).toLocaleString()}</td>
-      <td class="${r.approvalStatus === 'Approved' ? 'st-approved' : r.approvalStatus === 'Rejected' ? 'st-rejected' : 'st-pending'}">${r.approvalStatus}</td>
-      <td>${r.pmNote || '—'}</td>
-    </tr>`).join('');
+    // 2. Report Title & Cycle Identity
+    doc.setTextColor(17, 24, 39);
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('CROP PRODUCTION REPORT', 15, 42);
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.text(`Internal ID: ${displayCycleId}`, 15, 47);
 
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <title>Financial Report – ${displayCycleId}</title>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:Arial,sans-serif;font-size:11px;color:#111;padding:28px 36px;background:#fff}
-    /* ── Header ── */
-    .header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:2.5px solid #166534;margin-bottom:18px}
-    .brand{display:flex;align-items:center;gap:10px}
-    .brand-logo{width:40px;height:40px;background:#166534;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:900}
-    .brand-name{font-size:20px;font-weight:900;color:#166534;line-height:1.1}
-    .brand-sub{font-size:9px;color:#666;margin-top:1px;letter-spacing:.5px;text-transform:uppercase}
-    .report-info{text-align:right}
-    .report-title{font-size:13px;font-weight:800;color:#166534}
-    .report-sub{font-size:9px;color:#555;margin-top:3px}
-    /* ── Info grid ── */
-    .info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;background:#f0faf3;border:1px solid #bbddc8;border-radius:6px;padding:10px 14px;margin-bottom:16px}
-    .info-label{font-size:8px;font-weight:700;text-transform:uppercase;color:#555;letter-spacing:.4px}
-    .info-value{font-size:11px;font-weight:700;color:#111;margin-top:1px}
-    /* ── Summary cards ── */
-    .summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
-    .card{border:1px solid #ddd;border-radius:6px;padding:10px 12px;text-align:center}
-    .card.hl{border-color:#166534;background:#f0faf3}
-    .card-label{font-size:8px;font-weight:700;text-transform:uppercase;color:#777;letter-spacing:.4px}
-    .card-value{font-size:14px;font-weight:900;color:#111;margin-top:4px}
-    .card-value.green{color:#166534}.card-value.red{color:#b91c1c}.card-value.amber{color:#b45309}
-    /* ── Progress ── */
-    .prog-row{display:flex;justify-content:space-between;font-size:9px;font-weight:700;margin-bottom:4px}
-    .prog-wrap{background:#e5e7eb;border-radius:4px;height:7px;overflow:hidden;margin-bottom:16px}
-    .prog-fill{height:100%;border-radius:4px}
-    /* ── Section titles ── */
-    .sec-title{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.6px;color:#166534;
-      border-bottom:1.5px solid #bbddc8;padding-bottom:4px;margin-bottom:8px}
-    /* ── Tables ── */
-    table{width:100%;border-collapse:collapse;margin-bottom:18px;font-size:10px}
-    th{background:#166534;color:#fff;padding:5px 8px;text-align:left;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
-    td{padding:5px 8px;border-bottom:1px solid #eee;vertical-align:top}
-    tr:nth-child(even) td{background:#f9fafb}
-    .num{text-align:right;font-variant-numeric:tabular-nums;font-family:monospace}
-    .total-row td{font-weight:800;background:#f0faf3!important;border-top:2px solid #166534;font-size:11px}
-    .over{color:#b91c1c}.under{color:#166534}
-    .st-approved{color:#166534;font-weight:700}.st-rejected{color:#b91c1c;font-weight:700}.st-pending{color:#b45309;font-weight:700}
-    /* ── Footer ── */
-    .footer { margin-top: 40px; border-top: 1px solid #e5e7eb; padding-top: 12px; font-size: 8px; color: #6b7280; text-align: center; }
-    .footer-disclaimer { margin-bottom: 6px; font-weight: 500; }
-    .footer-contact { display: flex; justify-content: space-between; align-items: center; }
-    .footer-info { flex: 1; text-align: center; margin-left: 60px; }
-    .footer-page { text-align: right; font-weight: 600; }
-    @media print{body{padding:12px 20px}button{display:none!important}}
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="brand">
-      <div class="brand-logo">🌿</div>
-      <div>
-        <div class="brand-name">FreshSarura</div>
-        <div class="brand-sub">Export Farmer Hub</div>
-      </div>
-    </div>
-    <div class="report-info">
-      <div class="report-title">Financial Production Report</div>
-      <div class="report-sub">${displayCycleId} &nbsp;•&nbsp; ${displayCrop} &nbsp;•&nbsp; ${(cycleStatus || '').toUpperCase()}</div>
-      <div class="report-sub">Generated: ${new Date().toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}</div>
-    </div>
-  </div>
+    // 3. Overview Summary Section
+    const summaryFields = [
+      { label: 'Cultivated Crop', value: toTitleCase(displayCrop) },
+      { label: 'Assigned Farmer', value: toTitleCase(displayFarmer) },
+      { label: 'Land Size / Plot', value: displayLandSize },
+      { label: 'Current Status', value: toTitleCase(cycleStatus) },
+      { label: 'Production Timeline', value: `${displayStartDate} – ${displayEndDate}` },
+      { label: 'Target Yield Goal', value: displayYieldGoal }
+    ];
 
-  <div class="info-grid">
-    <div><div class="info-label">Farmer</div><div class="info-value">${displayFarmer}</div></div>
-    <div><div class="info-label">Land Size</div><div class="info-value">${displayLandSize}</div></div>
-    <div><div class="info-label">Season</div><div class="info-value">${fullData?.cycle?.season || cycle.season || '—'}</div></div>
-    <div><div class="info-label">Start Date</div><div class="info-value">${displayStartDate}</div></div>
-    <div><div class="info-label">Expected Harvest</div><div class="info-value">${displayEndDate}</div></div>
-    <div><div class="info-label">Yield Goal</div><div class="info-value">${displayYieldGoal}</div></div>
-  </div>
+    let yPos = 58;
+    doc.setFontSize(9);
+    summaryFields.forEach(field => {
+      doc.setTextColor(107, 114, 128); doc.setFont('helvetica', 'normal');
+      doc.text(field.label, 15, yPos);
+      doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
+      doc.text(field.value, pageWidth - 15, yPos, { align: 'right' });
+      doc.setDrawColor(243, 244, 246);
+      doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+      yPos += 10;
+    });
 
-  <div class="summary-grid">
-    <div class="card"><div class="card-label">Total Allocated</div><div class="card-value">${totalAllocated.toLocaleString()} Rwf</div></div>
-    <div class="card hl"><div class="card-label">Total Approved</div><div class="card-value green">${totalApproved.toLocaleString()} Rwf</div></div>
-    <div class="card"><div class="card-label">Actual Spent</div><div class="card-value">${totalSpent.toLocaleString()} Rwf</div></div>
-    <div class="card"><div class="card-label">Budget Variance</div><div class="card-value ${globalVariance >= 0 ? 'green' : 'red'}">${globalVariance >= 0 ? '+' : ''}${globalVariance.toLocaleString()} Rwf</div></div>
-  </div>
+    const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [21, 128, 61] };
+    const commonBodyStyles: any = { fontSize: 8, textColor: [17, 24, 39], cellPadding: { top: 4, bottom: 4, left: 3, right: 3 } };
+    const alternateRowStyles: any = { fillColor: [249, 250, 251] };
 
-  <div class="prog-row"><span>Cycle Progress (Approved / Allocated)</span><span style="color:${cycleProgress >= 90 ? '#b45309' : '#166534'}">${cycleProgress}%</span></div>
-  <div class="prog-wrap"><div class="prog-fill" style="width:${cycleProgress}%;background:${cycleProgress >= 90 ? '#b45309' : '#166534'}"></div></div>
+    // 4. Financial Performance Table
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+    doc.text('FINANCIAL PERFORMANCE BY CATEGORY', 15, yPos + 8);
+    
+    autoTable(doc, {
+      startY: yPos + 13,
+      head: [['CATEGORY', 'ALLOCATED', 'APPROVED', 'ACTUAL SPENT', 'VARIANCE']],
+      body: budgetCategories.map((c: any) => [
+        toTitleCase(c.name),
+        `${(c.allocated || 0).toLocaleString()} Rwf`,
+        `${(c.approved || 0).toLocaleString()} Rwf`,
+        `${(c.spent || 0).toLocaleString()} Rwf`,
+        `${((c.allocated || 0) - (c.spent || 0)).toLocaleString()} Rwf`
+      ]),
+      theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+      margin: { left: 15, right: 15 },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 4) {
+          const val = parseInt(String(data.cell.raw).replace(/[^0-9-]/g, ''));
+          if (val < 0) data.cell.styles.textColor = [220, 38, 38]; // Red for overdraft
+          else data.cell.styles.textColor = [21, 128, 61]; // Green for under budget
+        }
+      }
+    });
 
-  <div class="sec-title">Budget by Category</div>
-  <table>
-    <thead><tr>
-      <th>Category</th>
-      <th class="num">Allocated (Rwf)</th>
-      <th class="num">Approved (Rwf)</th>
-      <th class="num">Actual Spent (Rwf)</th>
-      <th class="num">Variance (Rwf)</th>
-      <th class="num">% Approved</th>
-    </tr></thead>
-    <tbody>
-      ${categoryRows || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:12px">No category data available</td></tr>'}
-      <tr class="total-row">
-        <td>TOTAL</td>
-        <td class="num">${totalAllocated.toLocaleString()}</td>
-        <td class="num">${totalApproved.toLocaleString()}</td>
-        <td class="num">${totalSpent.toLocaleString()}</td>
-        <td class="num ${globalVariance < 0 ? 'over' : 'under'}">${globalVariance >= 0 ? '+' : ''}${globalVariance.toLocaleString()}</td>
-        <td class="num">${totalAllocated > 0 ? Math.round((totalApproved / totalAllocated) * 100) : 0}%</td>
-      </tr>
-    </tbody>
-  </table>
+    yPos = (doc as any).lastAutoTable.finalY + 15;
 
-  ${budgetRequests.length > 0 ? `
-  <div class="sec-title">Budget Activity Requests (${budgetRequests.length})</div>
-  <table>
-    <thead><tr>
-      <th>Submitted By</th><th>Period</th><th>Activities</th>
-      <th class="num">Amount (Rwf)</th><th>Status</th><th>PM Note</th>
-    </tr></thead>
-    <tbody>${requestRows}</tbody>
-  </table>` : ''}
-
-  <div class="footer">
-    <div class="footer-disclaimer">This is a computer generated report by Fresh Sarura. No signature required.</div>
-    <div class="footer-contact">
-      <div class="footer-info">Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw</div>
-      <div class="footer-page">Page 1 of 1</div>
-    </div>
-  </div>
-</body>
-</html>`;
-
-    const win = window.open('', '_blank', 'width=900,height=750,scrollbars=yes');
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-      setTimeout(() => win.print(), 600);
+    // 5. Recent Budget Requests (Detailed Table)
+    if (budgetRequests.length > 0) {
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+      doc.text('BUDGET ACTIVITY LOG (RECENT)', 15, yPos);
+      
+      autoTable(doc, {
+        startY: yPos + 5,
+        head: [['DATE', 'ACTIVITIES', 'REQUESTED AMOUNT', 'APPROVAL STATUS']],
+        body: budgetRequests.slice(0, 15).map((r: any) => [
+          new Date(r.createdAt).toLocaleDateString('en-GB'),
+          (r.lineItems?.map((li: any) => li.activityName) || []).join(', ').slice(0, 50),
+          `${(r.totalRequestedRwf || 0).toLocaleString()} Rwf`,
+          toTitleCase(r.approvalStatus)
+        ]),
+        theme: 'striped', headStyles: { ...commonHeadStyles, fillColor: [37, 99, 235] }, // Blue for log
+        bodyStyles: commonBodyStyles, alternateRowStyles,
+        margin: { left: 15, right: 15, bottom: 30 },
+      });
     }
+
+    // 6. Standard Platform Footer
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
+      doc.setFontSize(7.5); doc.setTextColor(107, 114, 128); doc.setFont('helvetica', 'medium');
+      doc.text('This is a computer generated production report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+      const footerY = 286;
+      doc.text('Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw', pageWidth / 2, footerY, { align: 'center' });
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+      doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
+    }
+
+    doc.save(`Sarura_Production_Report_${displayCycleId}.pdf`);
     setShowExportMenu(false);
   };
 
@@ -446,6 +413,7 @@ const CropCycleDetailModal = ({
       case 'active':     return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
       case 'planned':    return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
       case 'completed':  return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
+      case 'in_progress':
       case 'harvesting': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
       default:           return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
     }
@@ -484,8 +452,8 @@ const CropCycleDetailModal = ({
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white font-mono">
                   {displayCycleId}
                 </h2>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(cycleStatus)} ${(cycleStatus || '').toLowerCase() === 'harvesting' ? 'animate-pulse' : ''}`}>
-                  {cycleStatus}
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(cycleStatus)} ${['in_progress', 'harvesting'].includes((cycleStatus || '').toLowerCase()) ? 'animate-pulse' : ''}`}>
+                  {['in_progress', 'harvesting'].includes((cycleStatus || '').toLowerCase()) ? 'In Progress' : cycleStatus}
                 </span>
               </div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
@@ -501,6 +469,7 @@ const CropCycleDetailModal = ({
             ) : (
               <button
                 onClick={handleCloseAttempt}
+                title="Mark this cycle as completed. All pending requests must be resolved first."
                 className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 text-sm font-bold transition-colors flex items-center gap-1.5 border border-red-100 dark:border-red-800/50"
               >
                 Close Crop Cycle
@@ -512,39 +481,41 @@ const CropCycleDetailModal = ({
             <div className="relative">
               <button
                 onClick={() => setShowExportMenu(prev => !prev)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors shadow-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm font-medium"
               >
-                <Download size={15} />
+                <Download size={17} />
                 Export Data
-                <ChevronDown size={14} className={`transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
+                <ChevronDown size={15} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
               </button>
+
               {showExportMenu && (
-                <>
-                  <div className="fixed inset-0 z-[10000]" onClick={() => setShowExportMenu(false)} />
-                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-[10001] overflow-hidden">
-                    <p className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-700">Export Options</p>
+                 <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
+                  <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden">
+                    <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Export Options</p>
                     <button
-                      onClick={handleExportCSV}
-                      className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
+                      onClick={handleExportXLSX}
+                      className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-green-50 dark:bg-green-900/20 flex items-center justify-center shrink-0">
-                        <FileText size={15} className="text-green-600" />
+                      <div className="p-1.5 bg-green-50 dark:bg-green-900/20 rounded-lg flex-shrink-0">
+                        <FileSpreadsheet size={16} className="text-green-600 dark:text-green-400" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Export CSV</p>
-                        <p className="text-xs text-gray-400">Raw data for current tab</p>
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export Excel</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">Spreadsheet (.xlsx)</p>
                       </div>
                     </button>
+                    <div className="mx-4 border-t border-gray-100 dark:border-gray-700" />
                     <button
                       onClick={handleExportPDF}
-                      className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left border-t border-gray-50 dark:border-gray-700/50"
+                      className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center shrink-0">
-                        <Download size={15} className="text-purple-600" />
+                      <div className="p-1.5 bg-red-50 dark:bg-red-900/20 rounded-lg flex-shrink-0">
+                        <FileText size={16} className="text-red-500 dark:text-red-400" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Save as PDF</p>
-                        <p className="text-xs text-gray-400">Print or save page as PDF</p>
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export PDF</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">Production Report (.pdf)</p>
                       </div>
                     </button>
                   </div>
@@ -644,10 +615,10 @@ const CropCycleDetailModal = ({
                     );
                   })()}
                 </div>
-                {(cycleStatus || '').toLowerCase() === 'harvesting' && (
+                {['in_progress', 'harvesting'].includes((cycleStatus || '').toLowerCase()) && (
                   <div className="mb-3 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 text-amber-700 dark:text-amber-400 text-xs font-semibold flex items-center gap-2">
                     <span className="animate-pulse w-2 h-2 rounded-full bg-amber-500 inline-block" />
-                    Harvesting in progress — cycle is financially open for harvest labor requests.
+                    Cycle is in progress — budget requests are being reviewed and field work is underway.
                   </div>
                 )}
                 {isClosed && (
@@ -665,7 +636,7 @@ const CropCycleDetailModal = ({
                         <div
                           className={`h-full rounded-full transition-all duration-700 ${
                             isClosed ? 'bg-gray-400' :
-                            (cycleStatus || '').toLowerCase() === 'harvesting' ? 'bg-amber-500' :
+                            ['in_progress', 'harvesting'].includes((cycleStatus || '').toLowerCase()) ? 'bg-amber-500' :
                             cycleProgress >= 90 ? 'bg-amber-500' : 'bg-green-500'
                           }`}
                           style={{ width: isClosed ? '100%' : `${cycleProgress}%` }}
@@ -680,7 +651,7 @@ const CropCycleDetailModal = ({
                     </div>
                     <div className="text-center">
                       <span className="block font-bold text-gray-900 dark:text-white">Current Stage</span>
-                      {(cycleStatus || '').toLowerCase() === 'harvesting' ? 'Harvesting' : isClosed ? 'Closed' : 'Active'}
+                      {['in_progress', 'harvesting'].includes((cycleStatus || '').toLowerCase()) ? 'In Progress' : isClosed ? 'Closed' : 'Active'}
                     </div>
                     <div className="text-center">
                       <span className="block text-gray-400">Harvest</span>
@@ -719,6 +690,9 @@ const CropCycleDetailModal = ({
                               {new Date(report.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
                             </span>
                           </div>
+                          <p className="text-[10px] text-gray-400 mb-0.5">
+                            {report.category || 'General'} · Submitted by {report.submittedByName || 'Farm Manager'}
+                          </p>
                           {report.notes && (
                             <p className="text-xs text-gray-500 line-clamp-2">"{report.notes}"</p>
                           )}
@@ -813,7 +787,7 @@ const CropCycleDetailModal = ({
               {/* Field Reports / Transactions */}
               <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-5">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">Recently Logged Expenses</h3>
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">Expense Log (All Field Reports)</h3>
                   <button onClick={() => setIsLedgerOpen(true)} className="text-xs text-blue-600 font-medium hover:underline">
                     View Full Ledger
                   </button>
@@ -854,7 +828,7 @@ const CropCycleDetailModal = ({
             <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="flex items-center gap-2">
                 <ListChecks size={18} className="text-gray-500" />
-                <h3 className="font-bold text-gray-900 dark:text-white">Pending Budget Requests</h3>
+                <h3 className="font-bold text-gray-900 dark:text-white">Budget Requests</h3>
                 {budgetRequests.filter((r: any) => r.approvalStatus === 'Pending').length > 0 && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                     {budgetRequests.filter((r: any) => r.approvalStatus === 'Pending').length} pending
@@ -978,8 +952,8 @@ const CropCycleDetailModal = ({
                                 <AlertCircle size={14} /> Rejected
                               </div>
                               {req.pmNote && (
-                                <p className="text-[10px] bg-red-50 dark:bg-red-900/10 p-2 rounded-lg border border-red-100 dark:border-red-800/30">
-                                  Note: {req.pmNote}
+                                <p className="text-[10px] bg-red-50 dark:bg-red-900/10 p-2 rounded-lg border border-red-100 dark:border-red-800/30 break-words whitespace-normal max-w-xs">
+                                  Rejection note: {req.pmNote}
                                 </p>
                               )}
                             </div>

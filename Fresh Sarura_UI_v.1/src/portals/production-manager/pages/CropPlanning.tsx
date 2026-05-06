@@ -36,7 +36,7 @@ const CropPlanning = () => {
         refreshPendingReports
     } = usePMContext();
     
-    // Split cycles into active/harvesting and completed
+    // Split cycles into active/in_progress and completed
     const activeCycles = cycles.filter((c: any) => c.status !== 'completed');
     const completedCycles = cycles.filter((c: any) => c.status === 'completed');
 
@@ -298,6 +298,7 @@ const CropPlanning = () => {
                                     handleOpenDetail(cycle);
                                 }}
                                 calculateProgress={calculateProgress}
+                                pendingCount={pendingRequests.filter((r: any) => r.cycleId === cycle._id).length}
                             />
                         ))}
                     </div>
@@ -318,6 +319,7 @@ const CropPlanning = () => {
                                     handleOpenDetail(cycle);
                                 }}
                                 calculateProgress={calculateProgress}
+                                pendingCount={0}
                             />
                         ))}
                     </div>
@@ -401,16 +403,14 @@ const CropPlanning = () => {
 };
 
 // ── Local Component: CycleCard ──────────────────────────────────────────
-const CycleCard = ({ cycle, onSelect, calculateProgress }: { cycle: any, onSelect: () => void, calculateProgress: any }) => {
+const CycleCard = ({ cycle, onSelect, calculateProgress, pendingCount = 0 }: { cycle: any, onSelect: () => void, calculateProgress: any, pendingCount?: number }) => {
     const spent = cycle.spent ?? 0;
     const total = cycle.total_budget ?? 0;
     const approved = cycle.approved ?? 0;
-    const progress = cycle.status === 'completed' || cycle.status === 'harvesting'
-        ? 100
-        : calculateProgress(approved, total);
+    const progress = calculateProgress(approved, total);
     
     const statusLabel = cycle.status === 'active' ? '● Active'
-        : cycle.status === 'harvesting' ? '◉ Harvesting'
+        : (cycle.status === 'in_progress' || cycle.status === 'harvesting') ? '◉ In Progress'
         : cycle.status === 'completed' ? '✓ Completed'
         : cycle.status;
 
@@ -430,15 +430,22 @@ const CycleCard = ({ cycle, onSelect, calculateProgress }: { cycle: any, onSelec
                         {cycle.crop_name}
                     </h4>
                 </div>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${cycle.status === 'completed' ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-600'}`}>
-                    <BarChart2 size={16} />
+                <div className="flex items-center gap-2">
+                    {pendingCount > 0 && (
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 animate-pulse">
+                            {pendingCount} pending
+                        </span>
+                    )}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${cycle.status === 'completed' ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-600'}`}>
+                        <BarChart2 size={16} />
+                    </div>
                 </div>
             </div>
 
             {/* Status badge */}
             <div className="mb-3">
                 <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                    cycle.status === 'harvesting' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 animate-pulse' :
+                    (cycle.status === 'in_progress' || cycle.status === 'harvesting') ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 animate-pulse' :
                     cycle.status === 'completed' ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' :
                     'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                 }`}>
@@ -457,7 +464,7 @@ const CycleCard = ({ cycle, onSelect, calculateProgress }: { cycle: any, onSelec
                 <div className="relative h-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                     <div
                         className={`absolute top-0 left-0 h-full rounded-full transition-all duration-500 ${
-                            cycle.status === 'harvesting' ? 'bg-amber-500' :
+                            (cycle.status === 'in_progress' || cycle.status === 'harvesting') ? 'bg-amber-500' :
                             cycle.status === 'completed' ? 'bg-gray-400' :
                             progress >= 90 ? 'bg-amber-500' : 'bg-green-500'
                         }`}
@@ -465,8 +472,8 @@ const CycleCard = ({ cycle, onSelect, calculateProgress }: { cycle: any, onSelec
                     />
                 </div>
                 <div className="flex justify-between mt-1 text-[10px] font-mono text-gray-400">
-                    <span>{approved.toLocaleString()} approved</span>
-                    <span>{total.toLocaleString()} total</span>
+                    <span>{approved.toLocaleString()} Rwf approved</span>
+                    <span>{total.toLocaleString()} Rwf budget</span>
                 </div>
             </div>
 

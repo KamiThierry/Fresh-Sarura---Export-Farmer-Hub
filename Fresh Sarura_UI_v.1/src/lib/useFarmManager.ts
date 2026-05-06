@@ -62,11 +62,16 @@ export const useFarmManager = () => {
     lineItems: { activityName: string; estimatedCostRwf: number }[];
   }) => {
     console.log('useFarmManager: submitBudgetRequest START', data);
-    const res = await api.post('/farm-manager/budget-requests', data);
-    console.log('useFarmManager: submitBudgetRequest SUCCESS', res);
-    await fetchBudgetRequests();
-    await fetchCycles();
-    return res;
+    try {
+      const res = await api.post('/farm-manager/budget-requests', data);
+      console.log('useFarmManager: submitBudgetRequest SUCCESS', res);
+      await fetchBudgetRequests();
+      await fetchCycles();
+      return res;
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || 'Failed to submit budget request.';
+      throw new Error(message);
+    }
   };
 
   const declareHarvest = async (data: {
@@ -75,9 +80,15 @@ export const useFarmManager = () => {
     cropName: string;
     notes?: string;
   }) => {
-    const res = await api.post('/harvest-declarations', data);
-    await fetchCycles();
-    return res;
+    try {
+      const res = await api.post('/harvest-declarations', data);
+      await fetchCycles();
+      return res;
+    } catch (err: any) {
+      // Extract the backend message and rethrow so the modal can display it
+      const message = err?.response?.data?.message || err?.message || 'Failed to declare harvest.';
+      throw new Error(message);
+    }
   };
 
   const submitFieldReport = async (data: {
@@ -113,9 +124,14 @@ export const useFarmManager = () => {
     confidence: string;
     notes?: string;
   }) => {
-    const res = await api.post('/farm-manager/yield-forecasts', data);
-    await fetchForecasts();
-    return res;
+    try {
+      const res = await api.post('/farm-manager/yield-forecasts', data);
+      await fetchForecasts();
+      return res;
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || 'Failed to submit yield forecast.';
+      throw new Error(message);
+    }
   };
 
 

@@ -127,7 +127,7 @@ const Home = () => {
             <div className="p-6 space-y-6">
 
                 {/* Welcome Banner */}
-                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-green-700 to-green-600 p-8 text-white shadow-lg">
+                <div className="relative overflow-hidden rounded-2xl bg-[#5cb85c] p-8 text-white shadow-lg">
                     <div className="relative z-10">
                         <h1 className="text-3xl font-bold mb-1">Welcome back, {user.name.split(' ')[0]}.</h1>
                         <p className="text-green-100 text-base opacity-90">

@@ -32,6 +32,7 @@ const RequestSuppliesModal = ({
     const [globalEndDate, setGlobalEndDate] = useState('');
     const [submitted, setSubmitted] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     // Default to first cycle if available
     useEffect(() => {
@@ -63,6 +64,7 @@ const RequestSuppliesModal = ({
         if (!selectedCycle) return;
 
         setIsSubmitting(true);
+        setError(null);
         try {
             const request: BudgetRequest = {
                 id: Date.now(),
@@ -85,8 +87,9 @@ const RequestSuppliesModal = ({
                 setLineItems([emptyLine()]);
                 onClose();
             }, 1800);
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to submit request:', err);
+            setError(err.message || 'Failed to submit request.');
         } finally {
             setIsSubmitting(false);
         }
@@ -136,6 +139,14 @@ const RequestSuppliesModal = ({
                     </div>
                 ) : (
                     <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+                        {error && (
+                            <div className="px-6 py-3">
+                                <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/40 text-red-600 dark:text-red-400 text-xs font-semibold flex items-start gap-2">
+                                    <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                                    <span>{error}</span>
+                                </div>
+                            </div>
+                        )}
                         {/* Selector Section */}
                         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 space-y-4">
                             <div>

@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import User from '../models/User.js';
 import logger from '../utils/logger.js';
-import { sendPasswordResetEmail } from '../utils/emailService.js';
+import { sendPasswordResetEmail, sendUserWelcomeEmail } from '../utils/emailService.js';
 import { createEventLog } from './eventLogController.js';
 
 // Generate JWT token
@@ -81,15 +81,28 @@ export const login = async (req, res) => {
 // @route POST /api/auth/create-user (Admin only)
 export const createUser = async (req, res) => {
     try {
-        const { name, email, password, phone, role } = req.body;
+        const { name, email, phone, role } = req.body;
 
-        // Check if user already exists
+        if (!name || !email || !role) {
+            return res.status(400).json({ message: 'Name, email, and role are required' });
+        }
+
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({ message: 'User with this email already exists' });
         }
 
-        const user = await User.create({ name, email, password, phone, role });
+        // Auto-generate a temporary password
+        const tempPassword = `Sarura${Math.random().toString(36).slice(-6).toUpperCase()}@2026`;
+
+        const user = await User.create({ name, email, password: tempPassword, phone, role });
+
+        // Send credentials email — don't let email failure block the response
+        try {
+            await sendUserWelcomeEmail({ name, email, password: tempPassword, role });
+        } catch (emailError) {
+            logger.error(`User created but welcome email failed: ${emailError.message}`);
+        }
 
         await createEventLog({
             module: 'User Management',
@@ -103,7 +116,7 @@ export const createUser = async (req, res) => {
         logger.info(`New user created: ${user.email} (${user.role})`);
 
         res.status(201).json({
-            message: 'User created successfully',
+            message: 'User created successfully. Credentials sent to their email.',
             user: {
                 id: user._id,
                 name: user.name,
@@ -357,6 +370,31 @@ export const deleteUser = async (req, res) => {
         });
         res.json({ status: 'success', message: 'User deactivated.' });
     } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// @route DELETE /api/v1/auth/users/:id/permanent (Admin only — permanent delete)
+export const permanentlyDeleteUser = async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json({ status: 'error', message: 'User not found.' });
+
+        await User.findByIdAndDelete(req.params.id);
+
+        await createEventLog({
+            module: 'User Management',
+            action: 'User Deleted',
+            severity: 'CRITICAL',
+            description: `User account PERMANENTLY DELETED: ${user.email} (${user.role})`,
+            actor: req.user?.name || 'Admin',
+            metadata: { deletedEmail: user.email, deletedRole: user.role }
+        });
+
+        logger.info(`User permanently deleted: ${user.email}`);
+        res.json({ status: 'success', message: 'User permanently deleted.' });
+    } catch (err) {
+        logger.error('Permanent delete error:', err.message);
         res.status(500).json({ status: 'error', message: err.message });
     }
 };

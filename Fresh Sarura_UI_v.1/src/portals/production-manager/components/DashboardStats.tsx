@@ -80,7 +80,7 @@ const DashboardStats = ({
   return (
     <div className="space-y-6">
       {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-green-700 to-green-600 p-8 text-white shadow-lg">
+      <div className="relative overflow-hidden rounded-2xl bg-[#5cb85c] p-8 text-white shadow-lg">
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-2">
             <Sprout className="h-8 w-8" />

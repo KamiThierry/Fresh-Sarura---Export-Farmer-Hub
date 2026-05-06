@@ -7,7 +7,7 @@ const CropCyclesOverview = () => {
 
   // Status Counts
   const activeCount = cycles.filter(c => c.status === 'active').length;
-  const harvestingCount = cycles.filter(c => c.status === 'harvesting').length;
+  const harvestingCount = cycles.filter(c => c.status === 'in_progress').length;
   const totalActive = activeCount + harvestingCount;
 
   // Completed this month logic
@@ -50,10 +50,10 @@ const CropCyclesOverview = () => {
         <div className="flex items-center justify-between py-2 border-b border-gray-50 dark:border-gray-700/50 relative overflow-hidden">
           <div className="flex items-center gap-3">
             <div className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></div>
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Harvesting</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">In Progress</span>
           </div>
           <span className="text-sm font-bold text-gray-900 dark:text-white">{harvestingCount}</span>
-          {/* Subtle pulse background effect for harvesting */}
+          {/* Subtle pulse background effect for in progress cycles */}
           {harvestingCount > 0 && (
             <div className="absolute inset-0 bg-amber-400/5 animate-pulse -z-10"></div>
           )}

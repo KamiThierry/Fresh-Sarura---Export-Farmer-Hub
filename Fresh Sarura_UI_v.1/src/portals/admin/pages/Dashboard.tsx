@@ -25,7 +25,7 @@ const Dashboard = () => {
     const [loading, setLoading] = useState(true);
     
     const [activityData, setActivityData] = useState([]);
-    const [cycleStats, setCycleStats] = useState({ active: 0, harvesting: 0, planned: 0, completed: 0 });
+    const [cycleStats, setCycleStats] = useState({ active: 0, in_progress: 0, planned: 0, completed: 0 });
     const [recentEvents, setRecentEvents] = useState([]);
     const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
     const [successToast, setSuccessToast] = useState<{ name: string } | null>(null);
@@ -65,7 +65,7 @@ const Dashboard = () => {
                 });
 
                 if (activityRes.status === 'fulfilled') setActivityData(activityRes.value || []);
-                if (cycleStatsRes.status === 'fulfilled') setCycleStats(cycleStatsRes.value || { active: 0, harvesting: 0, planned: 0, completed: 0 });
+                if (cycleStatsRes.status === 'fulfilled') setCycleStats(cycleStatsRes.value || { active: 0, in_progress: 0, planned: 0, completed: 0 });
                 if (recentRes.status === 'fulfilled') setRecentEvents(recentRes.value || []);
 
             } catch (err) {
@@ -86,7 +86,7 @@ const Dashboard = () => {
 
     const cycleChartData = [
         { name: 'Active', value: cycleStats.active, color: '#10B981' }, 
-        { name: 'Harvesting', value: cycleStats.harvesting, color: '#F59E0B' }, 
+        { name: 'In Progress', value: cycleStats.in_progress, color: '#F59E0B' }, 
         { name: 'Planned', value: cycleStats.planned, color: '#6366F1' }, 
         { name: 'Completed', value: cycleStats.completed, color: '#6B7280' }, 
     ].filter(d => d.value > 0);
@@ -94,7 +94,7 @@ const Dashboard = () => {
     return (
         <div className="p-6 space-y-6 animate-fade-in">
             {/* Welcome Banner */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-green-700 to-green-600 p-8 text-white shadow-lg">
+            <div className="relative overflow-hidden rounded-2xl bg-[#5cb85c] p-8 text-white shadow-lg">
                 <div className="relative z-10 flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl md:text-3xl font-bold mb-1">Welcome back, {userName}</h1>
@@ -223,11 +223,11 @@ const Dashboard = () => {
                                                 ? 'bg-green-50 text-green-600' 
                                                 : evt.status.toLowerCase() === 'rejected' || evt.status.toLowerCase() === 'cancelled'
                                                 ? 'bg-red-50 text-red-600'
-                                                : evt.status.toLowerCase() === 'harvesting'
+                                                : evt.status.toLowerCase() === 'in_progress' || evt.status.toLowerCase() === 'harvesting'
                                                 ? 'bg-amber-50 text-amber-600'
                                                 : 'bg-gray-100 text-gray-600'
                                             }`}>
-                                                {evt.status}
+                                                {evt.status === 'in_progress' ? 'In Progress' : evt.status}
                                             </span>
                                         </td>
                                     </tr>

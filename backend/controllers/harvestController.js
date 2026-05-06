@@ -19,6 +19,22 @@ export const declareHarvest = async (req, res) => {
         const cycle = await CropCycle.findById(cycleId);
         if (!cycle) return res.status(404).json({ status: 'error', message: 'Crop cycle not found.' });
 
+        // Guard: prevent harvest declaration on cycles with no approved budget activity
+        if (cycle.status === 'active' || (cycle.approved || 0) === 0) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Harvest cannot be declared yet. This crop cycle has no approved budget requests. At least one budget request must be approved by the Production Manager before declaring a harvest, confirming that field work such as planting, irrigation, or pest control has been funded and carried out.'
+            });
+        }
+
+        // Guard: prevent duplicate harvest declaration on a completed cycle
+        if (cycle.status === 'completed') {
+            return res.status(400).json({
+                status: 'error',
+                message: 'This crop cycle is already completed. No further harvest declarations can be submitted.'
+            });
+        }
+
         const declaration = await HarvestDeclaration.create({
             cycleId,
             farmerId: cycle.farmer_id,
@@ -47,8 +63,7 @@ export const declareHarvest = async (req, res) => {
             refModel: 'HarvestDeclaration',
         });
 
-        // Update cycle status to 'harvesting'
-        await CropCycle.findByIdAndUpdate(cycleId, { status: 'harvesting' });
+        // No cycle status change on harvest declaration — status is managed by budget approval flow
 
         res.status(201).json({ status: 'success', data: declaration });
 

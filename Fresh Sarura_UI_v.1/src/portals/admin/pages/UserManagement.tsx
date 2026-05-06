@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Users, Search, UserPlus, Edit2, PowerOff, Filter, CheckCircle, ShieldOff, Clock, X, ChevronDown, Download, FileSpreadsheet, FileText } from 'lucide-react';
+import { Users, Search, UserPlus, Edit2, PowerOff, Trash2, Filter, CheckCircle, ShieldOff, Clock, X, ChevronDown, Download, FileSpreadsheet, FileText, AlertTriangle } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AddUserModal from '../components/AddUserModal';
 import Toast from '../../shared/component/Toast';
@@ -41,8 +41,9 @@ const UserManagement = () => {
     const [editingUser, setEditingUser] = useState<any | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 8;
-    const [successToast, setSuccessToast] = useState<{ name: string } | null>(null);
+    const [successToast, setSuccessToast] = useState<{ name: string; message?: string } | null>(null);
     const [isExportOpen, setIsExportOpen] = useState(false);
+    const [deletingUser, setDeletingUser] = useState<any | null>(null);
 
     const location = useLocation();
     const navigate = useNavigate();
@@ -86,6 +87,18 @@ const UserManagement = () => {
             setEditingUser(null);
             fetchUsers();
         } catch (err) { console.error('Failed to save edit', err); }
+    };
+
+    const handleDelete = async () => {
+        if (!deletingUser) return;
+        try {
+            await api.delete(`/auth/users/${deletingUser._id}/permanent`);
+            setSuccessToast({ name: deletingUser.name, message: 'User permanently deleted' });
+            setDeletingUser(null);
+            fetchUsers();
+        } catch (err) {
+            console.error('Failed to delete user', err);
+        }
     };
 
     const handleExportXLSX = () => {
@@ -403,6 +416,10 @@ const UserManagement = () => {
                                                 title={u.isActive ? 'Deactivate' : 'Activate'}>
                                                 <PowerOff size={15} />
                                             </button>
+                                            <button onClick={() => setDeletingUser(u)}
+                                                className="p-1.5 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="Delete">
+                                                <Trash2 size={15} />
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -496,6 +513,35 @@ const UserManagement = () => {
                 document.body
             )}
 
+            {/* Delete Confirmation Modal */}
+            {deletingUser && createPortal(
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDeletingUser(null)} />
+                    <div className="relative w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <AlertTriangle className="text-red-600" size={32} />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Confirm Delete</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                                Are you sure you want to delete user <span className="font-bold text-gray-900 dark:text-white">"{deletingUser.name}"</span>? This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setDeletingUser(null)}
+                                    className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                    Cancel
+                                </button>
+                                <button onClick={handleDelete}
+                                    className="flex-1 px-4 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20">
+                                    Delete User
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
             <AddUserModal
                 isOpen={isAddUserOpen}
                 onClose={() => setIsAddUserOpen(false)}
@@ -507,8 +553,8 @@ const UserManagement = () => {
 
             {successToast && (
                 <Toast
-                    message="User Created Successfully"
-                    subtitle={`${successToast.name} has been added to the system.`}
+                    message={successToast.message || "User Created Successfully"}
+                    subtitle={successToast.message ? `The record for ${successToast.name} has been removed.` : `${successToast.name} has been added to the system.`}
                     onClose={() => setSuccessToast(null)}
                 />
             )}

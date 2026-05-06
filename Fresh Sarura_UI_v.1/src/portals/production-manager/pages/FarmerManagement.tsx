@@ -25,6 +25,7 @@ const FarmerManagement = () => {
   const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [cropFilter, setCropFilter] = useState('all');
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [selectedFarmer, setSelectedFarmer] = useState<Farmer | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -37,6 +38,13 @@ const FarmerManagement = () => {
     loading, 
     refreshFarmers 
   } = usePMContext();
+
+  // Extract unique crops for filter
+  const uniqueCrops = useMemo(() => {
+    const crops = new Set<string>();
+    farmers.forEach(f => f.produce_types?.forEach((p: string) => crops.add(p)));
+    return Array.from(crops).sort();
+  }, [farmers]);
 
   // Harvest declarations for leaderboard & profile metrics
   const [harvestDeclarations, setHarvestDeclarations] = useState<any[]>([]);
@@ -62,6 +70,7 @@ const FarmerManagement = () => {
   // Filter Logic (must be before early return — used in stats below)
   const filteredFarmers = farmers.filter(farmer =>
     (statusFilter === 'all' || farmer.status.toLowerCase() === statusFilter.toLowerCase()) &&
+    (cropFilter === 'all' || farmer.produce_types?.some((p: string) => p.toLowerCase() === cropFilter.toLowerCase())) &&
     ((farmer.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
       (farmer.district?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
       (farmer.sector?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
@@ -130,7 +139,7 @@ const FarmerManagement = () => {
         f.farm_size_hectares || 0,
         f.production_capacity_tons || 0,
         f.status || 'Active',
-        new Date(f.created_at || '').toLocaleDateString('en-GB'),
+        new Date(f.createdAt || '').toLocaleDateString('en-GB'),
       ])
     );
     XLSX.utils.book_append_sheet(wb, farmerWs, 'Farmers');
@@ -225,7 +234,7 @@ const FarmerManagement = () => {
     doc.text('REGISTERED FARMERS', 15, yPos);
     autoTable(doc, {
       startY: yPos + 5,
-      head: [['FARMER / FARM', 'NATIONAL ID', 'CONTACT INFO', 'PHYSICAL ADDRESS', 'MAIN CROP', 'SIZE', 'STATUS']],
+      head: [['FARMER / FARM', 'NATIONAL ID', 'CONTACT INFO', 'PHYSICAL ADDRESS', 'MAIN CROP', 'SIZE', 'JOINED', 'STATUS']],
       body: filteredFarmers.map(f => [
         `${toTitleCase(f.full_name)}\n${toTitleCase(f.farm_name || 'Individual')}`,
         f.national_id || 'N/A',
@@ -233,12 +242,13 @@ const FarmerManagement = () => {
         `${toTitleCase(f.district)}, ${toTitleCase(f.sector)}\nCell: ${toTitleCase(f.cell)}, Village: ${toTitleCase(f.village)}`,
         (f.produce_types || []).join(', '),
         `${f.farm_size_hectares || 0} ha`,
+        f.createdAt ? new Date(f.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A',
         toTitleCase(f.status || 'Active')
       ]),
       theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
       margin: { left: 15, right: 15, bottom: 30 },
       didParseCell: (data) => {
-        if (data.section === 'body' && data.column.index === 6) {
+        if (data.section === 'body' && data.column.index === 7) {
           const s = String(data.cell.raw).toLowerCase();
           if (s.includes('active'))   data.cell.styles.textColor = [22, 163, 74];
           if (s.includes('inactive')) data.cell.styles.textColor = [220, 38, 38];
@@ -424,7 +434,7 @@ const FarmerManagement = () => {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="pl-4 pr-10 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer"
+                  className="pl-4 pr-10 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer text-sm"
                 >
                   <option value="all">All Status</option>
                   <option value="active">Active</option>
@@ -432,6 +442,21 @@ const FarmerManagement = () => {
                   <option value="auditing">Auditing</option>
                 </select>
                 <Filter className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+              </div>
+
+              {/* Crop Filter */}
+              <div className="relative">
+                <select
+                  value={cropFilter}
+                  onChange={(e) => setCropFilter(e.target.value)}
+                  className="pl-4 pr-10 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer text-sm"
+                >
+                  <option value="all">All Crops</option>
+                  {uniqueCrops.map(crop => (
+                    <option key={crop} value={crop}>{crop}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
               </div>
             </div>
 
@@ -447,6 +472,7 @@ const FarmerManagement = () => {
                     <th className="px-5 py-4 whitespace-nowrap">Physical Address</th>
                     <th className="px-5 py-4 whitespace-nowrap">Main Crop</th>
                     <th className="px-5 py-4 whitespace-nowrap">Land Size</th>
+                    <th className="px-5 py-4 whitespace-nowrap">Date Joined</th>
                     <th className="px-5 py-4 whitespace-nowrap">Status</th>
                     <th className="px-5 py-4 text-right whitespace-nowrap">Actions</th>
                   </tr>
@@ -498,6 +524,10 @@ const FarmerManagement = () => {
                       {/* Land Size */}
                       <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
                         {farmer.farm_size_hectares} Ha
+                      </td>
+                      {/* Date Joined */}
+                      <td className="px-5 py-4 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
+                        {farmer.createdAt ? new Date(farmer.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
                       </td>
                       {/* Status */}
                       <td className="px-5 py-4 whitespace-nowrap">

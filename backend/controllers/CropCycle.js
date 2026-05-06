@@ -283,6 +283,12 @@ export const approveBudgetRequest = async (req, res) => {
 
             cycle.budget_categories = updatedCategories;
             cycle.approved = (cycle.approved || 0) + totalAdded;
+            
+        }
+        
+        // Trigger transition to 'in_progress' on first budget approval
+        if (cycle.status === 'active') {
+            cycle.status = 'in_progress';
             await cycle.save();
         }
 
@@ -348,10 +354,7 @@ export const verifyForecast = async (req, res) => {
         );
         if (!forecast) return res.status(404).json({ status: 'error', message: 'Forecast not found.' });
 
-        // Auto-transition the parent crop cycle to 'harvesting'
-        if (forecast.cycleId) {
-            await CropCycle.findByIdAndUpdate(forecast.cycleId, { status: 'harvesting' });
-        }
+        // Status is managed by budget approval only — no change on forecast submission
 
         res.status(200).json({ status: 'success', data: forecast });
 

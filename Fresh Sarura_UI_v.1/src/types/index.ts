@@ -37,7 +37,7 @@ export interface CropCycle {
     field_size_hectares: number;
     total_budget: number;
     spent: number;
-    status: 'active' | 'harvesting' | 'completed';
+    status: 'active' | 'in_progress' | 'completed';
     yield_goal_kg?: number;
     final_yield?: string;
     budget_seeds?: number;

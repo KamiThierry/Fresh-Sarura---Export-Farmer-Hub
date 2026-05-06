@@ -52,13 +52,14 @@ const Badge = ({ status }: { status: string }) => {
         RoomRequested:        'bg-purple-100 text-purple-700',
         Active:               'bg-emerald-100 text-emerald-700',
         active:               'bg-emerald-100 text-emerald-700',
+        in_progress:          'bg-amber-100 text-amber-700',
         harvesting:           'bg-amber-100 text-amber-700',
         completed:            'bg-gray-100 text-gray-500',
         Inactive:             'bg-red-100 text-red-700',
     };
     return (
         <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${colors[status] ?? 'bg-gray-100 text-gray-600'}`}>
-            {status ? status.charAt(0).toUpperCase() + status.slice(1) : ''}
+            {status === 'in_progress' || status === 'harvesting' ? 'In Progress' : (status ? status.charAt(0).toUpperCase() + status.slice(1) : '')}
         </span>
     );
 };

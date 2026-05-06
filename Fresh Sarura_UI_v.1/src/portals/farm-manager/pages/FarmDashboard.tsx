@@ -22,7 +22,10 @@ const FarmDashboard = () => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const farmerName = dashboard?.farmer?.full_name || user?.name || 'Farm Manager';
 
-    const activeCycles = cycles.filter((c: any) => c.status?.toLowerCase() === 'active');
+    const activeCycles = cycles.filter((c: any) => {
+        const s = (c.status || '').toLowerCase();
+        return s === 'active' || s === 'in_progress' || s === 'harvesting';
+    });
 
     const stats = [
         {
@@ -138,7 +141,7 @@ const FarmDashboard = () => {
             <div className="p-4 md:p-6 space-y-6 pb-24">
 
                 {/* Hero */}
-                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-green-700 to-green-600 p-8 text-white shadow-lg">
+                <div className="relative overflow-hidden rounded-2xl bg-[#5cb85c] p-8 text-white shadow-lg">
                     <div className="relative z-10">
                         <div className="flex items-center gap-3 mb-2">
                             <Sprout className="h-8 w-8 text-green-100" />
@@ -297,11 +300,12 @@ const FarmDashboard = () => {
                                                 <p className="text-xs text-gray-500">{cycle.season}</p>
                                             </div>
                                         </div>
-                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${cycle.status === 'harvesting'
+                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                                            (cycle.status === 'in_progress' || cycle.status === 'harvesting')
                                             ? 'bg-amber-100 text-amber-700 animate-pulse'
                                             : 'bg-green-100 text-green-700'
                                             }`}>
-                                            {cycle.status?.charAt(0).toUpperCase() + cycle.status?.slice(1)}
+                                            {(cycle.status === 'in_progress' || cycle.status === 'harvesting') ? 'In Progress' : cycle.status?.charAt(0).toUpperCase() + cycle.status?.slice(1)}
                                         </span>
                                     </div>
                                 ))

@@ -21,6 +21,7 @@ const HarvestReadyModal = ({ isOpen, onClose, cycles, onSubmitConfirm }: Harvest
     const [notes, setNotes] = useState('');
     const [submitted, setSubmitted] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     // Default to first cycle if available
     if (isOpen && cycles.length > 0 && !selectedCycleId) {
@@ -35,6 +36,7 @@ const HarvestReadyModal = ({ isOpen, onClose, cycles, onSubmitConfirm }: Harvest
         if (!cycle || !onSubmitConfirm) return;
 
         setIsSubmitting(true);
+        setError(null);
         try {
             await onSubmitConfirm({
                 cycleId: cycle._id,
@@ -50,8 +52,9 @@ const HarvestReadyModal = ({ isOpen, onClose, cycles, onSubmitConfirm }: Harvest
                 setNotes('');
                 onClose();
             }, 1800);
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to declare harvest:', err);
+            setError(err.message);
         } finally {
             setIsSubmitting(false);
         }
@@ -93,6 +96,12 @@ const HarvestReadyModal = ({ isOpen, onClose, cycles, onSubmitConfirm }: Harvest
                 ) : (
                     <form onSubmit={handleSubmit}>
                         <div className="px-6 py-5 space-y-4">
+                            {error && (
+                                <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/40 text-red-600 dark:text-red-400 text-xs font-semibold flex items-start gap-2">
+                                    <CheckCircle2 size={14} className="rotate-180 shrink-0 mt-0.5" />
+                                    <span>{error}</span>
+                                </div>
+                            )}
 
                             {/* Crop Cycle */}
                             <div>

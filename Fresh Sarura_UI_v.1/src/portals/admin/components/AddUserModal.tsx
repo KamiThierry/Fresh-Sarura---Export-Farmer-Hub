@@ -10,7 +10,7 @@ interface AddUserModalProps {
 }
 
 const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
-    const [formData, setFormData] = useState({ name: '', email: '', password: '', role: '', phone: '' });
+    const [formData, setFormData] = useState({ name: '', email: '', role: '', phone: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
 
@@ -30,7 +30,7 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
             await api.post('/auth/create-user', formData);
             onUserAdded?.(formData.name);
             onClose();
-            setFormData({ name: '', email: '', password: '', role: '', phone: '' });
+            setFormData({ name: '', email: '', role: '', phone: '' });
         } catch (err: any) {
             setError(err.message || 'Failed to create user');
         } finally {
@@ -91,13 +91,7 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
                                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
                             </div>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Temporary Password *</label>
-                            <input type="password" required minLength={6} value={formData.password}
-                                onChange={e => setFormData({ ...formData, password: e.target.value })}
-                                placeholder="Min. 6 characters"
-                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm dark:text-white" />
-                        </div>
+
                     </form>
                 </div>
                 <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 flex gap-3">

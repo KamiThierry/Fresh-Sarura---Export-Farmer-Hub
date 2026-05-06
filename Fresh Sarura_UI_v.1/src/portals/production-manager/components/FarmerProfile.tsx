@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Pencil, ShieldOff, Phone, Mail, MapPin, Leaf, Ruler, Star, BadgeCheck, Sprout, PackageCheck, Loader2 } from 'lucide-react';
+import { ArrowLeft, Pencil, ShieldOff, Phone, Mail, MapPin, Leaf, Ruler, Star, BadgeCheck, Sprout, PackageCheck, Loader2, Download, ChevronDown, FileSpreadsheet, FileText } from 'lucide-react';
 import { Farmer } from '@/types';
 import EditFarmerModal from './EditFarmerModal';
 import DeleteFarmerModal from './DeleteFarmerModal';
 import { api } from '@/lib/api';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import logo from '@/assets/sarura_logo_nav.png';
 
 interface FarmerProfileProps {
   farmer: Farmer;
@@ -12,53 +16,6 @@ interface FarmerProfileProps {
   allStock?: any[];
 }
 
-const CROP_CYCLES: Record<string, { block: string; crop: string; planted: string; estYield: string; daysLeft: number }[]> = {
-  1: [{ block: 'Block A', crop: 'French Beans', planted: '15 Jan 2026', estYield: '500 kg', daysLeft: 22 }],
-  2: [
-    { block: 'Block A', crop: 'Avocados (Hass)', planted: '01 Nov 2025', estYield: '12,000 kg', daysLeft: 60 },
-    { block: 'Block B', crop: 'Avocados (Fuerte)', planted: '10 Nov 2025', estYield: '8,500 kg', daysLeft: 70 },
-  ],
-  3: [],
-  4: [{ block: 'Plots 1-3', crop: "Chili Peppers (Bird's Eye)", planted: '20 Jan 2026', estYield: '2,800 kg', daysLeft: 35 }],
-  5: [{ block: 'Main Field', crop: 'Mangoes (Kent)', planted: '10 Sep 2025', estYield: '1,200 kg', daysLeft: 14 }],
-  6: [
-    { block: 'Block A', crop: 'Kale', planted: '05 Feb 2026', estYield: '400 kg', daysLeft: 18 },
-    { block: 'Block B', crop: 'Spinach', planted: '12 Feb 2026', estYield: '300 kg', daysLeft: 25 },
-  ],
-};
-
-const HARVESTS: Record<string, { date: string; qty: string; crop: string; grade: string }[]> = {
-  1: [
-    { date: '28 Feb 2026', qty: '460 kg', crop: 'French Beans', grade: 'A' },
-    { date: '15 Jan 2026', qty: '510 kg', crop: 'French Beans', grade: 'A' },
-    { date: '02 Dec 2025', qty: '430 kg', crop: 'French Beans', grade: 'B+' },
-  ],
-  2: [
-    { date: '20 Feb 2026', qty: '3,200 kg', crop: 'Avocados (Hass)', grade: 'A' },
-    { date: '10 Jan 2026', qty: '4,100 kg', crop: 'Avocados (Hass)', grade: 'A' },
-    { date: '25 Nov 2025', qty: '2,900 kg', crop: 'Avocados (Fuerte)', grade: 'A' },
-  ],
-  3: [
-    { date: '01 Oct 2025', qty: '180 kg', crop: 'Passion Fruit', grade: 'B' },
-    { date: '15 Aug 2025', qty: '200 kg', crop: 'Passion Fruit', grade: 'B+' },
-    { date: '01 Jun 2025', qty: '160 kg', crop: 'Passion Fruit', grade: 'B' },
-  ],
-  4: [
-    { date: '22 Feb 2026', qty: '950 kg', crop: 'Chili Peppers', grade: 'A' },
-    { date: '10 Jan 2026', qty: '870 kg', crop: 'Chili Peppers', grade: 'A' },
-    { date: '05 Dec 2025', qty: '1,020 kg', crop: 'Chili Peppers', grade: 'A' },
-  ],
-  5: [
-    { date: '18 Feb 2026', qty: '380 kg', crop: 'Mangoes', grade: 'A' },
-    { date: '30 Dec 2025', qty: '420 kg', crop: 'Mangoes', grade: 'B+' },
-    { date: '10 Nov 2025', qty: '310 kg', crop: 'Mangoes', grade: 'A' },
-  ],
-  6: [
-    { date: '25 Feb 2026', qty: '620 kg', crop: 'Mixed Veg', grade: 'A' },
-    { date: '12 Jan 2026', qty: '580 kg', crop: 'Mixed Veg', grade: 'A' },
-    { date: '28 Nov 2025', qty: '700 kg', crop: 'Mixed Veg', grade: 'A' },
-  ],
-};
 
 
 const STATUS_STYLE: Record<string, string> = {
@@ -82,9 +39,24 @@ const FarmerProfile = ({ farmer: initialFarmer, onBack, allFarmers = [], allStoc
   const [farmer, setFarmer] = useState<Farmer>(initialFarmer);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
   const [cycles, setCycles] = useState<any[]>([]);
   const [cyclesLoading, setCyclesLoading] = useState(true);
-  const harvests = HARVESTS[farmer._id] ?? [];
+
+  // ── Recent Harvests from Real Declarations ──
+  const realHarvests = allStock
+    .filter((d: any) => {
+      const fid = d.farmerId?._id ?? d.farmerId;
+      return String(fid) === String(farmer._id);
+    })
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const harvests = realHarvests.map((d: any) => ({
+    date: new Date(d.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+    crop: d.cropName || 'N/A',
+    qty: `${(d.estimatedWeightKg || 0).toLocaleString()} kg`,
+    status: d.status || 'Pending'
+  }));
 
   // ── Performance metrics ──
   // Total kg declared by this farmer across all harvest declarations
@@ -124,6 +96,199 @@ const FarmerProfile = ({ farmer: initialFarmer, onBack, allFarmers = [], allStoc
       .finally(() => setCyclesLoading(false));
   }, [farmer._id]);
 
+  // ─── Export Logic (Excel) ───
+  const handleExportXLSX = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Helper to make sheet
+    const makeSheet = (headers: string[], rows: (string | number)[][]) => {
+      const data = [headers, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      ws['!cols'] = headers.map((h, i) => {
+        const maxLen = Math.max(h.length, ...rows.map(r => String(r[i] ?? '').length));
+        return { wch: Math.min(maxLen + 4, 40) };
+      });
+      return ws;
+    };
+
+    // Sheet 1: Farmer Profile
+    const profileWs = makeSheet(
+      ['Field', 'Value'],
+      [
+        ['Full Name', farmer.full_name],
+        ['Farm Name', farmer.farm_name || 'Individual'],
+        ['National ID', farmer.national_id],
+        ['Phone', farmer.phone],
+        ['Email', farmer.email],
+        ['District', farmer.district],
+        ['Sector', farmer.sector],
+        ['Cell', farmer.cell],
+        ['Village', farmer.village],
+        ['Main Crops', farmer.produce_types.join(', ')],
+        ['Farm Size', `${farmer.farm_size_hectares} Ha`],
+        ['Production Capacity', `${farmer.production_capacity_tons} Tons`],
+        ['Status', farmer.status],
+        ['Total Supplied', `${totalSuppliedKg.toLocaleString()} kg`],
+        ['Supply Rank', supplyRank ? `#${supplyRank}` : 'N/A'],
+      ]
+    );
+    XLSX.utils.book_append_sheet(wb, profileWs, 'Farmer Profile');
+
+    // Sheet 2: Active Crop Cycles
+    const cycleWs = makeSheet(
+      ['Block', 'Crop', 'Planted', 'Yield Goal (kg)', 'Status'],
+      cycles.map(c => [
+        c.block_name,
+        c.crop_name,
+        c.planting_date ? new Date(c.planting_date).toLocaleDateString() : 'N/A',
+        c.yield_goal_kg || 0,
+        c.status
+      ])
+    );
+    XLSX.utils.book_append_sheet(wb, cycleWs, 'Crop Cycles');
+
+    // Sheet 3: Recent Harvests
+    const harvestWs = makeSheet(
+      ['Date', 'Crop', 'Quantity (kg)', 'Status'],
+      realHarvests.map(h => [
+        new Date(h.createdAt).toLocaleDateString(),
+        h.cropName,
+        h.estimatedWeightKg,
+        h.status
+      ])
+    );
+    XLSX.utils.book_append_sheet(wb, harvestWs, 'Harvest Records');
+
+    XLSX.writeFile(wb, `Sarura_Profile_${farmer.full_name.replace(/ /g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    setIsExportOpen(false);
+  };
+
+  // ─── Export Logic (PDF) ───
+  const handleExportPDF = async () => {
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const timestamp = new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const toTitleCase = (str: string) => str?.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || 'N/A';
+
+    // 1. Header
+    try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch { }
+    doc.setTextColor(21, 128, 61);
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('Fresh Sarura', 28, 19);
+    doc.setTextColor(107, 114, 128);
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+    doc.text('Export & Farmer Hub', 28, 23);
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+    doc.setDrawColor(229, 231, 235);
+    doc.line(15, 30, pageWidth - 15, 30);
+
+    // 2. Title & Summary
+    doc.setTextColor(17, 24, 39);
+    doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+    doc.text(`INDIVIDUAL FARMER PROFILE: ${farmer.full_name.toUpperCase()}`, 15, 42);
+
+    const summaryFields = [
+      { label: 'Farm Name / Cooperative', value: toTitleCase(farmer.farm_name || 'Individual') },
+      { label: 'Physical Location', value: `${toTitleCase(farmer.district)}, ${toTitleCase(farmer.sector)}` },
+      { label: 'Contact Information', value: `${farmer.phone} | ${farmer.email}` },
+      { label: 'Total Volume Supplied', value: totalSuppliedKg >= 1000 ? `${(totalSuppliedKg / 1000).toFixed(2)} Tons` : `${totalSuppliedKg.toLocaleString()} kg` },
+      { label: 'Supply Network Rank', value: supplyRank ? `#${supplyRank} of ${allFarmers.length} farmers` : '—' }
+    ];
+
+    let yPos = 52;
+    doc.setFontSize(9);
+    summaryFields.forEach(field => {
+      doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
+      doc.text(field.label, 15, yPos);
+      doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'bold');
+      doc.text(field.value, pageWidth - 15, yPos, { align: 'right' });
+      doc.setDrawColor(243, 244, 246);
+      doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+      yPos += 10;
+    });
+
+    const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [92, 184, 92] };
+    const commonBodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } };
+    const alternateRowStyles: any = { fillColor: [249, 250, 251] };
+
+    // 3. Farm Specifications Table
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+    doc.text('FARM SPECIFICATIONS', 15, yPos + 5);
+
+    autoTable(doc, {
+      startY: yPos + 10,
+      head: [['SPECIFICATION', 'DETAILS']],
+      body: [
+        ['Main Crops Cultivated', (farmer.produce_types || []).join(', ')],
+        ['Total Land Size', `${farmer.farm_size_hectares} Hectares`],
+        ['Production Capacity', `${farmer.production_capacity_tons} Tons / Season`],
+        ['Farm Name / ID', farmer.farm_name || 'Individual Plot'],
+      ],
+      theme: 'striped',
+      headStyles: commonHeadStyles,
+      bodyStyles: commonBodyStyles,
+      alternateRowStyles,
+      margin: { left: 15, right: 15 },
+    });
+
+    yPos = (doc as any).lastAutoTable.finalY + 15;
+
+    // 4. Active Crop Cycles Table
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+    doc.text('ACTIVE CROP CYCLES', 15, yPos);
+    
+    autoTable(doc, {
+      startY: yPos + 5,
+      head: [['BLOCK', 'CROP NAME', 'PLANTING DATE', 'YIELD GOAL', 'STATUS']],
+      body: cycles.map(c => [
+        toTitleCase(c.block_name),
+        toTitleCase(c.crop_name),
+        c.planting_date ? new Date(c.planting_date).toLocaleDateString('en-GB') : '—',
+        `${(c.yield_goal_kg || 0).toLocaleString()} kg`,
+        toTitleCase(c.status)
+      ]),
+      theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+      margin: { left: 15, right: 15 },
+    });
+
+    yPos = (doc as any).lastAutoTable.finalY + 15;
+
+    // 5. Recent Harvests Table
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+    doc.text('RECENT HARVEST DECLARATIONS', 15, yPos);
+    
+    autoTable(doc, {
+      startY: yPos + 5,
+      head: [['DECLARATION DATE', 'CROP', 'DECLARED QTY', 'CURRENT STATUS']],
+      body: realHarvests.slice(0, 10).map(h => [
+        new Date(h.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        toTitleCase(h.cropName),
+        `${(h.estimatedWeightKg || 0).toLocaleString()} kg`,
+        toTitleCase(h.status)
+      ]),
+      theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+      margin: { left: 15, right: 15, bottom: 30 },
+    });
+
+    // 6. Footer
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
+      doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
+      doc.text('This is a computer generated profile report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+      const footerY = 288;
+      doc.text('Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw', pageWidth / 2, footerY, { align: 'center' });
+      doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
+    }
+
+    doc.save(`Sarura_FarmerProfile_${farmer.full_name.replace(/ /g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+    setIsExportOpen(false);
+  };
+
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -158,6 +323,53 @@ const FarmerProfile = ({ farmer: initialFarmer, onBack, allFarmers = [], allStoc
           </div>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
+          {/* Export dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setIsExportOpen(prev => !prev)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm font-medium"
+            >
+              <Download size={15} />
+              Export Data
+              <ChevronDown size={14} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isExportOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setIsExportOpen(false)} />
+                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Export Options</p>
+                  <button
+                    onClick={handleExportXLSX}
+                    className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+                  >
+                    <div className="p-1.5 bg-green-50 dark:bg-green-900/20 rounded-lg flex-shrink-0">
+                      <FileSpreadsheet size={16} className="text-green-600 dark:text-green-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export Excel</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">Spreadsheet (.xlsx)</p>
+                    </div>
+                  </button>
+                  <div className="mx-4 border-t border-gray-100 dark:border-gray-700" />
+                  <button
+                    onClick={handleExportPDF}
+                    className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+                  >
+                    <div className="p-1.5 bg-red-50 dark:bg-red-900/20 rounded-lg flex-shrink-0">
+                      <FileText size={16} className="text-red-500 dark:text-red-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export PDF</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">Printable report (.pdf)</p>
+                    </div>
+                  </button>
+                  <div className="pb-2" />
+                </div>
+              </>
+            )}
+          </div>
+
           <button
             onClick={() => setIsEditOpen(true)}
             className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -221,8 +433,8 @@ const FarmerProfile = ({ farmer: initialFarmer, onBack, allFarmers = [], allStoc
           <div className="space-y-3 pt-1">
             {[
               { label: 'Total Supplied', value: totalSuppliedKg >= 1000 ? `${(totalSuppliedKg / 1000).toFixed(2)} Tons` : `${totalSuppliedKg.toLocaleString()} kg` },
-              { label: 'Active Crop Cycles', value: cyclesLoading ? '…' : String(cycles.filter(c => c.status === 'active' || c.status === 'harvesting').length) },
-              { label: 'Yield Goal (Current)', value: (() => { const ac = cycles.find(c => c.status === 'active' || c.status === 'harvesting'); return ac?.yield_goal_kg ? `${ac.yield_goal_kg.toLocaleString()} kg` : '—'; })() },
+              { label: 'Active Crop Cycles', value: cyclesLoading ? '…' : String(cycles.filter(c => c.status === 'active' || c.status === 'in_progress').length) },
+              { label: 'Yield Goal (Current)', value: (() => { const ac = cycles.find(c => c.status === 'active' || c.status === 'in_progress'); return ac?.yield_goal_kg ? `${ac.yield_goal_kg.toLocaleString()} kg` : '—'; })() },
               { label: 'Supply Rank', value: supplyRank ? `#${supplyRank} of ${allFarmers.length} farmers` : '—' },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-center justify-between text-sm">
@@ -275,11 +487,11 @@ const FarmerProfile = ({ farmer: initialFarmer, onBack, allFarmers = [], allStoc
                     </td>
                     <td className="px-5 py-3">
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                        c.status === 'harvesting' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 animate-pulse' :
+                        c.status === 'in_progress' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 animate-pulse' :
                         c.status === 'completed'  ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' :
                         'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
                       }`}>
-                        {c.status === 'active' ? '● Active' : c.status === 'harvesting' ? '◉ Harvesting' : c.status === 'completed' ? '✓ Done' : c.status}
+                        {c.status === 'active' ? '● Active' : c.status === 'in_progress' ? '◉ In Progress' : c.status === 'completed' ? '✓ Done' : c.status}
                       </span>
                     </td>
                   </tr>
@@ -305,7 +517,7 @@ const FarmerProfile = ({ farmer: initialFarmer, onBack, allFarmers = [], allStoc
                   <th className="px-5 py-2.5 text-left">Date</th>
                   <th className="px-5 py-2.5 text-left">Crop</th>
                   <th className="px-5 py-2.5 text-left">Quantity</th>
-                  <th className="px-5 py-2.5 text-left">Grade</th>
+                  <th className="px-5 py-2.5 text-left">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -315,8 +527,12 @@ const FarmerProfile = ({ farmer: initialFarmer, onBack, allFarmers = [], allStoc
                     <td className="px-5 py-3 text-gray-600 dark:text-gray-400">{h.crop}</td>
                     <td className="px-5 py-3 font-semibold text-gray-800 dark:text-gray-200">{h.qty}</td>
                     <td className="px-5 py-3">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${h.grade === 'A' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'}`}>
-                        {h.grade}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        h.status === 'PickedUp' 
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' 
+                        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                      }`}>
+                        {h.status}
                       </span>
                     </td>
                   </tr>

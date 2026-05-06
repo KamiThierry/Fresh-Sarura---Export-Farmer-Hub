@@ -28,7 +28,7 @@ const cropCycleSchema = new mongoose.Schema({
     ],
     approved: { type: Number, default: 0 }, // Total across all categories
     spent: { type: Number, default: 0 },
-    status: { type: String, enum: ['active', 'harvesting', 'completed', 'cancelled'], default: 'active' },
+    status: { type: String, enum: ['active', 'in_progress', 'completed', 'cancelled'], default: 'active' },
     final_yield: { type: String },
     registeredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 }, { timestamps: true });
