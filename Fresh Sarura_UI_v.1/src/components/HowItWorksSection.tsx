@@ -9,14 +9,14 @@ const steps = [
 ];
 
 const HowItWorksSection = () => (
-  <section id="how-it-works" className="py-24">
-    <div className="container px-6 md:px-10 lg:px-10">
-      <div className="text-center mb-16">
+  <section id="how-it-works" className="pt-40 pb-24">
+    <div className="container px-6 md:px-10 lg:px-10 mx-auto">
+      <div className="text-center mb-16 flex flex-col items-center">
         <p className="text-green-700 font-semibold tracking-wider uppercase text-sm mb-3">The Platform</p>
         <h2 className="text-4xl md:text-5xl font-extrabold text-green-950 leading-tight">
           How Fresh Sarura Works
         </h2>
-        <p className="text-slate-500 mt-4 max-w-xl mx-auto text-base">
+        <p className="text-slate-500 mt-4 max-w-2xl mx-auto text-base">
           Every kilogram of produce is tracked through 11 verifiable steps — from farm declaration to confirmed delivery.
         </p>
       </div>

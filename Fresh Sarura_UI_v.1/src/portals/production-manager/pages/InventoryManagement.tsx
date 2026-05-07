@@ -547,45 +547,46 @@ const InventoryManagement = () => {
             day: '2-digit', month: 'short', year: 'numeric',
             hour: '2-digit', minute: '2-digit'
         });
-
-        // 1. Header
-        try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch {}
+        // ── 1. Header ──
+        try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch (e) { console.warn('Logo failed'); }
         doc.setTextColor(21, 128, 61); doc.setFontSize(14); doc.setFont('helvetica', 'bold');
         doc.text('Fresh Sarura', 28, 19);
         doc.setTextColor(107, 114, 128); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
         doc.text('Export & Farmer Hub', 28, 23);
-        doc.setFontSize(10); doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
-        doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10); doc.setTextColor(17, 24, 39);
+        doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
         doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
         doc.setDrawColor(229, 231, 235); doc.line(15, 30, pageWidth - 15, 30);
 
-        // 2. Title
+        // ── 2. Title ──
         doc.setTextColor(17, 24, 39); doc.setFontSize(12); doc.setFont('helvetica', 'bold');
         const title = activeTab.replace('_', ' ').toUpperCase();
-        doc.text(`${title} REPORT`, 15, 42);
+        doc.text(`${title} AUDIT REPORT`, 15, 42);
 
-        // 3. Summary Section
-        let yPos = 52;
+        // ── 3. Summary Section ──
         const summaryFields = [
-            { label: 'Total Stock', value: `${totalStockTons} Tons` },
-            { label: 'Raw Intake Today', value: `${intakeTodayKg.toLocaleString()} kg` },
-            { label: 'Active Exports', value: `${exportBatches.filter(b => b.status !== 'Shipped').length} Batches` },
+            { label: 'Current Inventory', value: `${totalStockTons} Tons` },
+            { label: 'Recent Intake',    value: `${intakeTodayKg.toLocaleString()} kg` },
+            { label: 'Active Exports',   value: `${exportBatches.filter(b => b.status !== 'Shipped').length} Batches` },
+            { label: 'System Alert Count', value: String(fullyDepletedCount + nearlyEmptyCount) },
         ];
         
+        let yPos = 52;
         doc.setFontSize(9);
         summaryFields.forEach(field => {
-            doc.setTextColor(107, 114, 128); doc.setFont('helvetica', 'normal');
+            doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
             doc.text(field.label, 15, yPos);
             doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
             doc.text(field.value, pageWidth - 15, yPos, { align: 'right' });
-            doc.setDrawColor(243, 244, 246);
-            doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+            doc.setDrawColor(243, 244, 246); doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
             yPos += 10;
         });
 
-        // 4. Data Table
-        const headStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [92, 184, 92] };
-        const bodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: 3 };
+        // ── 4. Data Table ──
+        const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [92, 184, 92] };
+        const commonBodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } };
+        const alternateRowStyles: any = { fillColor: [249, 250, 251] };
 
         if (activeTab === 'recent_activity') {
             autoTable(doc, {
@@ -595,32 +596,50 @@ const InventoryManagement = () => {
                     `${a.timestamp.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}\n${a.timestamp.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`,
                     a.type, a.description, a.impact, a.actor
                 ]),
-                headStyles, bodyStyles,
+                theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+                margin: { left: 15, right: 15, bottom: 30 }
             });
         } else if (activeTab === 'active_inventory') {
             autoTable(doc, {
                 startY: yPos + 10,
                 head: [['STOCK ID', 'PRODUCE', 'WEIGHT (KG)', 'LOCATION', 'STATUS']],
                 body: inventoryItems.map(i => [i.id, i.produce, i.processedKg.toLocaleString(), i.storageLocation, i.status]),
-                headStyles, bodyStyles,
+                theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+                margin: { left: 15, right: 15, bottom: 30 }
             });
         } else if (activeTab === 'export_batches') {
             autoTable(doc, {
                 startY: yPos + 10,
                 head: [['BATCH ID', 'PRODUCE', 'CLIENT', 'DESTINATION', 'WEIGHT (KG)', 'STATUS']],
                 body: exportBatches.map(b => [b.batchId, b.cropName, b.clientName, b.destination, b.allocatedWeightKg.toLocaleString(), b.status]),
-                headStyles, bodyStyles,
+                theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+                margin: { left: 15, right: 15, bottom: 30 }
             });
         }
 
-        // 5. Footer
+        // ── 5. System Insights ──
+        let lastY = (doc as any).lastAutoTable?.finalY || yPos;
+        if (lastY > 210) { doc.addPage(); lastY = 20; }
+        
+        doc.setTextColor(17, 24, 39); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+        doc.text('SYSTEM INSIGHTS', 15, lastY + 15);
+        
+        const depletionMsg = fullyDepletedCount > 0 ? `${fullyDepletedCount} items fully depleted.` : 'No critical stock depletion detected.';
+        doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'normal');
+        doc.text(`• Inventory Health: ${depletionMsg} Current total availability is ${totalStockTons} Tons.`, 15, lastY + 23);
+        doc.text(`• Logistics Throughput: ${exportBatches.filter(b => b.status === 'ReadyForExport').length} batches are ready for immediate export dispatch.`, 15, lastY + 29);
+        doc.text(`• Recent Activity: ${activityFeed.length} significant inventory events logged in the current reporting period.`, 15, lastY + 35);
+
+        // ── 6. Footer ──
         const pageCount = (doc as any).internal.getNumberOfPages();
         for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);
             doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
             doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
-            doc.text('Confidential Production Report — Fresh Sarura Hub', pageWidth / 2, 280, { align: 'center' });
-            doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, 280, { align: 'right' });
+            doc.text('This is a computer generated report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+            const footerY = 288;
+            doc.text('Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw', pageWidth / 2, footerY, { align: 'center' });
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
         }
 
         doc.save(`Sarura_Inventory_${activeTab}_${new Date().toISOString().split('T')[0]}.pdf`);

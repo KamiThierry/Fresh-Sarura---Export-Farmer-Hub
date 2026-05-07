@@ -27,10 +27,9 @@ const DashboardPreviewSection = () => {
 
   return (
     <section className="py-24" style={{ backgroundColor: "#1a3d2b" }}>
-      <div className="container px-6 md:px-10 lg:px-10">
-
+        <div className="container px-6 md:px-10 lg:px-10 mx-auto">
         {/* Header */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-12 flex flex-col items-center">
           <p className="text-green-400 font-semibold tracking-wider uppercase text-sm mb-3">
             Live Platform
           </p>
@@ -72,14 +71,18 @@ const DashboardPreviewSection = () => {
           </div>
 
           {/* Screenshot */}
-          <div className="relative w-full overflow-hidden" style={{ backgroundColor: "#0f2d1c" }}>
-            <img
-              key={activeTab}
-              src={active.img}
-              alt={active.label}
-              className="w-full block transition-opacity duration-300"
-              style={{ opacity: 1 }}
-            />
+          <div className="relative w-full overflow-hidden bg-slate-900/50">
+            {tabs.map((tab, i) => (
+              <img
+                key={tab.label}
+                src={tab.img}
+                alt={tab.label}
+                className={`w-full h-auto block transition-opacity duration-700 ease-in-out ${
+                  activeTab === i ? "opacity-100 relative z-10" : "opacity-0 absolute inset-0 z-0"
+                }`}
+                style={{ objectFit: "contain" }}
+              />
+            ))}
           </div>
         </div>
 

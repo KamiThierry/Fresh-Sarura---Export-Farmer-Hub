@@ -1,22 +1,51 @@
 const stats = [
-  { value: "6", label: "User Roles" },
-  { value: "11", label: "Production Steps" },
-  { value: "100%", label: "Traceability" },
   { value: "500+", label: "Verified Outgrowers" },
+  { value: "11", label: "Production Steps" },
+  { value: "100%", label: "Export Traceability" },
+  { value: "5+", label: "Years Operating" },
+];
+
+const certs = [
+  { label: "GLOBALG.A.P Aligned" },
+  { label: "SMETA Compliant" },
+  { label: "NAEB Registered" },
+  { label: "EU Phytosanitary Ready" },
 ];
 
 const StatsBar = () => (
-  <section className="py-6 px-8 md:px-16 lg:px-24">
-    <div className="rounded-2xl grid grid-cols-2 md:grid-cols-4"
-      style={{ backgroundColor: "#e8f5e9", border: "1px solid #c8e6c9" }}>
-      {stats.map((s, i) => (
-        <div key={s.label}
-          className={`flex flex-col items-center justify-center py-10 px-6 gap-1
-            ${i < stats.length - 1 ? "border-r border-green-200/60" : ""}`}>
-          <span className="text-4xl font-extrabold text-green-800">{s.value}</span>
-          <span className="text-xs font-semibold tracking-widest text-green-600/80 uppercase text-center">{s.label}</span>
-        </div>
-      ))}
+  <section className="pb-6 px-6 md:px-10">
+    <div className="max-w-4xl mx-auto flex flex-col items-center gap-4">
+
+      {/* Stats row — plain inline text */}
+      <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2">
+        {stats.map((s, i) => (
+          <div key={s.label} className="flex items-center gap-2">
+            <span className="text-base font-extrabold" style={{ color: "#15803d" }}>
+              {s.value}
+            </span>
+            <span className="text-xs font-medium text-slate-500">{s.label}</span>
+            {i < stats.length - 1 && (
+              <span className="ml-8 text-slate-300 hidden sm:inline">·</span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Divider */}
+      <div className="w-16 h-px" style={{ backgroundColor: "#d1fae5" }} />
+
+      {/* Certs row */}
+      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+        <span className="text-[10px] font-semibold tracking-widest uppercase text-slate-400">
+          Certified &amp; Compliant
+        </span>
+        {certs.map((c, i) => (
+          <span key={c.label} className="text-[11px] font-medium text-slate-500">
+            {c.label}{i < certs.length - 1 && <span className="ml-4 text-slate-300">·</span>}
+          </span>
+        ))}
+      </div>
+
     </div>
   </section>
 );

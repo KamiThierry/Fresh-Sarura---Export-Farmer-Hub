@@ -6,9 +6,12 @@ const router = express.Router();
 
 // All routes protected — PM and Admin only
 router.use(protect);
+// Index route open to more roles for search/visibility
+router.get('/', restrictTo('production_manager', 'admin', 'logistic_officer', 'quality_officer'), getFarmers);
+
+// Management routes restricted to PM and Admin
 router.use(restrictTo('production_manager', 'admin'));
 
-router.get('/', getFarmers);
 router.post('/', registerFarmer);
 router.patch('/:id', updateFarmer);
 router.patch('/:id/suspend', suspendFarmer);

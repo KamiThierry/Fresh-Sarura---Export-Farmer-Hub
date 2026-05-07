@@ -1,8 +1,8 @@
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
-
 import HowItWorksSection from "@/components/HowItWorksSection";
 import DashboardPreviewSection from "@/components/DashboardPreviewSection";
+
 import ForYourTeamSection from "@/components/ForYourTeamSection";
 
 import ProductionChainSection from "@/components/ProductionChainSection";

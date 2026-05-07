@@ -23,10 +23,14 @@ import {
 const router = express.Router();
 
 router.use(protect);
+// Index route open to more roles for search/visibility
+router.get('/', restrictTo('production_manager', 'admin', 'logistic_officer', 'quality_officer'), getCropCycles);
+
+// Management routes restricted to PM and Admin
 router.use(restrictTo('production_manager', 'admin'));
 
 // Core CRUD
-router.route('/').get(getCropCycles).post(createCropCycle);
+router.route('/').post(createCropCycle);
 router.route('/:id').patch(updateCropCycle).delete(deleteCropCycle);
 
 // Cycle lifecycle

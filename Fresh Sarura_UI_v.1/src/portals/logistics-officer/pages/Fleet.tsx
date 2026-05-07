@@ -1,18 +1,25 @@
 import { useState, useEffect } from 'react';
-import { Users, Truck, Wrench, Search, Filter, Plus, Calendar, Phone, MoreVertical, Eye, Loader2 } from 'lucide-react';
+import { Users, Truck, Wrench, Search, Filter, Plus, Calendar, Phone, MoreVertical, Eye, Loader2, Download, FileSpreadsheet, FileText, ChevronDown } from 'lucide-react';
 import AddVehicleModal from '../components/AddVehicleModal';
 import LogMaintenanceModal from '../components/LogMaintenanceModal';
 import AddDriverModal from '../components/AddDriverModal';
 import AssignTruckModal from '../components/AssignTruckModal';
 import Pagination from '../../shared/component/Pagination';
 import { api } from '../../../lib/api';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import logo from '../../../assets/sarura_logo_nav.png';
 
 const Fleet = () => {
     const [activeTab, setActiveTab] = useState<'vehicles' | 'drivers'>('vehicles');
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('All');
+    const [filterType, setFilterType] = useState('All');
+    const [filterLicense, setFilterLicense] = useState('All');
     const [vehiclePage, setVehiclePage] = useState(1);
     const [driverPage, setDriverPage] = useState(1);
+    const [isExportOpen, setIsExportOpen] = useState(false);
     const itemsPerPage = 10; // Increased from mock 3
 
     const [vehicles, setVehicles] = useState<any[]>([]);
@@ -58,20 +65,186 @@ const Fleet = () => {
         fetchData();
     }, []);
 
+    const handleExportXLSX = () => {
+        const dataToExport = activeTab === 'vehicles' ? filteredVehicles : filteredDrivers;
+        const sheetData = activeTab === 'vehicles' 
+            ? dataToExport.map(v => ({
+                'Plate Number': v.plateNumber,
+                'Type': v.type,
+                'Capacity (kg)': v.capacityKg,
+                'Next Maintenance': v.nextMaintenanceDate ? new Date(v.nextMaintenanceDate).toLocaleDateString() : 'N/A',
+                'Status': v.status
+            }))
+            : dataToExport.map(d => ({
+                'Name': `${d.firstName} ${d.lastName}`,
+                'Phone': d.phoneNumber,
+                'License': d.licenseType,
+                'Vehicle': d.assignedVehicle?.plateNumber || 'Unassigned',
+                'Status': d.status
+            }));
+
+        const ws = XLSX.utils.json_to_sheet(sheetData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, activeTab === 'vehicles' ? 'Vehicles' : 'Drivers');
+        XLSX.writeFile(wb, `FreshSarura_${activeTab}_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+        setIsExportOpen(false);
+    };
+
+    const handleExportPDF = async () => {
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const timestamp = new Date().toLocaleString('en-GB', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+
+        const toTitleCase = (str: string) =>
+            str.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+        // 1. Header
+        try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch (e) {}
+        doc.setTextColor(21, 128, 61);
+        doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+        doc.text('Fresh Sarura', 28, 19);
+        doc.setTextColor(107, 114, 128);
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+        doc.text('Export & Farmer Hub', 28, 23);
+        doc.setFontSize(10); doc.setTextColor(17, 24, 39);
+        doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
+        doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+        doc.setDrawColor(229, 231, 235);
+        doc.line(15, 30, pageWidth - 15, 30);
+
+        // 2. Report Title
+        doc.setTextColor(17, 24, 39);
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+        doc.text(`${activeTab.toUpperCase()} STATUS REPORT`, 15, 42);
+
+        // 3. Summary Fields
+        const summaryFields = activeTab === 'vehicles' ? [
+            { label: 'Total Fleet', value: String(vehicles.length) },
+            { label: 'In Maintenance', value: String(vehicles.filter(v => v.status === 'Maintenance').length) },
+            { label: 'Available Units', value: String(vehicles.filter(v => v.status === 'Available').length) },
+            { label: 'Total Capacity', value: `${vehicles.reduce((s, v) => s + (v.capacityKg || 0), 0).toLocaleString()} kg` },
+        ] : [
+            { label: 'Total Drivers', value: String(drivers.length) },
+            { label: 'On Active Duty', value: String(drivers.filter(d => d.status === 'Driving').length) },
+            { label: 'Off Duty', value: String(drivers.filter(d => d.status === 'Off Duty').length) },
+            { label: 'Licensed Personnel', value: String(drivers.filter(d => d.licenseType).length) },
+        ];
+
+        let yPos = 52;
+        doc.setFontSize(9);
+        summaryFields.forEach(field => {
+            doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
+            doc.text(field.label, 15, yPos);
+            doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
+            doc.text(field.value, pageWidth - 15, yPos, { align: 'right' });
+            doc.setDrawColor(243, 244, 246);
+            doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+            yPos += 10;
+        });
+
+        // 4. Data Table
+        const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [92, 184, 92] };
+        const commonBodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } };
+        const alternateRowStyles: any = { fillColor: [249, 250, 251] };
+
+        if (activeTab === 'vehicles') {
+            autoTable(doc, {
+                startY: yPos + 10,
+                head: [['PLATE', 'TYPE', 'CAPACITY', 'NEXT SERVICE', 'STATUS']],
+                body: filteredVehicles.map(v => [
+                    v.plateNumber,
+                    toTitleCase(v.type),
+                    `${(v.capacityKg || 0).toLocaleString()} kg`,
+                    v.nextMaintenanceDate ? new Date(v.nextMaintenanceDate).toLocaleDateString('en-GB') : '—',
+                    v.status
+                ]),
+                theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+                margin: { left: 15, right: 15, bottom: 30 },
+                didParseCell: (data) => {
+                    if (data.section === 'body' && data.column.index === 4) {
+                        const s = String(data.cell.raw).toLowerCase();
+                        if (s.includes('available')) data.cell.styles.textColor = [22, 163, 74];
+                        if (s.includes('maintenance')) data.cell.styles.textColor = [220, 38, 38];
+                        if (s.includes('trip')) data.cell.styles.textColor = [234, 88, 12];
+                    }
+                }
+            });
+        } else {
+            autoTable(doc, {
+                startY: yPos + 10,
+                head: [['NAME', 'PHONE', 'LICENSE', 'VEHICLE', 'STATUS']],
+                body: filteredDrivers.map(d => [
+                    toTitleCase(`${d.firstName} ${d.lastName}`),
+                    d.phoneNumber,
+                    d.licenseType,
+                    d.assignedVehicle?.plateNumber || '—',
+                    d.status
+                ]),
+                theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+                margin: { left: 15, right: 15, bottom: 30 },
+                didParseCell: (data) => {
+                    if (data.section === 'body' && data.column.index === 4) {
+                        const s = String(data.cell.raw).toLowerCase();
+                        if (s.includes('driving')) data.cell.styles.textColor = [22, 163, 74];
+                        if (s.includes('idle')) data.cell.styles.textColor = [37, 99, 235];
+                    }
+                }
+            });
+        }
+
+        // 5. System Insights
+        let lastY = (doc as any).lastAutoTable?.finalY || yPos;
+        if (lastY > 210) { doc.addPage(); lastY = 20; }
+        
+        doc.setTextColor(17, 24, 39); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+        doc.text(activeTab === 'vehicles' ? 'FLEET ANALYTICS' : 'DRIVER ANALYTICS', 15, lastY + 15);
+        
+        doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'normal');
+        if (activeTab === 'vehicles') {
+            const maintenance = vehicles.filter(v => v.status === 'Maintenance').length;
+            const avgCapacity = vehicles.length ? (vehicles.reduce((s, v) => s + (v.capacityKg || 0), 0) / vehicles.length).toFixed(0) : '0';
+            doc.text(`• Maintenance Rate: ${((maintenance / (vehicles.length || 1)) * 100).toFixed(1)}% of the fleet is currently in service.`, 15, lastY + 23);
+            doc.text(`• Average Capacity: The average vehicle payload capacity is ${avgCapacity} kg.`, 15, lastY + 29);
+        } else {
+            const active = drivers.filter(d => d.status === 'Driving').length;
+            doc.text(`• Workforce Utilization: ${((active / (drivers.length || 1)) * 100).toFixed(1)}% of drivers are currently assigned to active trips.`, 15, lastY + 23);
+            doc.text(`• Resource Readiness: ${drivers.filter(d => d.status === 'Idle').length} drivers are available for immediate dispatch.`, 15, lastY + 29);
+        }
+
+        // 6. Footer
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
+            doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
+            doc.text('This is a computer generated report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+            const footerY = 288;
+            doc.text('Kigali - Rwanda | +250 788 123 456 | logistics@freshsarura.rw | www.freshsarura.rw', pageWidth / 2, footerY, { align: 'center' });
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
+        }
+
+        doc.save(`FreshSarura_${activeTab}_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+        setIsExportOpen(false);
+    };
+
     // Filter Data
     const filteredVehicles = (vehicles || []).filter(v => {
         const matchesSearch = (v?.plateNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) || (v?.type || '').toLowerCase().includes(searchTerm.toLowerCase());
-        const isVehicleTab = activeTab === 'vehicles';
-        const matchesStatus = !isVehicleTab || filterStatus === 'All' || v.status === filterStatus;
-        return matchesSearch && matchesStatus;
+        const matchesStatus = filterStatus === 'All' || v.status === filterStatus;
+        const matchesType = filterType === 'All' || v.type === filterType;
+        return matchesSearch && matchesStatus && matchesType;
     });
 
     const filteredDrivers = (drivers || []).filter(d => {
         const name = `${d?.firstName || ''} ${d?.lastName || ''}`;
         const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase());
-        const isDriverTab = activeTab === 'drivers';
-        const matchesStatus = !isDriverTab || filterStatus === 'All' || d.status === filterStatus;
-        return matchesSearch && matchesStatus;
+        const matchesStatus = filterStatus === 'All' || d.status === filterStatus;
+        const matchesLicense = filterLicense === 'All' || d.licenseType === filterLicense;
+        return matchesSearch && matchesStatus && matchesLicense;
     });
 
     // Available Vehicles for Assignment (Excluding Maintenance/On Trip)
@@ -119,12 +292,56 @@ const Fleet = () => {
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Fleet & Drivers</h1>
                     <p className="text-gray-500 dark:text-gray-400">Manage vehicle assets, driver profiles, and assignments.</p>
                 </div>
-                {loading && (
-                    <div className="flex items-center gap-2 text-indigo-600 font-medium bg-indigo-50 dark:bg-indigo-900/20 px-4 py-2 rounded-xl">
-                        <Loader2 className="animate-spin" size={18} />
-                        Syncing...
+                
+                <div className="flex items-center gap-3">
+                    {loading && (
+                        <div className="flex items-center gap-2 text-indigo-600 font-medium bg-indigo-50 dark:bg-indigo-900/20 px-4 py-2 rounded-xl">
+                            <Loader2 className="animate-spin" size={18} />
+                            Syncing...
+                        </div>
+                    )}
+
+                    <div className="relative">
+                        <button
+                            onClick={() => setIsExportOpen(!isExportOpen)}
+                            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-xl font-bold shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-all active:scale-95"
+                        >
+                            <Download size={18} className="text-indigo-600" />
+                            Export Data
+                            <ChevronDown size={16} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isExportOpen && (
+                            <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden animate-in fade-in zoom-in duration-200 origin-top-right">
+                                <button
+                                    onClick={handleExportXLSX}
+                                    className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-700"
+                                >
+                                    <FileSpreadsheet size={18} className="text-emerald-600" />
+                                    Export as Excel
+                                </button>
+                                <button
+                                    onClick={handleExportPDF}
+                                    className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                >
+                                    <FileText size={18} className="text-red-600" />
+                                    Export as PDF
+                                </button>
+                            </div>
+                        )}
                     </div>
-                )}
+
+                    <button
+                        onClick={() => {
+                            if (activeTab === 'vehicles') setIsAddVehicleOpen(true);
+                            if (activeTab === 'drivers') setIsAddDriverOpen(true);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-900/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
+                    >
+                        <Plus size={18} />
+                        Add {activeTab === 'vehicles' ? 'Vehicle' : 'Driver'}
+                    </button>
+                </div>
             </div>
 
             {/* Top Stats Cards */}
@@ -154,77 +371,112 @@ const Fleet = () => {
             </div>
 
             {/* Main Workspace */}
-            <div className="space-y-4">
-                {/* Tabs & Actions */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
-                        <button
-                            onClick={() => { setActiveTab('vehicles'); setFilterStatus('All'); setVehiclePage(1); }}
-                            className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'vehicles' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
-                        >
-                            <Truck size={16} /> Vehicles
-                        </button>
-                        <button
-                            onClick={() => { setActiveTab('drivers'); setFilterStatus('All'); setDriverPage(1); }}
-                            className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'drivers' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
-                        >
-                            <Users size={16} /> Drivers
-                        </button>
-                    </div>
+            {/* Main Content Card */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden min-h-[400px]">
 
-                    <div className="flex items-center gap-3">
-
-                        {/* Filter Dropdown */}
-                        <div className="relative">
-                            <Filter size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <select
-                                value={filterStatus}
-                                onChange={(e) => setFilterStatus(e.target.value)}
-                                className="pl-10 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer font-medium text-gray-700 dark:text-gray-200"
+                {/* Table Header & Controls */}
+                <div className="border-b border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center justify-between p-4">
+                        {/* Tabs */}
+                        <div className="flex gap-1 bg-gray-100 dark:bg-gray-900/50 p-1 rounded-lg">
+                            <button
+                                onClick={() => { setActiveTab('vehicles'); setFilterStatus('All'); setFilterType('All'); setFilterLicense('All'); setVehiclePage(1); }}
+                                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'vehicles'
+                                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                    }`}
                             >
-                                <option value="All">All Statuses</option>
-                                {activeTab === 'vehicles' ? (
-                                    <>
-                                        <option value="Available">Available</option>
-                                        <option value="On Trip">On Trip</option>
-                                        <option value="Maintenance">Maintenance</option>
-                                    </>
-                                ) : (
-                                    <>
-                                        <option value="Idle">Idle</option>
-                                        <option value="Driving">Driving</option>
-                                        <option value="Off Duty">Off Duty</option>
-                                    </>
-                                )}
-                            </select>
+                                <Truck size={16} /> Vehicles
+                            </button>
+                            <button
+                                onClick={() => { setActiveTab('drivers'); setFilterStatus('All'); setFilterType('All'); setFilterLicense('All'); setDriverPage(1); }}
+                                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'drivers'
+                                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                    }`}
+                            >
+                                <Users size={16} /> Drivers
+                            </button>
                         </div>
-
-                        <div className="relative">
-                            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <input
-                                type="text"
-                                placeholder={`Search ${activeTab}...`}
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-full md:w-64"
-                            />
-                        </div>
-                        <button
-                            onClick={() => {
-                                if (activeTab === 'vehicles') setIsAddVehicleOpen(true);
-                                if (activeTab === 'drivers') setIsAddDriverOpen(true);
-                            }}
-                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-900/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
-                        >
-                            <Plus size={18} />
-                            Add {activeTab === 'vehicles' ? 'Vehicle' : 'Driver'}
-                        </button>
                     </div>
                 </div>
 
-                {/* Content Table */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm min-h-[400px]">
-                    <div className="overflow-x-auto">
+                {/* Unified Search & Filter Bar */}
+                <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/10 flex flex-wrap items-center gap-3">
+                    <div className="relative flex-1 max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <input
+                            type="text"
+                            placeholder={`Search ${activeTab === 'vehicles' ? 'by plate or type...' : 'by name...'}`}
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-9 pr-4 py-2 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm transition-all"
+                        />
+                    </div>
+
+                    <div className="relative">
+                        <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <select
+                            value={filterStatus}
+                            onChange={(e) => setFilterStatus(e.target.value)}
+                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer shadow-sm"
+                        >
+                            <option value="All">All Statuses</option>
+                            {activeTab === 'vehicles' ? (
+                                <>
+                                    <option value="Available">Available</option>
+                                    <option value="On Trip">On Trip</option>
+                                    <option value="Maintenance">Maintenance</option>
+                                </>
+                            ) : (
+                                <>
+                                    <option value="Idle">Idle</option>
+                                    <option value="Driving">Driving</option>
+                                    <option value="Off Duty">Off Duty</option>
+                                </>
+                            )}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                    </div>
+
+                    {activeTab === 'vehicles' ? (
+                        <div className="relative">
+                            <Truck size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                            <select
+                                value={filterType}
+                                onChange={(e) => setFilterType(e.target.value)}
+                                className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer shadow-sm"
+                            >
+                                <option value="All">All Types</option>
+                                <option value="Refrigerated Truck">Refrigerated Truck</option>
+                                <option value="Standard Truck">Standard Truck</option>
+                                <option value="Pickup">Pickup</option>
+                                <option value="Van">Van</option>
+                            </select>
+                            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        </div>
+                    ) : (
+                        <div className="relative">
+                            <FileText size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                            <select
+                                value={filterLicense}
+                                onChange={(e) => setFilterLicense(e.target.value)}
+                                className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer shadow-sm"
+                            >
+                                <option value="All">All Licenses</option>
+                                <option value="A">Category A</option>
+                                <option value="B">Category B</option>
+                                <option value="C">Category C</option>
+                                <option value="D">Category D</option>
+                                <option value="E">Category E</option>
+                                <option value="F">Category F</option>
+                            </select>
+                            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        </div>
+                    )}
+                </div>
+
+                <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
                             <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-500 uppercase tracking-wider text-xs">
                                 <tr>
@@ -259,123 +511,127 @@ const Fleet = () => {
                                             </div>
                                         </td>
                                     </tr>
-                                ) : activeTab === 'vehicles' ? (
-                                    filteredVehicles.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={6} className="px-6 py-10 text-center text-gray-500">No vehicles found.</td>
-                                        </tr>
-                                    ) : (
-                                        filteredVehicles.slice((vehiclePage - 1) * itemsPerPage, vehiclePage * itemsPerPage).map(vehicle => (
-                                            <tr key={vehicle._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
-                                                <td className="px-6 py-4 font-bold text-gray-900 dark:text-white font-mono">{vehicle.plateNumber}</td>
-                                                <td className="px-6 py-4">
-                                                    <div className="text-gray-900 dark:text-white font-medium">{vehicle.type}</div>
-                                                    <div className="text-xs text-gray-500">{vehicle.capacityKg} kg</div>
-                                                </td>
-                                                <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
-                                                    {(() => {
-                                                        const assignedDriver = (drivers || []).find((d: any) =>
-                                                            d.assignedVehicle?._id === vehicle._id || d.assignedVehicle === vehicle._id
-                                                        );
-                                                        return assignedDriver ? (
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                                                                    {assignedDriver.firstName?.substring(0, 1) ?? '?'}
-                                                                </div>
-                                                                {assignedDriver.firstName} {assignedDriver.lastName}
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-gray-400 italic">Unassigned</span>
-                                                        );
-                                                    })()}
-                                                </td>
-                                                <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <Calendar size={14} className="text-gray-400" />
-                                                        {vehicle.nextMaintenanceDate ? new Date(vehicle.nextMaintenanceDate).toLocaleDateString() : 'Not set'}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border border-transparent ${getStatusColor(vehicle.status)}`}>
-                                                        {vehicle.status}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button
-                                                            onClick={() => handleOpenMaintenance(vehicle)}
-                                                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                                                            title="Log Service"
-                                                        >
-                                                            <Wrench size={16} />
-                                                        </button>
-                                                        <button className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Edit">
-                                                            <MoreVertical size={16} />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )
                                 ) : (
-                                    filteredDrivers.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={6} className="px-6 py-10 text-center text-gray-500">No drivers found.</td>
-                                        </tr>
-                                    ) : (
-                                        filteredDrivers.slice((driverPage - 1) * itemsPerPage, driverPage * itemsPerPage).map(driver => (
-                                            <tr key={driver._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
-                                                <td className="px-6 py-4">
-                                                    <div className="font-bold text-gray-900 dark:text-white">{driver.firstName} {driver.lastName}</div>
-                                                </td>
-                                                <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
-                                                    <div className="flex items-center gap-1.5 font-mono text-xs">
-                                                        <Phone size={14} className="text-gray-400" />
-                                                        {driver.phoneNumber}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="text-sm text-gray-600 dark:text-gray-300">
-                                                        <span className="font-medium">{driver.licenseType}</span>
-                                                        {driver.licenseExpiry && (
-                                                            <span className="text-xs text-gray-400 ml-2">Exp: {new Date(driver.licenseExpiry).toLocaleDateString()}</span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {driver.assignedVehicle ? (
-                                                        <div className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-900/30 px-2.5 py-1 rounded-lg w-fit text-xs font-mono">
-                                                            <Truck size={12} />
-                                                            {driver.assignedVehicle.plateNumber}
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-gray-400 italic text-xs">Unassigned</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border border-transparent ${getStatusColor(driver.status)}`}>
-                                                        {driver.status}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="View Profile">
-                                                            <Eye size={16} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleOpenAssignTruck(driver)}
-                                                            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                                                            title="Assign Truck"
-                                                        >
-                                                            <Truck size={16} />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )
+                                    <>
+                                        {activeTab === 'vehicles' ? (
+                                            filteredVehicles.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">No vehicles found.</td>
+                                                </tr>
+                                            ) : (
+                                                filteredVehicles.slice((vehiclePage - 1) * itemsPerPage, vehiclePage * itemsPerPage).map(vehicle => (
+                                                    <tr key={vehicle._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
+                                                        <td className="px-6 py-4 font-bold text-gray-900 dark:text-white font-mono">{vehicle.plateNumber}</td>
+                                                        <td className="px-6 py-4">
+                                                            <div className="text-gray-900 dark:text-white font-medium">{vehicle.type}</div>
+                                                            <div className="text-xs text-gray-500">{vehicle.capacityKg} kg</div>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
+                                                            {(() => {
+                                                                const assignedDriver = (drivers || []).find((d: any) =>
+                                                                    d.assignedVehicle?._id === vehicle._id || d.assignedVehicle === vehicle._id
+                                                                );
+                                                                return assignedDriver ? (
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                                                                            {assignedDriver.firstName?.substring(0, 1) ?? '?'}
+                                                                        </div>
+                                                                        {assignedDriver.firstName} {assignedDriver.lastName}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-gray-400 italic">Unassigned</span>
+                                                                );
+                                                            })()}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <Calendar size={14} className="text-gray-400" />
+                                                                {vehicle.nextMaintenanceDate ? new Date(vehicle.nextMaintenanceDate).toLocaleDateString() : 'Not set'}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border border-transparent ${getStatusColor(vehicle.status)}`}>
+                                                                {vehicle.status}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-right">
+                                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button
+                                                                    onClick={() => handleOpenMaintenance(vehicle)}
+                                                                    className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                                                    title="Log Service"
+                                                                >
+                                                                    <Wrench size={16} />
+                                                                </button>
+                                                                <button className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Edit">
+                                                                    <MoreVertical size={16} />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )
+                                        ) : (
+                                            filteredDrivers.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">No drivers found.</td>
+                                                </tr>
+                                            ) : (
+                                                filteredDrivers.slice((driverPage - 1) * itemsPerPage, driverPage * itemsPerPage).map(driver => (
+                                                    <tr key={driver._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
+                                                        <td className="px-6 py-4">
+                                                            <div className="font-bold text-gray-900 dark:text-white">{driver.firstName} {driver.lastName}</div>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
+                                                            <div className="flex items-center gap-1.5 font-mono text-xs">
+                                                                <Phone size={14} className="text-gray-400" />
+                                                                {driver.phoneNumber}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <div className="text-sm text-gray-600 dark:text-gray-300">
+                                                                <span className="font-medium">{driver.licenseType}</span>
+                                                                {driver.licenseExpiry && (
+                                                                    <span className="text-xs text-gray-400 ml-2">Exp: {new Date(driver.licenseExpiry).toLocaleDateString()}</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            {driver.assignedVehicle ? (
+                                                                <div className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-900/30 px-2.5 py-1 rounded-lg w-fit text-xs font-mono">
+                                                                    <Truck size={12} />
+                                                                    {driver.assignedVehicle.plateNumber}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-gray-400 italic text-xs">Unassigned</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border border-transparent ${getStatusColor(driver.status)}`}>
+                                                                {driver.status}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-right">
+                                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="View Profile">
+                                                                    <Eye size={16} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleOpenAssignTruck(driver)}
+                                                                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                                                    title="Assign Truck"
+                                                                >
+                                                                    <Truck size={16} />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )
+                                        )}
+                                    </>
                                 )}
-                            </tbody>
+                             </tbody>
                         </table>
                     </div>
                     {activeTab === 'vehicles'
@@ -383,7 +639,7 @@ const Fleet = () => {
                         : <Pagination currentPage={driverPage} totalItems={filteredDrivers.length} itemsPerPage={itemsPerPage} onPageChange={setDriverPage} />
                     }
                 </div>
-            </div>
+
 
             {/* Modals */}
             <AddVehicleModal

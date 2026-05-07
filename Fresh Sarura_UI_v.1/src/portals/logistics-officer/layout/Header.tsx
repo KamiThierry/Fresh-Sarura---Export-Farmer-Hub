@@ -11,6 +11,8 @@ const TYPE_COLOURS: Record<string, string> = {
     'Farmer': 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400',
     'Shipment': 'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400',
     'Crop Cycle': 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400',
+    'Vehicle': 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400',
+    'Batch': 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400',
 };
 
 const Header = () => {

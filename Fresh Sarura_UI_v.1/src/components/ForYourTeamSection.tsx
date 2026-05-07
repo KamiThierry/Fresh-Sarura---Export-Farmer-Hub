@@ -10,7 +10,7 @@ const roles = [
 
 const ForYourTeamSection = () => (
   <section id="for-your-team" className="py-24">
-    <div className="container px-6 md:px-10 lg:px-10">
+    <div className="container px-6 md:px-10 lg:px-10 mx-auto">
       <div className="text-center mb-14">
         <p className="text-green-700 font-semibold tracking-wider uppercase text-sm mb-3">For Your Team</p>
         <h2 className="text-4xl md:text-5xl font-extrabold text-green-950 leading-tight">

@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Truck, Scale, Plane, FileWarning, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Truck, Scale, Plane, FileWarning, Loader2, Package, Activity, Clock, TrendingUp, Calendar } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import ActionCenter from '../components/ActionCenter';
 import ShipmentBuilderModal from '../components/ShipmentBuilderModal';
 import { api } from '../../../lib/api';
 
 const Dashboard = () => {
+    const navigate = useNavigate();
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : { name: 'Logistics Officer' };
     const [isShipmentModalOpen, setIsShipmentModalOpen] = useState(false);
@@ -15,6 +18,8 @@ const Dashboard = () => {
         activeShipments: 0,
         pendingDocs: 0,
     });
+    const [chartData, setChartData] = useState<any[]>([]);
+    const [timeRange, setTimeRange] = useState(7);
     const [loading, setLoading] = useState(true);
 
     const fetchStats = async () => {
@@ -22,7 +27,7 @@ const Dashboard = () => {
         try {
             const [vehiclesRes, pickupsRes, shipmentsRes, docsRes] = await Promise.all([
                 api.get('/fleet/vehicles'),
-                api.get('/harvest-declarations?status=Pending'),
+                api.get('/harvest-declarations'),
                 api.get('/shipments'),
                 api.get('/export-documents'),
             ]);
@@ -39,9 +44,28 @@ const Dashboard = () => {
             // Pending docs: documents that have not been verified yet
             const pendingDocs = docs.filter((d: any) => d.status !== 'Verified').length;
 
+            // Process chart data for the selected time range
+            const daysArr = [...Array(timeRange)].map((_, i) => {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                return d.toISOString().split('T')[0];
+            }).reverse();
+
+            const processedChartData = daysArr.map(date => {
+                const dailyPickups = (pickups || []).filter((p: any) => (p.createdAt || '').startsWith(date)).length;
+                const dailyShipments = (shipments || []).filter((s: any) => (s.createdAt || '').startsWith(date)).length;
+                return {
+                    name: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                    pickups: dailyPickups,
+                    shipments: dailyShipments
+                };
+            });
+
+            setChartData(processedChartData);
+
             setStats({
                 activeFleet: vehicles.filter((v: any) => v.status === 'Available' || v.status === 'On Trip').length,
-                pendingPickups: pickups.length,
+                pendingPickups: (pickups || []).filter((p: any) => p.status === 'Pending').length,
                 activeShipments,
                 pendingDocs,
             });
@@ -54,7 +78,7 @@ const Dashboard = () => {
 
     useEffect(() => {
         fetchStats();
-    }, []);
+    }, [timeRange]);
 
     const statCards = [
         {
@@ -137,12 +161,159 @@ const Dashboard = () => {
                 ))}
             </div>
 
+            {/* Quick Actions */}
+            <div>
+                <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">Quick Actions</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <button
+                        onClick={() => navigate('/logistics/pickups')}
+                        className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl border border-blue-100 dark:border-blue-900/30 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all group text-left"
+                    >
+                        <div className="w-12 h-12 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform shrink-0">
+                            <Scale size={24} />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-bold text-gray-900 dark:text-white">Log Pickup</h4>
+                            <p className="text-xs text-gray-500 mt-0.5">Record weight from field</p>
+                        </div>
+                    </button>
+
+                    <button
+                        onClick={() => setIsShipmentModalOpen(true)}
+                        className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl border border-green-100 dark:border-green-900/30 shadow-sm hover:shadow-md hover:border-green-300 dark:hover:border-green-700 transition-all group text-left"
+                    >
+                        <div className="w-12 h-12 rounded-lg bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform shrink-0">
+                            <Package size={24} />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-bold text-gray-900 dark:text-white">Create Packing List</h4>
+                            <p className="text-xs text-gray-500 mt-0.5">Build new export shipment</p>
+                        </div>
+                    </button>
+
+                    <button
+                        onClick={() => navigate('/logistics/shipments')}
+                        className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl border border-amber-100 dark:border-amber-900/30 shadow-sm hover:shadow-md hover:border-amber-300 dark:hover:border-amber-700 transition-all group text-left"
+                    >
+                        <div className="w-12 h-12 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform shrink-0">
+                            <Plane size={24} />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-bold text-gray-900 dark:text-white">Confirm Departure</h4>
+                            <p className="text-xs text-gray-500 mt-0.5">Update flight status</p>
+                        </div>
+                    </button>
+
+                    <button
+                        onClick={() => navigate('/logistics/shipments')}
+                        className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl border border-purple-100 dark:border-purple-900/30 shadow-sm hover:shadow-md hover:border-purple-300 dark:hover:border-purple-700 transition-all group text-left"
+                    >
+                        <div className="w-12 h-12 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center text-purple-600 group-hover:scale-110 transition-transform shrink-0">
+                            <Truck size={24} />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-bold text-gray-900 dark:text-white">Mark Dispatched</h4>
+                            <p className="text-xs text-gray-500 mt-0.5">Cargo delivery status</p>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
             {/* Main Content */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 h-96 flex flex-col items-center justify-center gap-3 text-gray-400">
-                        <Truck size={40} className="opacity-20" />
-                        <p className="text-sm font-medium">Fleet map coming in a future update</p>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm">
+                        <div className="flex items-center justify-between mb-8">
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Pickups vs Shipments</h3>
+                                <p className="text-sm text-gray-500">Volume trends over the selected period</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="relative">
+                                    <select
+                                        value={timeRange}
+                                        onChange={(e) => setTimeRange(Number(e.target.value))}
+                                        className="appearance-none bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl px-4 py-2 pr-10 text-xs font-bold text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer outline-none transition-all"
+                                    >
+                                        <option value={7}>Last 7 Days</option>
+                                        <option value={30}>Last 30 Days</option>
+                                        <option value={90}>Last 90 Days</option>
+                                    </select>
+                                    <Calendar size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                </div>
+                                <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-lg">
+                                    <TrendingUp size={20} />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="h-80 w-full">
+                            {loading ? (
+                                <div className="h-full flex items-center justify-center">
+                                    <Loader2 className="animate-spin text-indigo-500" size={32} />
+                                </div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                        <defs>
+                                            <linearGradient id="colorPickups" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1} />
+                                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                            </linearGradient>
+                                            <linearGradient id="colorShipments" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
+                                                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                        <XAxis
+                                            dataKey="name"
+                                            axisLine={false}
+                                            tickLine={false}
+                                            tick={{ fontSize: 12, fill: '#6B7280', fontWeight: 500 }}
+                                            dy={10}
+                                        />
+                                        <YAxis
+                                            axisLine={false}
+                                            tickLine={false}
+                                            tick={{ fontSize: 12, fill: '#9CA3AF' }}
+                                        />
+                                        <Tooltip
+                                            contentStyle={{
+                                                borderRadius: '16px',
+                                                border: 'none',
+                                                boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+                                                padding: '12px'
+                                            }}
+                                        />
+                                        <Legend
+                                            verticalAlign="top"
+                                            align="right"
+                                            iconType="circle"
+                                            wrapperStyle={{ paddingBottom: '20px', fontSize: '12px', fontWeight: 600 }}
+                                        />
+                                        <Area
+                                            type="monotone"
+                                            name="Field Pickups"
+                                            dataKey="pickups"
+                                            stroke="#6366f1"
+                                            strokeWidth={3}
+                                            fillOpacity={1}
+                                            fill="url(#colorPickups)"
+                                        />
+                                        <Area
+                                            type="monotone"
+                                            name="Export Shipments"
+                                            dataKey="shipments"
+                                            stroke="#10b981"
+                                            strokeWidth={3}
+                                            fillOpacity={1}
+                                            fill="url(#colorShipments)"
+                                        />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            )}
+                        </div>
                     </div>
                 </div>
                 <div>

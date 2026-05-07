@@ -52,13 +52,14 @@ const ContactSection = () => {
   }
 
   return (
-    <section id="contact" className="py-24 bg-slate-50">
+    <section id="contact" className="py-24" style={{ backgroundColor: "#f5f0e8" }}>
       <div className="container px-6 md:px-10 lg:px-10 mx-auto">
         <div className="max-w-3xl mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4 font-serif">Get in Touch</h2>
           <p className="text-slate-600 text-lg leading-relaxed">
-            Have questions about sourcing produce or joining our outgrower network?
-            Send us a message and our team will respond within 24 hours.
+            For platform access issues, contact your system administrator.
+            For business inquiries about Fresh Sarura or Garden Fresh Rwanda Ltd,
+            send us a message and we'll respond within 24 hours.
           </p>
         </div>
 
@@ -67,10 +68,10 @@ const ContactSection = () => {
           <div className="space-y-8">
             <div className="prose prose-slate max-w-none">
               <p className="text-slate-600 text-lg leading-relaxed">
-                At Fresh Sarura, we are committed to building transparent and sustainable
-                supply chains. Whether you're a global buyer looking for premium
-                produce or a farmer in Rwanda seeking technical support and market access,
-                we're here to help you succeed.
+                Fresh Sarura is Garden Fresh Rwanda Ltd's internal export management
+                platform, connecting farm managers, quality control, logistics, and
+                production under one roof. Reach out for partnership opportunities,
+                export sourcing, or general inquiries about our operations.
               </p>
             </div>
 
@@ -151,10 +152,11 @@ const ContactSection = () => {
                             <SelectValue placeholder="Select one" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Produce Sourcing">Produce Sourcing</SelectItem>
+                        <SelectContent className="bg-white border border-slate-200 shadow-xl z-[100]">
+                          <SelectItem value="Export Sourcing">Export Sourcing</SelectItem>
                           <SelectItem value="Outgrower Partnership">Outgrower Partnership</SelectItem>
                           <SelectItem value="Platform Support">Platform Support</SelectItem>
+                          <SelectItem value="Export Compliance">Export Compliance</SelectItem>
                           <SelectItem value="General Inquiry">General Inquiry</SelectItem>
                         </SelectContent>
                       </Select>

@@ -21,7 +21,7 @@ const actorColors: Record<string, string> = {
 
 const ProductionChainSection = () => (
   <section id="production-chain" className="py-24" style={{ backgroundColor: "#f5f0e8" }}>
-    <div className="container px-6 md:px-10 lg:px-10">
+    <div className="container px-6 md:px-10 lg:px-10 mx-auto">
       <div className="text-center mb-14">
         <p className="text-green-700 font-semibold tracking-wider uppercase text-sm mb-3">End-to-End Chain</p>
         <h2 className="text-4xl md:text-5xl font-extrabold text-green-950 leading-tight">

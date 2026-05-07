@@ -154,14 +154,14 @@ const UserManagement = () => {
 
         // ── 2. Title ──
         doc.setTextColor(17, 24, 39); doc.setFontSize(12); doc.setFont('helvetica', 'bold');
-        doc.text(`USER MANAGEMENT REPORT SUMMARY`, 15, 42);
+        doc.text(`USER MANAGEMENT AUDIT REPORT`, 15, 42);
 
         // ── 3. Summary Fields ──
         const summaryFields = [
-            { label: 'Total Users',       value: String(filtered.length) },
-            { label: 'Active Users',      value: String(filtered.filter(u => u.isActive).length) },
-            { label: 'Pending/Inactive',  value: String(filtered.filter(u => !u.isActive).length) },
-            { label: 'Admins',            value: String(filtered.filter(u => u.role === 'admin').length) },
+            { label: 'Total Accounts',    value: String(filtered.length) },
+            { label: 'Active Personnel',  value: String(filtered.filter(u => u.isActive).length) },
+            { label: 'Inactive / Pending', value: String(filtered.filter(u => !u.isActive).length) },
+            { label: 'Privileged Admins',  value: String(filtered.filter(u => u.role === 'admin').length) },
         ];
 
         let yPos = 52;
@@ -175,35 +175,45 @@ const UserManagement = () => {
             yPos += 10;
         });
 
-        // ── 4. Table ──
+        // ── 4. Data Table ──
         const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [92, 184, 92] };
         const commonBodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } };
         const alternateRowStyles: any = { fillColor: [249, 250, 251] };
 
-        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
-        doc.text('SYSTEM USER ACTIVITY', 15, yPos + 10);
-        
         autoTable(doc, {
-            startY: yPos + 15,
-            head: [['NAME', 'EMAIL', 'ROLE', 'PHONE', 'STATUS', 'JOINED']],
+            startY: yPos + 10,
+            head: [['NAME', 'EMAIL', 'ROLE', 'STATUS', 'JOINED']],
             body: filtered.map(u => [
-                toTitleCase(u.name), u.email,
+                toTitleCase(u.name), 
+                u.email,
                 toTitleCase(ROLE_LABELS[u.role] || u.role),
-                u.phone || '—',
                 u.isActive ? 'Active' : 'Inactive',
                 new Date(u.createdAt).toLocaleDateString('en-GB')
             ]),
             theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
             margin: { left: 15, right: 15, bottom: 30 },
             didParseCell: (data) => {
-                if (data.section === 'body' && data.column.index === 4) {
+                if (data.section === 'body' && data.column.index === 3) {
                     if (String(data.cell.raw) === 'Active') data.cell.styles.textColor = [22, 163, 74];
                     else data.cell.styles.textColor = [220, 38, 38];
                 }
             }
         });
 
-        // ── 5. Footer ──
+        // ── 5. System Insights ──
+        let lastY = (doc as any).lastAutoTable?.finalY || yPos;
+        if (lastY > 210) { doc.addPage(); lastY = 20; }
+        
+        doc.setTextColor(17, 24, 39); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+        doc.text('SYSTEM INSIGHTS', 15, lastY + 15);
+        
+        const activeRate = ((filtered.filter(u => u.isActive).length / (filtered.length || 1)) * 100).toFixed(1);
+        doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'normal');
+        doc.text(`• Account Health: ${activeRate}% of user accounts are currently active and authorized.`, 15, lastY + 23);
+        doc.text(`• Access Control: There are ${filtered.filter(u => u.role === 'admin').length} administrator accounts with elevated system privileges.`, 15, lastY + 29);
+        doc.text(`• Workforce Overview: The system currently manages ${filtered.length} personnel across ${new Set(filtered.map(u => u.role)).size} distinct roles.`, 15, lastY + 35);
+
+        // ── 6. Footer ──
         const pageCount = (doc as any).internal.getNumberOfPages();
         for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);
@@ -324,50 +334,52 @@ const UserManagement = () => {
                 ))}
             </div>
 
-            {/* Search & Filter */}
-            <div className="flex flex-wrap items-center gap-3">
-                <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                    <input type="text" placeholder="Search users, emails, roles..."
-                        value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
-                </div>
-                <div className="relative">
-                    <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                        className="pl-8 pr-8 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer">
-                        <option value="All">All Statuses</option>
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                    </select>
-                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
-                </div>
-                <div className="relative">
-                    <Users size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    <select value={roleFilter} onChange={e => { setRoleFilter(e.target.value); setCurrentPage(1); }}
-                        className="pl-8 pr-8 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer">
-                        <option value="All">All Roles</option>
-                        {Object.entries(ROLE_LABELS).map(([val, label]) => (
-                            <option key={val} value={val}>{label}</option>
-                        ))}
-                    </select>
-                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
-                </div>
-                <div className="relative">
-                    <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    <select value={dateFilter} onChange={e => { setDateFilter(e.target.value); setCurrentPage(1); }}
-                        className="pl-8 pr-8 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer">
-                        <option value="All">All Time</option>
-                        <option value="Week">This Week</option>
-                        <option value="Month">This Month</option>
-                        <option value="3Months">Last 3 Months</option>
-                    </select>
-                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
-                </div>
-            </div>
+            {/* Directory Card */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden min-h-[400px]">
 
-            {/* Table */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
+                {/* Unified Search & Filter Bar */}
+                <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/10 flex flex-wrap items-center gap-3">
+                    <div className="relative flex-1 max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <input type="text" placeholder="Search users, emails, roles..."
+                            value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 shadow-sm transition-all" />
+                    </div>
+                    <div className="relative">
+                        <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm">
+                            <option value="All">All Statuses</option>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                    </div>
+                    <div className="relative">
+                        <Users size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <select value={roleFilter} onChange={e => { setRoleFilter(e.target.value); setCurrentPage(1); }}
+                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm">
+                            <option value="All">All Roles</option>
+                            {Object.entries(ROLE_LABELS).map(([val, label]) => (
+                                <option key={val} value={val}>{label}</option>
+                            ))}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                    </div>
+                    <div className="relative">
+                        <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <select value={dateFilter} onChange={e => { setDateFilter(e.target.value); setCurrentPage(1); }}
+                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm">
+                            <option value="All">All Time</option>
+                            <option value="Week">This Week</option>
+                            <option value="Month">This Month</option>
+                            <option value="3Months">Last 3 Months</option>
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto">
                 {loading ? (
                     <div className="py-16 text-center text-gray-400 text-sm">Loading users...</div>
                 ) : (
@@ -444,6 +456,7 @@ const UserManagement = () => {
                     </div>
                 )}
             </div>
+        </div>
 
             {/* Edit Modal */}
             {editingUser && createPortal(

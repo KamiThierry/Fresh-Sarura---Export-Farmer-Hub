@@ -139,7 +139,7 @@ const FarmerManagement = () => {
         f.farm_size_hectares || 0,
         f.production_capacity_tons || 0,
         f.status || 'Active',
-        new Date(f.createdAt || '').toLocaleDateString('en-GB'),
+        new Date(f.created_at || '').toLocaleDateString('en-GB'),
       ])
     );
     XLSX.utils.book_append_sheet(wb, farmerWs, 'Farmers');
@@ -164,33 +164,34 @@ const FarmerManagement = () => {
   const handleExportPDF = async () => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
-    const timestamp = new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const timestamp = new Date().toLocaleString('en-GB', { 
+        day: '2-digit', month: 'short', year: 'numeric', 
+        hour: '2-digit', minute: '2-digit' 
+    });
     const toTitleCase = (str: string) => str.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
-    // 1. Header
-    try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch { }
-    doc.setTextColor(21, 128, 61);
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    // ── 1. Header ──
+    try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch (e) { console.warn('Logo failed'); }
+    doc.setTextColor(21, 128, 61); doc.setFontSize(14); doc.setFont('helvetica', 'bold');
     doc.text('Fresh Sarura', 28, 19);
-    doc.setTextColor(107, 114, 128);
-    doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(107, 114, 128); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
     doc.text('Export & Farmer Hub', 28, 23);
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10); doc.setTextColor(17, 24, 39);
     doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
-    doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
     doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
-    doc.setDrawColor(229, 231, 235);
-    doc.line(15, 30, pageWidth - 15, 30);
+    doc.setDrawColor(229, 231, 235); doc.line(15, 30, pageWidth - 15, 30);
 
-    // 2. Title & Summary
-    doc.setTextColor(17, 24, 39);
-    doc.setFontSize(12); doc.setFont('helvetica', 'bold');
-    doc.text('FARMER NETWORK REPORT', 15, 42);
+    // ── 2. Title ──
+    doc.setTextColor(17, 24, 39); doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+    doc.text('FARMER NETWORK AUDIT REPORT', 15, 42);
 
+    // ── 3. Summary Section ──
     const summaryFields = [
       { label: 'Total Registered Farmers', value: String(filteredFarmers.length) },
-      { label: 'Active Farmers', value: String(farmers.filter(f => f.status.toLowerCase() === 'active').length) },
-      { label: 'Total Farm Land', value: `${totalHa} Ha` }
+      { label: 'Active Suppliers',        value: String(farmers.filter(f => f.status.toLowerCase() === 'active').length) },
+      { label: 'Total Managed Land',      value: `${totalHa} Ha` },
+      { label: 'Top Supplier Volume',     value: topSuppliers[0]?.totalKg >= 1000 ? `${(topSuppliers[0].totalKg / 1000).toFixed(2)} T` : `${topSuppliers[0]?.totalKg || 0} kg` },
     ];
 
     let yPos = 52;
@@ -198,18 +199,18 @@ const FarmerManagement = () => {
     summaryFields.forEach(field => {
       doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
       doc.text(field.label, 15, yPos);
-      doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'bold');
+      doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
       doc.text(field.value, pageWidth - 15, yPos, { align: 'right' });
-      doc.setDrawColor(243, 244, 246);
-      doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+      doc.setDrawColor(243, 244, 246); doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
       yPos += 10;
     });
 
+    // ── 4. Data Tables ──
     const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [92, 184, 92] };
     const commonBodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } };
     const alternateRowStyles: any = { fillColor: [249, 250, 251] };
 
-    // ── Top Suppliers Section ──
+    // Top Suppliers Table
     const top4 = topSuppliers.slice(0, 4);
     doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
     doc.text('TOP SUPPLIERS BY VOLUME', 15, yPos + 10);
@@ -229,35 +230,45 @@ const FarmerManagement = () => {
 
     yPos = (doc as any).lastAutoTable.finalY + 15;
 
-    // ── Registered Farmers Table ──
+    // Registered Farmers Table
     doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-    doc.text('REGISTERED FARMERS', 15, yPos);
+    doc.text('REGISTERED FARMERS DIRECTORY', 15, yPos);
     autoTable(doc, {
       startY: yPos + 5,
-      head: [['FARMER / FARM', 'NATIONAL ID', 'CONTACT INFO', 'PHYSICAL ADDRESS', 'MAIN CROP', 'SIZE', 'JOINED', 'STATUS']],
+      head: [['FARMER / FARM', 'CONTACT INFO', 'PHYSICAL ADDRESS', 'MAIN CROP', 'SIZE', 'STATUS']],
       body: filteredFarmers.map(f => [
         `${toTitleCase(f.full_name)}\n${toTitleCase(f.farm_name || 'Individual')}`,
-        f.national_id || 'N/A',
         `${f.phone || 'N/A'}\n${f.email || 'N/A'}`,
-        `${toTitleCase(f.district)}, ${toTitleCase(f.sector)}\nCell: ${toTitleCase(f.cell)}, Village: ${toTitleCase(f.village)}`,
+        `${toTitleCase(f.district)}, ${toTitleCase(f.sector)}`,
         (f.produce_types || []).join(', '),
         `${f.farm_size_hectares || 0} ha`,
-        f.createdAt ? new Date(f.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A',
         toTitleCase(f.status || 'Active')
       ]),
       theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
       margin: { left: 15, right: 15, bottom: 30 },
       didParseCell: (data) => {
-        if (data.section === 'body' && data.column.index === 7) {
+        if (data.section === 'body' && data.column.index === 5) {
           const s = String(data.cell.raw).toLowerCase();
           if (s.includes('active'))   data.cell.styles.textColor = [22, 163, 74];
           if (s.includes('inactive')) data.cell.styles.textColor = [220, 38, 38];
-          if (s.includes('auditing')) data.cell.styles.textColor = [234, 88, 12];
         }
       }
     });
 
-    // 4. Footer
+    // ── 5. System Insights ──
+    let lastY = (doc as any).lastAutoTable?.finalY || yPos;
+    if (lastY > 210) { doc.addPage(); lastY = 20; }
+    
+    doc.setTextColor(17, 24, 39); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+    doc.text('SYSTEM INSIGHTS', 15, lastY + 15);
+    
+    const activePercent = ((farmers.filter(f => f.status.toLowerCase() === 'active').length / (farmers.length || 1)) * 100).toFixed(1);
+    doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'normal');
+    doc.text(`• Network Health: ${activePercent}% of the registered farmer network is currently active.`, 15, lastY + 23);
+    doc.text(`• Land Utilization: The system monitors a total of ${totalHa} hectares of productive farmland.`, 15, lastY + 29);
+    doc.text(`• Supplier Performance: The leading supplier has contributed ${(topSuppliers[0]?.totalKg / 1000).toFixed(2)} Tons to the hub.`, 15, lastY + 35);
+
+    // ── 6. Footer ──
     const pageCount = (doc as any).internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
@@ -527,7 +538,7 @@ const FarmerManagement = () => {
                       </td>
                       {/* Date Joined */}
                       <td className="px-5 py-4 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
-                        {farmer.createdAt ? new Date(farmer.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                        {farmer.created_at ? new Date(farmer.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
                       </td>
                       {/* Status */}
                       <td className="px-5 py-4 whitespace-nowrap">

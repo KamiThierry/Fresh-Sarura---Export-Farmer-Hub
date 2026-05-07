@@ -5,7 +5,7 @@ const Footer = () => {
   const navigate = useNavigate();
   return (
     <footer style={{ backgroundColor: "#1a3d2b" }} className="pt-16 pb-8">
-      <div className="container px-6 md:px-10 lg:px-10">
+      <div className="container px-6 md:px-10 lg:px-10 mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10 pb-10 border-b border-white/10">
           <div>
             {/* Logo Section - Consistent with Navbar */}
