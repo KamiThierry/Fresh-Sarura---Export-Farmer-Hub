@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { DoorOpen, Plus, RefreshCw, Loader2, Wrench, CheckCircle2, AlertCircle, FlaskConical, Snowflake, Thermometer } from 'lucide-react';
 import { api } from '../../../lib/api';
 import AddRoomModal from '../components/AddRoomModal';
@@ -12,6 +13,7 @@ type Room = {
     name: string;
     type: 'Processing' | 'Cold Room';
     capacityKg: number;
+    currentLoadKg: number;
     status: 'Available' | 'In Use' | 'Maintenance';
     createdAt: string;
 };
@@ -31,6 +33,14 @@ const RoomManagement = () => {
     const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
     const [selectedBatch, setSelectedBatch] = useState<any>(null);
     const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
+
+    const [expandingRoom, setExpandingRoom] = useState<Room | null>(null);
+    const [expandKg, setExpandKg] = useState('');
+    const [clearingRoom, setClearingRoom] = useState<Room | null>(null);
+    
+    const [detailRoom, setDetailRoom] = useState<Room | null>(null);
+    const [roomBatches, setRoomBatches] = useState<any[]>([]);
+    const [loadingBatches, setLoadingBatches] = useState(false);
 
     const { pendingRoomRequests, refreshPendingRoomRequests } = usePMContext();
 
@@ -61,6 +71,44 @@ const RoomManagement = () => {
             console.error('Failed to update room:', err);
         } finally {
             setUpdatingId(null);
+        }
+    };
+
+    const handleExpand = async () => {
+        if (!expandingRoom || !expandKg) return;
+        try {
+            await api.patch(`/rooms/${expandingRoom._id}/expand`, { additionalKg: Number(expandKg) });
+            setExpandingRoom(null);
+            setExpandKg('');
+            fetchRooms();
+            setToast({ message: 'Capacity Expanded', subtitle: `${expandingRoom.name} now has ${Number(expandingRoom.capacityKg) + Number(expandKg)} kg capacity.` });
+        } catch (err: any) {
+            setToast({ message: 'Failed', subtitle: err.response?.data?.message || err.message });
+        }
+    };
+
+    const handleClear = async () => {
+        if (!clearingRoom) return;
+        try {
+            await api.patch(`/rooms/${clearingRoom._id}/clear`, {});
+            setClearingRoom(null);
+            fetchRooms();
+            setToast({ message: 'Room Cleared', subtitle: `${clearingRoom.name} is now available.` });
+        } catch (err: any) {
+            setToast({ message: 'Failed', subtitle: err.response?.data?.message || err.message });
+        }
+    };
+
+    const handleRoomClick = async (room: Room) => {
+        setDetailRoom(room);
+        setLoadingBatches(true);
+        try {
+            const res = await api.get(`/rooms/${room._id}/batches`);
+            setRoomBatches(res.data);
+        } catch (err) {
+            console.error('Failed to fetch room batches:', err);
+        } finally {
+            setLoadingBatches(false);
         }
     };
 
@@ -199,7 +247,11 @@ const RoomManagement = () => {
                                 const cfg = statusConfig[room.status];
                                 const StatusIcon = cfg.icon;
                                 return (
-                                    <div key={room._id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5 flex flex-col gap-4">
+                                    <div 
+                                        key={room._id} 
+                                        onClick={() => handleRoomClick(room)}
+                                        className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5 flex flex-col gap-4 cursor-pointer hover:border-emerald-200 dark:hover:border-emerald-900/50 hover:shadow-md transition-all group/room"
+                                    >
                                         {/* Room header */}
                                         <div className="flex items-start justify-between">
                                             <div className="flex items-center gap-3">
@@ -207,7 +259,7 @@ const RoomManagement = () => {
                                                     {room.type === 'Cold Room' ? <Snowflake size={18} /> : <FlaskConical size={18} />}
                                                 </div>
                                                 <div>
-                                                    <p className="text-sm font-bold text-gray-900 dark:text-white">{room.name}</p>
+                                                    <p className="text-sm font-bold text-gray-900 dark:text-white group-hover/room:text-emerald-600 transition-colors">{room.name}</p>
                                                     <p className="text-xs text-gray-400">{room.type}</p>
                                                 </div>
                                             </div>
@@ -217,35 +269,72 @@ const RoomManagement = () => {
                                             </span>
                                         </div>
 
-                                        {/* Capacity */}
-                                        <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl px-4 py-2.5 flex items-center justify-between">
-                                            <span className="text-xs text-gray-500 font-medium">Capacity</span>
-                                            <span className="text-sm font-bold text-gray-900 dark:text-white">{room.capacityKg.toLocaleString()} kg</span>
+                                        {/* Capacity + Load bar */}
+                                        <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl px-4 py-3 space-y-2">
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="text-gray-500 font-medium">Storage Load</span>
+                                                <span className="font-bold text-gray-900 dark:text-white">
+                                                    {(room.currentLoadKg || 0).toLocaleString()} / {room.capacityKg.toLocaleString()} kg
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2 overflow-hidden">
+                                                <div
+                                                    className={`h-2 rounded-full transition-all duration-500 ${
+                                                        (room.currentLoadKg / room.capacityKg) >= 0.9
+                                                            ? 'bg-red-500'
+                                                            : (room.currentLoadKg / room.capacityKg) >= 0.6
+                                                            ? 'bg-amber-500'
+                                                            : 'bg-green-500'
+                                                    }`}
+                                                    style={{ width: `${Math.min(((room.currentLoadKg || 0) / room.capacityKg) * 100, 100)}%` }}
+                                                />
+                                            </div>
+                                            <p className="text-[10px] text-gray-400 font-medium">
+                                                {(room.capacityKg - (room.currentLoadKg || 0)).toLocaleString()} kg remaining capacity
+                                            </p>
                                         </div>
 
-                                        {/* Toggle button — only for Available / Maintenance */}
-                                        {room.status !== 'In Use' && (
+                                        {/* Action buttons */}
+                                        <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                                            {/* Expand capacity */}
                                             <button
-                                                onClick={() => handleStatusToggle(room)}
-                                                disabled={updatingId === room._id}
-                                                className={`w-full py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-2 ${
-                                                    room.status === 'Available'
-                                                        ? 'border-amber-300 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20'
-                                                        : 'border-green-300 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
-                                                }`}
+                                                onClick={() => setExpandingRoom(room)}
+                                                className="flex-1 py-2 rounded-xl text-[10px] font-bold border border-blue-300 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all flex items-center justify-center gap-1"
                                             >
-                                                {updatingId === room._id ? (
-                                                    <Loader2 size={13} className="animate-spin" />
-                                                ) : room.status === 'Available' ? (
-                                                    <><Wrench size={13} /> Mark as Maintenance</>
-                                                ) : (
-                                                    <><CheckCircle2 size={13} /> Mark as Available</>
-                                                )}
+                                                <Plus size={10} /> Expand
                                             </button>
-                                        )}
-                                        {room.status === 'In Use' && (
-                                            <p className="text-center text-xs text-blue-500 font-medium py-1">Currently assigned to a batch</p>
-                                        )}
+
+                                            {/* Clear room — only if load > 0 */}
+                                            {(room.currentLoadKg || 0) > 0 && room.status !== 'Maintenance' && (
+                                                <button
+                                                    onClick={() => setClearingRoom(room)}
+                                                    className="flex-1 py-2 rounded-xl text-[10px] font-bold border border-amber-300 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-all flex items-center justify-center gap-1"
+                                                >
+                                                    <CheckCircle2 size={10} /> Clear
+                                                </button>
+                                            )}
+
+                                            {/* Maintenance toggle */}
+                                            {room.status !== 'In Use' && (
+                                                <button
+                                                    onClick={() => handleStatusToggle(room)}
+                                                    disabled={updatingId === room._id}
+                                                    className={`flex-1 py-2 rounded-xl text-[10px] font-bold border transition-all flex items-center justify-center gap-1 ${
+                                                        room.status === 'Available'
+                                                            ? 'border-amber-300 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                                                            : 'border-green-300 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
+                                                    }`}
+                                                >
+                                                    {updatingId === room._id ? (
+                                                        <Loader2 size={10} className="animate-spin" />
+                                                    ) : room.status === 'Available' ? (
+                                                        <><Wrench size={10} /> Maint.</>
+                                                    ) : (
+                                                        <><CheckCircle2 size={10} /> Restore</>
+                                                    )}
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -287,6 +376,167 @@ const RoomManagement = () => {
                     subtitle={toast.subtitle}
                     onClose={() => setToast(null)}
                 />
+            )}
+
+            {/* Expand Capacity Modal */}
+            {expandingRoom && createPortal(
+                <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setExpandingRoom(null)} />
+                    <div className="relative w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200">
+                        <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">Expand Room Capacity</h3>
+                        <p className="text-xs text-gray-500 mb-4">{expandingRoom.name} — current capacity: {expandingRoom.capacityKg.toLocaleString()} kg</p>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Additional Capacity (kg)</label>
+                        <input
+                            type="number"
+                            min="1"
+                            value={expandKg}
+                            onChange={e => setExpandKg(e.target.value)}
+                            placeholder="e.g. 1000"
+                            className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold mb-4"
+                            autoFocus
+                        />
+                        {expandKg && (
+                            <p className="text-xs text-blue-600 font-semibold mb-4">
+                                New total capacity: {(expandingRoom.capacityKg + Number(expandKg)).toLocaleString()} kg
+                            </p>
+                        )}
+                        <div className="flex gap-3">
+                            <button onClick={() => setExpandingRoom(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-100 transition-colors">Cancel</button>
+                            <button onClick={handleExpand} disabled={!expandKg} className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold disabled:opacity-40 transition-colors">Confirm</button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Clear Room Confirmation */}
+            {clearingRoom && createPortal(
+                <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setClearingRoom(null)} />
+                    <div className="relative w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200">
+                        <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">Clear Room</h3>
+                        <p className="text-sm text-gray-500 mb-2">
+                            This will reset <span className="font-bold text-gray-900 dark:text-white">{clearingRoom.name}</span>'s load to 0 kg and mark it as Available.
+                        </p>
+                        <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2 mb-4">
+                            Only do this after all stock has physically left the room. This action is manual and irreversible.
+                        </p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setClearingRoom(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-100 transition-colors">Cancel</button>
+                            <button onClick={handleClear} className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold transition-colors">Yes, Clear Room</button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Room Detail Modal */}
+            {detailRoom && createPortal(
+                <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDetailRoom(null)} />
+                    <div className="relative w-full max-w-2xl bg-white dark:bg-gray-800 rounded-3xl shadow-2xl overflow-hidden border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200">
+                        
+                        {/* Modal Header */}
+                        <div className={`px-6 py-6 flex items-center justify-between ${detailRoom.type === 'Cold Room' ? 'bg-blue-50/50 dark:bg-blue-900/10' : 'bg-purple-50/50 dark:bg-purple-900/10'}`}>
+                            <div className="flex items-center gap-4">
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${detailRoom.type === 'Cold Room' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30' : 'bg-purple-100 text-purple-600 dark:bg-purple-900/30'}`}>
+                                    {detailRoom.type === 'Cold Room' ? <Snowflake size={24} /> : <FlaskConical size={24} />}
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{detailRoom.name}</h3>
+                                    <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">{detailRoom.type} Inventory</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setDetailRoom(null)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-gray-400">
+                                <AlertCircle size={20} className="rotate-45" />
+                            </button>
+                        </div>
+
+                        {/* Inventory List */}
+                        <div className="p-6 max-h-[60vh] overflow-y-auto">
+                            {loadingBatches ? (
+                                <div className="flex flex-col items-center justify-center py-12 space-y-3">
+                                    <Loader2 size={32} className="animate-spin text-emerald-500" />
+                                    <p className="text-sm font-medium text-gray-400 tracking-wide uppercase">Scanning Inventory...</p>
+                                </div>
+                            ) : (roomBatches?.length || 0) === 0 ? (
+                                <div className="text-center py-12 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
+                                    <DoorOpen size={48} className="mx-auto text-gray-200 dark:text-gray-700 mb-3" />
+                                    <p className="text-gray-500 font-bold">Room is Empty</p>
+                                    <p className="text-xs text-gray-400 mt-1">No batches currently assigned to this room.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Active Batches ({roomBatches?.length || 0})</h4>
+                                        <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 dark:bg-emerald-900/20 rounded-full border border-emerald-100 dark:border-emerald-800">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Live Tracking</span>
+                                        </div>
+                                    </div>
+                                    
+                                    {roomBatches.map((batch) => (
+                                        <div key={batch._id} className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all group/batch">
+                                            <div className="flex justify-between items-start">
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-bold text-gray-900 dark:text-white">{batch.cropName}</span>
+                                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                                            {batch.stockId || 'BATCH'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[11px] text-gray-500 font-medium">Requested by {batch.requestedBy?.name || 'Processing Team'}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-sm font-black text-gray-900 dark:text-white">
+                                                        {(batch.availableWeightKg ?? (batch.processedWeightKg ?? batch.receivedWeightKg)).toLocaleString()} kg
+                                                    </p>
+                                                    {batch.totalAllocatedKg > 0 && (
+                                                        <p className="text-[9px] text-emerald-600 font-bold uppercase tracking-tighter">
+                                                            {batch.totalAllocatedKg.toLocaleString()} kg Allocated
+                                                        </p>
+                                                    )}
+                                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter mt-1">
+                                                        {batch.status === 'Done' ? (batch.availableWeightKg === 0 ? 'Fully Allocated' : 'Stocked') : batch.status}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="mt-3 flex items-center justify-between text-[10px]">
+                                                <div className="flex gap-4 text-gray-400">
+                                                    <span>Entry: {new Date(batch.createdAt).toLocaleDateString()}</span>
+                                                    <span>Last Move: {new Date(batch.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                </div>
+                                                <span className={`px-2 py-0.5 rounded-full font-bold uppercase ${
+                                                    batch.status === 'Done' ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-blue-600'
+                                                }`}>
+                                                    {batch.status}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer Summary */}
+                        <div className="bg-gray-50 dark:bg-gray-900/50 p-6 border-t border-gray-100 dark:border-gray-700">
+                            <div className="grid grid-cols-2 gap-6">
+                                <div>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Room Load</p>
+                                    <p className="text-xl font-black text-gray-900 dark:text-white">{detailRoom.currentLoadKg.toLocaleString()} kg</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Occupancy</p>
+                                    <p className="text-xl font-black text-emerald-600">
+                                        {((detailRoom.currentLoadKg / detailRoom.capacityKg) * 100).toFixed(1)}%
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
         </>
     );

@@ -206,3 +206,58 @@ export const sendUserWelcomeEmail = async ({ name, email, password, role }) => {
         throw error;
     }
 };
+
+export const sendContactReplyEmail = async ({ toName, toEmail, inquiryType, originalMsg, replyNote, adminName }) => {
+    const mailOptions = {
+        from: `"FreshSarura" <${process.env.EMAIL_USER}>`,
+        to: toEmail,
+        subject: `Re: Your ${inquiryType} Inquiry — FreshSarura`,
+        html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 32px; border-radius: 16px;">
+
+          <div style="background: linear-gradient(135deg, #16a34a, #15803d); border-radius: 12px; padding: 32px; text-align: center; margin-bottom: 24px;">
+            <h1 style="color: white; font-size: 28px; margin: 0; font-weight: bold;">Fresh Sarura</h1>
+            <p style="color: #bbf7d0; margin: 8px 0 0 0; font-size: 14px;">Export & Farmer Hub</p>
+          </div>
+
+          <div style="background: white; border-radius: 12px; padding: 28px; margin-bottom: 16px; border: 1px solid #e5e7eb;">
+            <h2 style="color: #111827; font-size: 18px; margin: 0 0 8px 0;">Hello, ${toName}</h2>
+            <p style="color: #4b5563; font-size: 14px; margin: 0 0 20px 0;">
+              Thank you for reaching out. Here is our response to your <strong>${inquiryType}</strong> inquiry.
+            </p>
+
+            <div style="background: #f0fdf4; border-left: 4px solid #16a34a; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+              <p style="color: #15803d; font-weight: bold; font-size: 13px; margin: 0 0 8px 0;">Our Response</p>
+              <p style="color: #1f2937; font-size: 14px; line-height: 1.7; margin: 0; white-space: pre-line;">${replyNote}</p>
+            </div>
+
+            <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+              <p style="color: #9ca3af; font-weight: bold; font-size: 12px; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.05em;">Your Original Message</p>
+              <p style="color: #6b7280; font-size: 13px; line-height: 1.6; margin: 0; white-space: pre-line;">${originalMsg}</p>
+            </div>
+
+            <p style="color: #6b7280; font-size: 13px; margin: 0;">
+              If you have further questions, feel free to reply to this email or reach us at
+              <a href="mailto:info@gardenfreshrwanda.com" style="color: #16a34a;">info@gardenfreshrwanda.com</a>.
+            </p>
+          </div>
+
+          <div style="text-align: center; padding: 16px;">
+            <p style="color: #9ca3af; font-size: 11px; margin: 0;">
+              Replied by ${adminName} · FreshSarura · Kigali, Rwanda<br/>
+              +250 (780) 389-786 · info@gardenfreshrwanda.com
+            </p>
+          </div>
+
+        </div>
+        `,
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        logger.info(`Contact reply sent to: ${toEmail}`);
+    } catch (error) {
+        logger.error(`Failed to send reply to ${toEmail}: ${error.message}`);
+        throw error;
+    }
+};

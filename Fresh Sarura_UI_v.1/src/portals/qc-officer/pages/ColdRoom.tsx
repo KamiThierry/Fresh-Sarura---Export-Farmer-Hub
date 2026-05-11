@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Package, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { Package, AlertTriangle, CheckCircle, Clock, Search, Filter, ChevronDown, Download, FileSpreadsheet, FileText, RefreshCw } from 'lucide-react';
 import { api } from '../../../lib/api';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import logo from '../../../assets/sarura_logo_nav.png';
 
 interface StockItem {
     id: string;
@@ -18,13 +22,13 @@ const ColdRoom = () => {
     const [stock, setStock] = useState<StockItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('All');
+    const [isExportOpen, setIsExportOpen] = useState(false);
 
     const fetchStock = async () => {
         setLoading(true);
         try {
             const res = await api.get('/stock');
-            // Backend returns { status: 'success', results: X, data: [...] }
-            // api.get returns the body direktly.
             const data = (res.data || []).map((b: any) => ({
                 id: b._id,
                 crop: b.cropName,
@@ -48,12 +52,128 @@ const ColdRoom = () => {
         fetchStock();
     }, []);
 
-    const filtered = stock.filter(r => 
-        r.crop.toLowerCase().includes(search.toLowerCase()) ||
-        r.batchId.toLowerCase().includes(search.toLowerCase())
-    );
+    const filtered = stock.filter(r => {
+        const matchesSearch = r.crop.toLowerCase().includes(search.toLowerCase()) ||
+            r.batchId.toLowerCase().includes(search.toLowerCase());
+        const matchesStatus = statusFilter === 'All' || r.status === statusFilter;
+        return matchesSearch && matchesStatus;
+    });
 
     const totalWeight = stock.reduce((acc, i) => acc + i.netStock, 0);
+
+    const handleExportXLSX = () => {
+        const wb = XLSX.utils.book_new();
+        const headers = ['Batch ID', 'Crop', 'Received (kg)', 'Processed (kg)', 'Rejected (kg)', 'Net Stock (kg)', 'Entry Date', 'Status'];
+        const rows = filtered.map(r => [
+            r.batchId.slice(-8).toUpperCase(),
+            r.crop,
+            r.received,
+            r.processed,
+            r.rejected,
+            r.netStock,
+            r.entryDate,
+            r.status === 'Done' ? 'Stocked' : r.status
+        ]);
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        ws['!cols'] = headers.map((h, i) => ({
+            wch: Math.max(h.length, ...rows.map(r => String(r[i] || '').length)) + 2
+        }));
+        XLSX.utils.book_append_sheet(wb, ws, 'Cold Room Stock');
+        XLSX.writeFile(wb, `FreshSarura_ColdRoomStock_${new Date().toISOString().split('T')[0]}.xlsx`);
+        setIsExportOpen(false);
+    };
+
+    const handleExportPDF = async () => {
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const timestamp = new Date().toLocaleString('en-GB', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+
+        const toTitleCase = (str: string) =>
+            str.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+        // 1. Header
+        try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch (e) { console.warn('Logo failed'); }
+        doc.setTextColor(21, 128, 61);
+        doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+        doc.text('Fresh Sarura', 28, 19);
+        doc.setTextColor(107, 114, 128);
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+        doc.text('Export & Farmer Hub', 28, 23);
+        doc.setFontSize(10); doc.setTextColor(17, 24, 39);
+        doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
+        doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+        doc.setDrawColor(229, 231, 235);
+        doc.line(15, 30, pageWidth - 15, 30);
+
+        // 2. Report Title
+        doc.setTextColor(17, 24, 39);
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+        doc.text(`COLD ROOM STOCK AUDIT REPORT`, 15, 42);
+
+        // 3. Summary Fields
+        const totalNet = filtered.reduce((sum, i) => sum + i.netStock, 0);
+        const totalRej = filtered.reduce((sum, i) => sum + i.rejected, 0);
+        const summaryFields = [
+            { label: 'Total Batches in View', value: String(filtered.length) },
+            { label: 'Total Net Stock', value: `${Math.round(totalNet).toLocaleString()} kg` },
+            { label: 'Total Loss/Rejections', value: `${Math.round(totalRej).toLocaleString()} kg` },
+            { label: 'Health Status', value: 'OPTIMAL — Within capacity' },
+        ];
+
+        let yPos = 52;
+        doc.setFontSize(9);
+        summaryFields.forEach(field => {
+            doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
+            doc.text(field.label, 15, yPos);
+            doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
+            doc.text(field.value, pageWidth - 15, yPos, { align: 'right' });
+            doc.setDrawColor(243, 244, 246);
+            doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+            yPos += 10;
+        });
+
+        // 4. Data Table
+        const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [92, 184, 92] };
+        const commonBodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } };
+        const alternateRowStyles: any = { fillColor: [249, 250, 251] };
+
+        autoTable(doc, {
+            startY: yPos + 10,
+            head: [['BATCH ID', 'CROP', 'RECEIVED', 'PROCESSED', 'NET STOCK', 'STATUS']],
+            body: filtered.map(r => [
+                r.batchId.slice(-8).toUpperCase(),
+                toTitleCase(r.crop),
+                `${r.received.toLocaleString()} kg`,
+                `${r.processed.toLocaleString()} kg`,
+                `${r.netStock.toLocaleString()} kg`,
+                r.status === 'Done' ? 'Stocked' : r.status
+            ]),
+            theme: 'striped',
+            headStyles: commonHeadStyles,
+            bodyStyles: commonBodyStyles,
+            alternateRowStyles: alternateRowStyles,
+            margin: { left: 15, right: 15, bottom: 30 }
+        });
+
+        // 5. Footer
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setDrawColor(229, 231, 235);
+            doc.line(15, 275, pageWidth - 15, 275);
+            doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
+            doc.text('This is a computer generated report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+            doc.text('Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw', pageWidth / 2, 287, { align: 'center' });
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, 287, { align: 'right' });
+        }
+
+        doc.save(`FreshSarura_ColdRoomStock_${new Date().toISOString().split('T')[0]}.pdf`);
+        setIsExportOpen(false);
+    };
 
     return (
         <div className="p-6 space-y-6">
@@ -63,10 +183,65 @@ const ColdRoom = () => {
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Cold Room (Stock)</h1>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Monitor all batches currently in cold storage with temperature and expiry tracking.</p>
                 </div>
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <button 
+                            onClick={() => setIsExportOpen(!isExportOpen)}
+                            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-all shadow-sm relative"
+                        >
+                            <Download size={15} />
+                            Export Data
+                            <ChevronDown size={13} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isExportOpen && (
+                            <>
+                                <div className="fixed inset-0 z-10" onClick={() => setIsExportOpen(false)} />
+                                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                                    <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Select Format</p>
+                                    <button 
+                                        onClick={handleExportXLSX}
+                                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+                                    >
+                                        <div className="p-1.5 bg-green-50 dark:bg-green-900/20 rounded-lg flex-shrink-0">
+                                            <FileSpreadsheet size={16} className="text-green-600 dark:text-green-400" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export Excel</p>
+                                            <p className="text-[11px] text-gray-400 mt-0.5">Spreadsheet (.xlsx)</p>
+                                        </div>
+                                    </button>
+                                    <div className="mx-4 border-t border-gray-100 dark:border-gray-700" />
+                                    <button 
+                                        onClick={handleExportPDF}
+                                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+                                    >
+                                        <div className="p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex-shrink-0">
+                                            <FileText size={16} className="text-blue-600 dark:text-blue-400" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export PDF</p>
+                                            <p className="text-[11px] text-gray-400 mt-0.5">Printable report (.pdf)</p>
+                                        </div>
+                                    </button>
+                                    <div className="pb-2" />
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    <button
+                        onClick={fetchStock}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm"
+                    >
+                        <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+                        Refresh
+                    </button>
+                </div>
             </div>
 
             {/* KPI Mini Row */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 {[
                     { label: 'Total Batches', value: stock.length, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
                     { label: 'Total Net Stock', value: `${Math.round(totalWeight).toLocaleString()} kg`, icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
@@ -89,19 +264,36 @@ const ColdRoom = () => {
                 ))}
             </div>
 
-            {/* Filters */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border-theme shadow-sm p-4 flex flex-wrap items-center gap-3">
-                <input
-                    type="text"
-                    placeholder="Search by Batch ID or crop..."
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    className="flex-1 min-w-[200px] px-4 py-2 rounded-xl bg-gray-50 dark:bg-gray-700 border-theme text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
-            </div>
+            {/* Table Card */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden min-h-[400px]">
+                {/* Unified Search & Filter Bar */}
+                <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/10 flex flex-wrap items-center gap-3">
+                    <div className="relative flex-1 max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <input
+                            type="text"
+                            placeholder="Search by crop or batch ID..."
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            className="pl-9 pr-4 py-2 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 shadow-sm transition-all"
+                        />
+                    </div>
 
-            {/* Table */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border-theme shadow-sm overflow-hidden">
+                    <div className="relative">
+                        <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <select
+                            value={statusFilter}
+                            onChange={e => setStatusFilter(e.target.value)}
+                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm min-w-[140px]"
+                        >
+                            <option value="All">All Statuses</option>
+                            <option value="Done">Stocked</option>
+                            <option value="Spoiled">Spoiled</option>
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                    </div>
+                </div>
+
                 <div className="overflow-x-auto">
                     <table className="w-full">
                         <thead>
@@ -113,9 +305,16 @@ const ColdRoom = () => {
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {loading ? (
-                                <tr><td colSpan={8} className="px-5 py-10 text-center text-gray-400 text-sm">Loading stock data...</td></tr>
+                                <tr><td colSpan={8} className="px-5 py-10 text-center">
+                                    <div className="flex items-center justify-center gap-2 text-gray-400 text-sm italic">
+                                        <Clock className="animate-spin" size={16} /> Loading stock data...
+                                    </div>
+                                </td></tr>
                             ) : filtered.length === 0 ? (
-                                <tr><td colSpan={8} className="px-5 py-10 text-center text-gray-400 text-sm">No stock items found.</td></tr>
+                                <tr><td colSpan={8} className="px-5 py-16 text-center">
+                                    <Package size={36} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                                    <p className="text-gray-400 text-sm font-medium">No stock items found.</p>
+                                </td></tr>
                             ) : filtered.map(row => (
                                 <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
                                     <td className="px-5 py-4 text-sm font-semibold text-gray-900 dark:text-white font-mono">{row.id.slice(-8).toUpperCase()}</td>
@@ -126,8 +325,12 @@ const ColdRoom = () => {
                                     <td className="px-5 py-4 text-sm font-bold text-green-600 dark:text-green-400">{row.netStock.toLocaleString()}</td>
                                     <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{row.entryDate}</td>
                                     <td className="px-5 py-4">
-                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                            Stocked
+                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                            row.status === 'Spoiled' 
+                                                ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' 
+                                                : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                        }`}>
+                                            {row.status === 'Done' ? 'Stocked' : row.status}
                                         </span>
                                     </td>
                                 </tr>
@@ -136,9 +339,9 @@ const ColdRoom = () => {
                     </table>
                 </div>
             </div>
-
         </div>
     );
 };
 
 export default ColdRoom;
+

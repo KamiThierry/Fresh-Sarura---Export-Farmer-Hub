@@ -8,6 +8,7 @@ import Room from '../models/Room.js';
 import Driver from '../models/Driver.js';
 import Vehicle from '../models/Vehicle.js';
 import { notifyByRole } from './notificationController.js';
+import { syncAllRoomLoads } from './roomController.js';
 import { createEventLog } from './eventLogController.js';
 
 // ── HARVEST DECLARATIONS ──────────────────────────────────────────────────────
@@ -231,7 +232,7 @@ export const getPendingRoomRequests = async (req, res) => {
     }
 };
 
-// PATCH /api/v1/processing-batches/:id/assign-room  ← PM assigns room
+// PATCH /api/v1/processing-batches/:id/assign-room
 export const assignRoom = async (req, res) => {
     try {
         const { roomId } = req.body;
@@ -239,22 +240,49 @@ export const assignRoom = async (req, res) => {
 
         const room = await Room.findById(roomId);
         if (!room) return res.status(404).json({ status: 'error', message: 'Room not found.' });
-        if (room.status !== 'Available') {
-            return res.status(400).json({ status: 'error', message: `Room is currently ${room.status}.` });
+        if (room.status === 'Maintenance') {
+            return res.status(400).json({ status: 'error', message: 'Room is under maintenance and cannot accept batches.' });
         }
 
-        // Update batch
-        const batch = await ProcessingBatch.findByIdAndUpdate(
-            req.params.id,
-            { assignedRoom: room.name, assignedRoomId: roomId, assignedBy: req.user._id, status: 'Processing' },
-            { new: true }
-        );
+        const batch = await ProcessingBatch.findById(req.params.id);
         if (!batch) return res.status(404).json({ status: 'error', message: 'Batch not found.' });
 
-        // Flip room to In Use
-        await Room.findByIdAndUpdate(roomId, { status: 'In Use' });
+        const incomingWeight = batch.receivedWeightKg || 0;
+        const remainingCapacity = room.capacityKg - room.currentLoadKg;
 
-        // Notify QC
+        if (incomingWeight > remainingCapacity) {
+            return res.status(400).json({
+                status: 'error',
+                message: `Insufficient space. Room "${room.name}" has ${remainingCapacity} kg remaining but batch requires ${incomingWeight} kg.`,
+                data: {
+                    roomCapacity: room.capacityKg,
+                    currentLoad: room.currentLoadKg,
+                    remaining: remainingCapacity,
+                    batchWeight: incomingWeight,
+                }
+            });
+        }
+
+        // Assign room to batch
+        const updatedBatch = await ProcessingBatch.findByIdAndUpdate(
+            req.params.id,
+            {
+                assignedRoom: room.name,
+                assignedRoomId: roomId,
+                assignedBy: req.user._id,
+                status: 'Processing'
+            },
+            { new: true }
+        );
+
+        // Add batch weight to room load, flip to In Use
+        const newLoad = room.currentLoadKg + incomingWeight;
+        await Room.findByIdAndUpdate(roomId, {
+            currentLoadKg: newLoad,
+            status: 'In Use',
+        });
+
+        // Notify QC officer
         await notifyByRole('quality_officer', {
             sender: req.user._id,
             type: 'ROOM_ASSIGNED',
@@ -263,16 +291,17 @@ export const assignRoom = async (req, res) => {
             link: '/qc/processing',
         });
 
-        res.json({ status: 'success', message: 'Room assigned.', data: batch });
-
         await createEventLog({
             module: 'Production & QC',
             action: 'Room Assigned',
             severity: 'INFO',
-            description: `Room "${room.name}" assigned to processing batch`,
+            description: `Room "${room.name}" assigned to processing batch (${incomingWeight} kg added, ${newLoad} kg total load)`,
             actor: req.user.name,
-            metadata: { batchId: batch._id, roomName: room.name, roomId }
+            metadata: { batchId: updatedBatch._id, roomName: room.name, roomId, incomingWeight, newLoad }
         });
+
+        res.json({ status: 'success', message: 'Room assigned.', data: updatedBatch });
+
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -340,35 +369,12 @@ export const confirmBatch = async (req, res) => {
 
         const updates = { status: 'Done', confirmedBy: req.user._id };
 
-        if (roomId) {
-            // PM is reassigning to a different room
-            const newRoom = await Room.findById(roomId);
-            if (!newRoom) return res.status(404).json({ 
-                status: 'error', message: 'Room not found.' 
-            });
-            if (newRoom.status !== 'Available') return res.status(400).json({ 
-                status: 'error', message: `Room "${newRoom.name}" is currently ${newRoom.status}.` 
-            });
-
-            // Free the old room if different
-            if (batch.assignedRoomId && batch.assignedRoomId.toString() !== roomId) {
-                await Room.findByIdAndUpdate(batch.assignedRoomId, { status: 'Available' });
-            }
-
-            // Assign new room
-            await Room.findByIdAndUpdate(roomId, { status: 'In Use' });
-            updates.assignedRoom = newRoom.name;
-            updates.assignedRoomId = roomId;
-        } else {
-            // Keeping existing room — just free it since processing is done
-            if (batch.assignedRoomId) {
-                await Room.findByIdAndUpdate(batch.assignedRoomId, { status: 'Available' });
-            }
-        }
-
         // This save triggers the pre-save hook → generates STK- id
         Object.assign(batch, updates);
         await batch.save();
+
+        // Recalculate room loads for all involved rooms
+        await syncAllRoomLoads();
 
         await notifyByRole('quality_officer', {
             type: 'STOCK_CONFIRMED',
@@ -431,8 +437,8 @@ export const getIntakeLogs = async (req, res) => {
         const { startDate, endDate } = req.query;
         const filter = {};
         if (startDate && endDate) {
-            filter.createdAt = {
-                $gte: new Date(startDate),
+            filter.arrivedAt = {
+                $gte: new Date(`${startDate}T00:00:00.000Z`),
                 $lte: new Date(`${endDate}T23:59:59.999Z`)
             };
         }
@@ -513,10 +519,8 @@ export const spoilBatch = async (req, res) => {
         batch.status = 'Spoiled';
         await batch.save();
 
-        // Free the room if still assigned
-        if (batch.assignedRoomId) {
-            await Room.findByIdAndUpdate(batch.assignedRoomId, { status: 'Available' });
-        }
+        // Recalculate room loads
+        await syncAllRoomLoads();
 
         await createEventLog({
             module: 'Production & QC',

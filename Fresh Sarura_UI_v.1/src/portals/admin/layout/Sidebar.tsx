@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
     Home, Users, ShieldAlert, Settings, LogOut,
-    BarChart3, ChevronDown,
+    BarChart3, ChevronDown, MessageSquare,
     Sprout, Truck, FlaskConical, UserCog
 } from 'lucide-react';
 
@@ -61,9 +61,10 @@ const mainGroups = [
     {
         title: 'Administration',
         items: [
-            { path: '/admin/users', icon: Users, label: 'User Management' },
-            { path: '/admin/event-logs', icon: ShieldAlert, label: 'Event Logs' },
-            { path: '/admin/reports', icon: BarChart3, label: 'Analytics & Reports' },
+            { path: '/admin/users',       icon: Users,          label: 'User Management' },
+            { path: '/admin/event-logs',  icon: ShieldAlert,    label: 'Event Logs' },
+            { path: '/admin/reports',     icon: BarChart3,      label: 'Analytics & Reports' },
+            { path: '/admin/messages',    icon: MessageSquare,  label: 'Messages' },
         ],
     },
 ];

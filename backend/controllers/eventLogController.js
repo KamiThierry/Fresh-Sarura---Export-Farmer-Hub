@@ -25,7 +25,18 @@ export const getAllLogs = async (req, res) => {
             ];
         }
 
-        const logs = await EventLog.find(query).sort({ timestamp: -1 });
+        // Date Range Filtering
+        const { startDate, endDate } = req.query;
+        if (startDate || endDate) {
+            query.createdAt = {};
+            if (startDate) query.createdAt.$gte = new Date(new Date(startDate).setUTCHours(0, 0, 0, 0));
+            if (endDate) {
+                const end = new Date(`${endDate}T23:59:59.999Z`);
+                query.createdAt.$lte = end;
+            }
+        }
+
+        const logs = await EventLog.find(query).sort({ createdAt: -1 });
 
         res.status(200).json({
             status: 'success',

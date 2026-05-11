@@ -88,6 +88,13 @@ export const getTraceabilityData = async (req, res) => {
               })
             : null;
 
+        // Fetch ALL export batches for this stock to calculate total allocations
+        const allExports = processingBatch 
+            ? await ExportBatch.find({ processingBatchId: processingBatch._id })
+            : [];
+        const totalAllocated = allExports.reduce((sum, eb) => sum + (eb.allocatedWeightKg || 0), 0);
+        const stockedWeight = Math.max(0, (processingBatch?.processedWeightKg || 0) - totalAllocated);
+
         // ── Build nodes ──
         const nodes = [];
 
@@ -155,6 +162,7 @@ export const getTraceabilityData = async (req, res) => {
                     { label: 'Room',      value: processingBatch.assignedRoom || 'N/A' },
                     { label: 'Received',  value: processingBatch.receivedWeightKg ? `${processingBatch.receivedWeightKg} kg` : 'N/A' },
                     { label: 'Processed', value: processingBatch.processedWeightKg ? `${processingBatch.processedWeightKg} kg` : 'Not logged yet' },
+                    { label: 'Stocked',   value: `${stockedWeight} kg`, highlight: 'text-emerald-600 font-bold' },
                     { label: 'Rejected',  value: processingBatch.rejectedWeightKg != null ? `${processingBatch.rejectedWeightKg} kg` : 'Not logged yet' },
                     {
                         label: 'Status',

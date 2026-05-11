@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-    Search, Filter, Download, Activity, ChevronDown,
+    Search, Filter, Download, Activity, ChevronDown, Calendar,
     FileSpreadsheet, FileText, Package, Plane,
-    Leaf, Sprout, UserCog
+    Leaf, Sprout, UserCog, ShieldAlert
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import jsPDF from 'jspdf';
@@ -38,6 +38,12 @@ const EventLogs = () => {
     const [moduleFilter, setModuleFilter] = useState('All');
     const [actionFilter, setActionFilter] = useState('All');
     const [actorFilter, setActorFilter] = useState('All');
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - 3); // Default to last 3 months
+        return d.toISOString().split('T')[0];
+    });
+    const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 8;
@@ -50,6 +56,8 @@ const EventLogs = () => {
             if (actionFilter !== 'All') params.append('action', actionFilter);
             if (actorFilter !== 'All') params.append('actor', actorFilter);
             if (searchTerm) params.append('search', searchTerm);
+            if (startDate) params.append('startDate', startDate);
+            if (endDate) params.append('endDate', endDate);
 
             const res = await api.get(`/event-logs?${params.toString()}`);
             const data = res.data?.data ?? res.data ?? [];
@@ -69,7 +77,7 @@ const EventLogs = () => {
         } finally {
             setLoading(false);
         }
-    }, [moduleFilter, actionFilter, actorFilter, searchTerm]);
+    }, [moduleFilter, actionFilter, actorFilter, searchTerm, startDate, endDate]);
 
     useEffect(() => {
         const timeout = setTimeout(() => {
@@ -82,7 +90,7 @@ const EventLogs = () => {
     const totalPages = Math.ceil(events.length / itemsPerPage);
 
     const summaryStats = [
-        { label: 'Total Activities', value: events.length.toString(), icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+        { label: 'Total Activities', value: events.length.toString(), icon: ShieldAlert, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
         { label: 'Farmer Actions', value: events.filter(e => e.module === 'Farmer Management').length.toString(), icon: Leaf, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
         { label: 'Production Actions', value: events.filter(e => e.module === 'Production & QC').length.toString(), icon: Package, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
         { label: 'Export Actions', value: events.filter(e => e.module === 'Export & Shipments').length.toString(), icon: Plane, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
@@ -221,15 +229,34 @@ const EventLogs = () => {
                     </div>
                 </div>
 
-                <div className="relative">
-                    <button
-                        onClick={() => setIsExportOpen(prev => !prev)}
-                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
-                    >
-                        <Download size={15} />
-                        Export Log
-                        <ChevronDown size={13} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
-                    </button>
+                <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 shadow-sm">
+                        <Calendar size={15} className="text-green-500 flex-shrink-0" />
+                        <span className="text-xs text-gray-400 font-medium">From:</span>
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={e => setStartDate(e.target.value)}
+                            className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer"
+                        />
+                        <span className="text-xs text-gray-400 font-medium ml-2">To:</span>
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={e => setEndDate(e.target.value)}
+                            className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer"
+                        />
+                    </div>
+
+                    <div className="relative">
+                        <button
+                            onClick={() => setIsExportOpen(prev => !prev)}
+                            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+                        >
+                            <Download size={15} />
+                            Export Log
+                            <ChevronDown size={13} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
+                        </button>
 
                     {isExportOpen && (
                         <>
@@ -266,6 +293,7 @@ const EventLogs = () => {
                         </>
                     )}
                 </div>
+                </div>
             </div>
 
             {/* KPI Cards */}
@@ -281,61 +309,63 @@ const EventLogs = () => {
                 ))}
             </div>
 
-            {/* Search & Filter Bar */}
-            <div className="flex flex-wrap items-center gap-3">
-                <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                    <input
-                        type="text"
-                        placeholder="Search actor name, detail, or batch ID..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                </div>
-
-                {/* Module Filter */}
-                <div className="relative">
-                    <Sprout size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    <select
-                        value={moduleFilter}
-                        onChange={(e) => { setModuleFilter(e.target.value); setCurrentPage(1); }}
-                        className="pl-8 pr-8 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none"
-                    >
-                        <option value="All">All Modules</option>
-                        {modules.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                </div>
-
-                {/* Action Filter */}
-                <div className="relative">
-                    <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    <select
-                        value={actionFilter}
-                        onChange={(e) => { setActionFilter(e.target.value); setCurrentPage(1); }}
-                        className="pl-8 pr-8 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none"
-                    >
-                        <option value="All">All Actions</option>
-                        {actions.map(a => <option key={a} value={a}>{a}</option>)}
-                    </select>
-                </div>
-
-                {/* Actor Filter */}
-                <div className="relative">
-                    <UserCog size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    <select
-                        value={actorFilter}
-                        onChange={(e) => { setActorFilter(e.target.value); setCurrentPage(1); }}
-                        className="pl-8 pr-8 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none"
-                    >
-                        <option value="All">All Actors</option>
-                        {actors.map(a => <option key={a} value={a}>{a}</option>)}
-                    </select>
-                </div>
-            </div>
-
             {/* Table */}
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
+                {/* Unified Search & Filter Bar */}
+                <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/10 flex flex-wrap items-center gap-3">
+                    <div className="relative flex-1 max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <input
+                            type="text"
+                            placeholder="Search actor name, detail, or batch ID..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 shadow-sm transition-all"
+                        />
+                    </div>
+
+                    {/* Module Filter */}
+                    <div className="relative">
+                        <Sprout size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <select
+                            value={moduleFilter}
+                            onChange={(e) => { setModuleFilter(e.target.value); setCurrentPage(1); }}
+                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm"
+                        >
+                            <option value="All">All Modules</option>
+                            {modules.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                    </div>
+
+                    {/* Action Filter */}
+                    <div className="relative">
+                        <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <select
+                            value={actionFilter}
+                            onChange={(e) => { setActionFilter(e.target.value); setCurrentPage(1); }}
+                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm"
+                        >
+                            <option value="All">All Actions</option>
+                            {actions.map(a => <option key={a} value={a}>{a}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                    </div>
+
+                    {/* Actor Filter */}
+                    <div className="relative">
+                        <UserCog size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <select
+                            value={actorFilter}
+                            onChange={(e) => { setActorFilter(e.target.value); setCurrentPage(1); }}
+                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm"
+                        >
+                            <option value="All">All Actors</option>
+                            {actors.map(a => <option key={a} value={a}>{a}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                    </div>
+                </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
                         <thead>

@@ -14,6 +14,7 @@ import traceabilityRoutes from './traceability.js';
 import adminRoutes from './adminRoutes.js';
 import eventLogRoutes from './eventLogs.js';
 import fleetRoutes from './fleet.js';
+import contactRoutes from './contact.js';
 
 const router = express.Router();
 const apiVersion = '/api/v1';
@@ -32,6 +33,7 @@ router.use(`${apiVersion}/traceability`, traceabilityRoutes);
 router.use(`${apiVersion}/admin`, adminRoutes);
 router.use(`${apiVersion}/event-logs`, eventLogRoutes);
 router.use(`${apiVersion}/fleet`, fleetRoutes);
+router.use(`${apiVersion}/contact`, contactRoutes);
 router.use(`${apiVersion}`, exportRoutes);
 
 export default router;

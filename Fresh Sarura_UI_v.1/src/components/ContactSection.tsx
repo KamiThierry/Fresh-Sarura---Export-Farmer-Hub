@@ -41,14 +41,25 @@ const ContactSection = () => {
     defaultValues: {
       name: "",
       email: "",
+      type: "General Inquiry",
       message: "",
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
-    toast.success("Thank you for your message! Our team will respond within 24 hours.");
-    form.reset();
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    try {
+      const res = await fetch('http://localhost:3000/api/v1/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Submission failed.');
+      toast.success('Thank you! Our team will respond within 24 hours.');
+      form.reset();
+    } catch (err: any) {
+      toast.error(err.message || 'Something went wrong. Please try again.');
+    }
   }
 
   return (

@@ -6,6 +6,7 @@ import MasterData from './pages/MasterData';
 import EventLogs from './pages/EventLogs';
 import AdminSettings from './pages/AdminSettings';
 import Reports from './pages/Reports';
+import Messages from './pages/Messages';
 
 // PM Pages
 import PMFarmerManagement from '../production-manager/pages/FarmerManagement';
@@ -38,6 +39,7 @@ const AdminRoutes = () => (
             <Route path="event-logs" element={<EventLogs />} />
             <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<AdminSettings />} />
+            <Route path="messages" element={<Messages />} />
 
             {/* Production Manager Sub-routes */}
             <Route path="pm/farmers" element={<PMProvider><PMFarmerManagement /></PMProvider>} />

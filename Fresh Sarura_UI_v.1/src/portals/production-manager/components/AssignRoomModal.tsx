@@ -24,7 +24,12 @@ const AssignRoomModal = ({ isOpen, onClose, batch, onSuccess }: AssignRoomModalP
             try {
                 const res = await api.get('/rooms');
                 const rooms = res.data?.data || res.data || [];
-                setAvailableRooms(rooms.filter((r: any) => r.status === 'Available'));
+                setAvailableRooms(
+                    rooms.filter((r: any) =>
+                        r.status !== 'Maintenance' &&
+                        (r.capacityKg - (r.currentLoadKg || 0)) > 0
+                    )
+                );
             } catch (err) {
                 console.error('Failed to fetch rooms:', err);
             } finally {
@@ -146,7 +151,19 @@ const AssignRoomModal = ({ isOpen, onClose, batch, onSuccess }: AssignRoomModalP
                                                     </div>
                                                     <div className="flex-1">
                                                         <p className="text-sm font-bold text-gray-900 dark:text-white">{room.name}</p>
-                                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">{room.type} • Cap: {room.capacityKg.toLocaleString()} kg</p>
+                                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">
+                                                            {room.type} · {(room.capacityKg - (room.currentLoadKg || 0)).toLocaleString()} kg free of {room.capacityKg.toLocaleString()} kg
+                                                        </p>
+                                                        {/* Capacity bar */}
+                                                        <div className="w-full bg-gray-200 rounded-full h-1 mt-1">
+                                                            <div
+                                                                className={`h-1 rounded-full ${
+                                                                    ((room.currentLoadKg || 0) / room.capacityKg) >= 0.9 ? 'bg-red-400' :
+                                                                    ((room.currentLoadKg || 0) / room.capacityKg) >= 0.6 ? 'bg-amber-400' : 'bg-green-400'
+                                                                }`}
+                                                                style={{ width: `${Math.min(((room.currentLoadKg || 0) / room.capacityKg) * 100, 100)}%` }}
+                                                            />
+                                                        </div>
                                                     </div>
                                                     {selectedRoomId === room._id && (
                                                         <CheckCircle2 size={16} className="text-emerald-600" />
@@ -159,7 +176,7 @@ const AssignRoomModal = ({ isOpen, onClose, batch, onSuccess }: AssignRoomModalP
                             )}
 
                             <p className="text-[10px] text-gray-500 mt-2 ml-1 italic">
-                                Only rooms currently marked as 'Available' are shown.
+                                Only operational rooms with remaining capacity are shown.
                             </p>
                         </div>
 

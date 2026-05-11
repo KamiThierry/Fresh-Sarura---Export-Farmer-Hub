@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, Package, RefreshCw, Download, FileSpreadsheet, FileText, ChevronDown, Search, Filter, Clock, Users } from 'lucide-react';
+import { Truck, Package, RefreshCw, Download, FileSpreadsheet, FileText, ChevronDown, Search, Filter, Clock, Users, Calendar } from 'lucide-react';
 import { api } from '../../../lib/api';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -36,7 +36,12 @@ const Intake = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
     const [supplierFilter, setSupplierFilter] = useState('All');
-    const [dateFilter, setDateFilter] = useState('All');
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - 3); // Default to last 3 months
+        return d.toISOString().split('T')[0];
+    });
+    const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -44,9 +49,13 @@ const Intake = () => {
     const fetchIntakes = async () => {
         setLoading(true);
         try {
-            const res = await api.get('/harvest-declarations/intake-logs');
+            const params = new URLSearchParams();
+            if (startDate) params.append('startDate', startDate);
+            if (endDate) params.append('endDate', endDate);
+            
+            const res = await api.get(`/harvest-declarations/intake-logs?${params.toString()}`);
             const logsArray = res.data?.data || res.data || (Array.isArray(res) ? res : []);
-
+            
             const data = logsArray.map((d: any) => {
                 const truck = d.truckId;
                 const driverName = truck?.currentDriver
@@ -87,20 +96,16 @@ const Intake = () => {
         }
     };
 
-    useEffect(() => { fetchIntakes(); }, []);
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            fetchIntakes();
+        }, 300);
+        return () => clearTimeout(timeout);
+    }, [startDate, endDate]);
 
     const uniqueSuppliers = Array.from(new Set(intakes.map(r => r.supplier))).sort();
 
     const filtered = React.useMemo(() => {
-        const now = new Date();
-        const limitMap: Record<string, Date> = {
-            '24h': new Date(now.getTime() - 24 * 60 * 60 * 1000),
-            '7d': new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
-            '30d': new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
-            '90d': new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000),
-        };
-        Object.values(limitMap).forEach(l => l.setHours(0, 0, 0, 0));
-
         return intakes.filter(r => {
             const matchSearch = r.intakeLogId.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 r.crop.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -111,15 +116,9 @@ const Intake = () => {
             const matchStatus = statusFilter === 'All' || r.status === statusFilter;
             const matchSupplier = supplierFilter === 'All' || r.supplier === supplierFilter;
 
-            let matchDate = true;
-            if (dateFilter !== 'All' && r.rawDate && !isNaN(r.rawDate.getTime())) {
-                const limit = limitMap[dateFilter];
-                if (limit) matchDate = r.rawDate >= limit;
-            }
-            
-            return matchSearch && matchStatus && matchSupplier && matchDate;
+            return matchSearch && matchStatus && matchSupplier;
         });
-    }, [intakes, searchTerm, statusFilter, supplierFilter, dateFilter]);
+    }, [intakes, searchTerm, statusFilter, supplierFilter]);
 
     const paginated = React.useMemo(() => 
         filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
@@ -291,7 +290,24 @@ const Intake = () => {
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Intake Log</h1>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Full traceability record of all received produce.</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 shadow-sm">
+                        <Calendar size={15} className="text-green-500 flex-shrink-0" />
+                        <span className="text-xs text-gray-400 font-medium">From:</span>
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={e => setStartDate(e.target.value)}
+                            className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer"
+                        />
+                        <span className="text-xs text-gray-400 font-medium ml-2">To:</span>
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={e => setEndDate(e.target.value)}
+                            className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer"
+                        />
+                    </div>
                     <div className="relative">
                         <button onClick={() => setIsExportOpen(!isExportOpen)}
                             className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-all shadow-sm relative">
@@ -394,22 +410,6 @@ const Intake = () => {
                             {uniqueSuppliers.map(s => (
                                 <option key={s} value={s}>{s}</option>
                             ))}
-                        </select>
-                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
-                    </div>
-
-                    <div className="relative">
-                        <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                        <select
-                            value={dateFilter}
-                            onChange={e => { setDateFilter(e.target.value); setCurrentPage(1); }}
-                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm"
-                        >
-                            <option value="All">All Time</option>
-                            <option value="24h">Today</option>
-                            <option value="7d">Last Week</option>
-                            <option value="30d">Last Month</option>
-                            <option value="90d">Last 3 Months</option>
                         </select>
                         <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
                     </div>
