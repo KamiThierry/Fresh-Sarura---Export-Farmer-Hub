@@ -127,7 +127,7 @@ const ColdRoom = () => {
                                     <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{row.entryDate}</td>
                                     <td className="px-5 py-4">
                                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                            {row.status}
+                                            Stocked
                                         </span>
                                     </td>
                                 </tr>

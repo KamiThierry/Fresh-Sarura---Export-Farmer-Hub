@@ -1,9 +1,12 @@
+import mongoose from 'mongoose';
 import HarvestDeclaration from '../models/HarvestDeclaration.js';
 import IntakeLog from '../models/IntakeLog.js';
 import ProcessingBatch from '../models/ProcessingBatch.js';
 import CropCycle from '../models/CropCycle.js';
 import Notification from '../models/Notification.js';
 import Room from '../models/Room.js';
+import Driver from '../models/Driver.js';
+import Vehicle from '../models/Vehicle.js';
 import { notifyByRole } from './notificationController.js';
 import { createEventLog } from './eventLogController.js';
 
@@ -105,12 +108,21 @@ export const logPickup = async (req, res) => {
         if (!declaration) return res.status(404).json({ status: 'error', message: 'Declaration not found.' });
         if (declaration.status === 'PickedUp') return res.status(400).json({ status: 'error', message: 'Already picked up.' });
 
+        // Resolve vehicle plate and driver
+        let resolvedTruckId = truckId;
+        if (truckId && mongoose.Types.ObjectId.isValid(truckId)) {
+            const vehicle = await Vehicle.findById(truckId);
+            if (vehicle) {
+                resolvedTruckId = vehicle.plateNumber;
+            }
+        }
+
         // Create IntakeLog
         const intakeLog = await IntakeLog.create({
             harvestDeclarationId: declaration._id,
             cycleId: declaration.cycleId,
             pickedUpWeightKg,
-            truckId: truckId || '',
+            truckId: resolvedTruckId || null,
             loggedBy: req.user._id,
         });
 
@@ -425,11 +437,48 @@ export const getIntakeLogs = async (req, res) => {
             };
         }
         const logs = await IntakeLog.find(filter)
-            .populate('harvestDeclarationId')
+            .populate({
+                path: 'harvestDeclarationId',
+                populate: { path: 'farmerId', select: 'full_name' }
+            })
             .populate('cycleId')
             .populate('loggedBy', 'name')
-            .sort({ createdAt: -1 });
-        res.json({ status: 'success', results: logs.length, data: logs });
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // Manual population for truckId since it's a string that can be an ID or a legacy ref (like 'T2')
+        const truckIds = logs.map(l => l.truckId).filter(id => id && mongoose.Types.ObjectId.isValid(id));
+        const vehicles = await Vehicle.find({ _id: { $in: truckIds } }).lean();
+        const drivers = await Driver.find({ assignedVehicle: { $ne: null } }).lean();
+        
+        // Find related processing batches to determine status
+        const logIds = logs.map(l => l._id);
+        const batches = await ProcessingBatch.find({ intakeLogId: { $in: logIds } }).lean();
+
+        const logsWithFullData = logs.map(log => {
+            // 1. Vehicle & Driver Logic
+            if (log.truckId) {
+                if (mongoose.Types.ObjectId.isValid(log.truckId)) {
+                    const vehicle = vehicles.find(v => v._id.toString() === log.truckId.toString());
+                    if (vehicle) {
+                        const driver = drivers.find(d => d.assignedVehicle?.toString() === vehicle._id.toString());
+                        log.truckId = { ...vehicle, currentDriver: driver || null };
+                    } else {
+                        log.truckId = { plateNumber: log.truckId, currentDriver: null };
+                    }
+                } else {
+                    log.truckId = { plateNumber: log.truckId, currentDriver: null };
+                }
+            }
+
+            // 2. Status Logic (based on ProcessingBatch)
+            const batch = batches.find(b => b.intakeLogId.toString() === log._id.toString());
+            log.status = batch ? batch.status : 'AwaitingQC';
+
+            return log;
+        });
+
+        res.json({ status: 'success', results: logsWithFullData.length, data: logsWithFullData });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }

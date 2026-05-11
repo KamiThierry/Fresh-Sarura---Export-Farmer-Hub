@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, Leaf, RefreshCcw, Boxes, ShieldAlert } from 'lucide-react';
+import { Users, Leaf, RefreshCcw, Boxes, ShieldAlert, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
@@ -30,6 +30,15 @@ const Dashboard = () => {
     const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
     const [successToast, setSuccessToast] = useState<{ name: string } | null>(null);
 
+    const [activityRange, setActivityRange] = useState('90days');
+    const [isRangeDropdownOpen, setIsRangeDropdownOpen] = useState(false);
+
+    const timeRangeOptions = [
+        { value: '7days', label: 'Last 7 Days' },
+        { value: '30days', label: 'Last 30 Days' },
+        { value: '90days', label: 'Last 90 Days' },
+    ];
+
 
     useEffect(() => {
         const userStr = localStorage.getItem('user');
@@ -47,7 +56,7 @@ const Dashboard = () => {
                     api.get('/farmers'),       
                     api.get('/crop-cycles'),   
                     api.get('/stock'),         
-                    api.get('/admin/stats/activity?months=3'),
+                    api.get(`/admin/stats/activity?range=${activityRange}`),
                     api.get('/admin/stats/cycles'),
                     api.get('/admin/activity/recent?limit=10')
                 ]);
@@ -75,7 +84,7 @@ const Dashboard = () => {
             }
         };
         fetchDashboardData();
-    }, []);
+    }, [activityRange]);
 
     const kpiCards = [
         { label: 'Total Users',        value: loading ? '...' : String(stats.users),     sub: 'Registered accounts', icon: Users,       color: 'bg-green-50 text-green-600 dark:bg-green-900/20',     onClick: () => navigate('/admin/users') },
@@ -118,15 +127,40 @@ const Dashboard = () => {
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
                 {/* Line Chart */}
                 <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
-                    <div className="mb-4">
-                        <h2 className="text-base font-bold text-gray-900 dark:text-white">Platform Activity</h2>
-                        <p className="text-sm text-gray-500">Platform activity over last 3 months</p>
+                    <div className="mb-4 flex items-center justify-between">
+                        <div>
+                            <h2 className="text-base font-bold text-gray-900 dark:text-white">Platform Activity</h2>
+                            <p className="text-sm text-gray-500">
+                                {timeRangeOptions.find(opt => opt.value === activityRange)?.label} overview
+                            </p>
+                        </div>
+                        <div className="relative">
+                            <button
+                                onClick={() => setIsRangeDropdownOpen(!isRangeDropdownOpen)}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-semibold hover:bg-gray-100 dark:hover:bg-gray-600 transition-all border border-gray-100 dark:border-gray-600"
+                            >
+                                {timeRangeOptions.find(opt => opt.value === activityRange)?.label}
+                                <ChevronDown size={14} className={`transition-transform ${isRangeDropdownOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                            {isRangeDropdownOpen && (
+                                <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-20 animate-in fade-in zoom-in-95 duration-200">
+                                    {timeRangeOptions.map(option => (
+                                        <button key={option.value}
+                                            onClick={() => { setActivityRange(option.value); setIsRangeDropdownOpen(false); }}
+                                            className={`w-full text-left px-4 py-2.5 text-xs transition-colors ${activityRange === option.value ? 'bg-green-50 text-green-600 font-bold dark:bg-green-900/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                     <div className="h-[250px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={activityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dy={10} />
+                                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dy={10} />
                                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} />
                                 <Tooltip
                                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}

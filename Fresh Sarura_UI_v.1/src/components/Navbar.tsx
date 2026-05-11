@@ -3,21 +3,20 @@ import { Menu, X } from "lucide-react";
 import { useActiveSection } from "@/hooks/use-active-section";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/sarura_logo_nav.png";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 const navLinks = [
   { label: "Home", href: "#top" },
   { label: "How It Works", href: "#how-it-works" },
   { label: "For Your Team", href: "#for-your-team" },
   { label: "Production Chain", href: "#production-chain" },
-  { label: "Contact", href: "#contact" },
+  { label: "Contact Us", href: "#contact-us" },
 ];
 
 const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
-  const navigate = useNavigate();
-  const activeSection = useActiveSection(["top", "how-it-works", "for-your-team", "production-chain", "contact"]);
+  const activeSection = useActiveSection(["top", "how-it-works", "for-your-team", "production-chain", "contact-us"]);
 
   const scrollTo = (href: string) => {
     setMobileOpen(false);
@@ -25,7 +24,7 @@ const Navbar = () => {
       window.location.href = "/" + href;
       return;
     }
-    
+
     if (href === "#top") { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
     document.querySelector(href)?.scrollIntoView({ behavior: "smooth" });
   };
@@ -68,7 +67,7 @@ const Navbar = () => {
             onMouseEnter={e => { e.currentTarget.style.backgroundColor = "#166534"; }}
             onMouseLeave={e => { e.currentTarget.style.backgroundColor = "#15803d"; }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" />
             </svg>
             Log In
           </button>

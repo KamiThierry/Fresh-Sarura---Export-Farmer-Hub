@@ -20,9 +20,8 @@ const Sidebar = () => {
         {
             title: 'Operations',
             items: [
-                { path: '/qc/intake', icon: Truck, label: 'Intake (Receiving)' },
+                { path: '/qc/intake', icon: Truck, label: 'Intake Log' },
                 { path: '/qc/processing', icon: FlaskConical, label: 'Processing' },
-                { path: '/qc/inspection', icon: ClipboardList, label: 'Inspection & Sorting' },
                 { path: '/qc/cold-room', icon: Thermometer, label: 'Cold Room (Stock)' },
             ]
         },

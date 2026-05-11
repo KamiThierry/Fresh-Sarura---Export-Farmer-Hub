@@ -3,7 +3,6 @@ import Layout from './layout/Layout';
 import Home from './pages/Home';
 import Processing from './pages/Processing';
 import Intake from './pages/Intake';
-import Inspection from './pages/Inspection';
 import ColdRoom from './pages/ColdRoom';
 import Settings from './pages/Settings';
 
@@ -17,7 +16,6 @@ const QCOfficerRoutes = () => {
                 <Route path="home" element={<Home />} />
                 <Route path="intake" element={<Intake />} />
                 <Route path="processing" element={<Processing />} />
-                <Route path="inspection" element={<Inspection />} />
                 <Route path="cold-room" element={<ColdRoom />} />
                 <Route path="settings" element={<Settings />} />
 

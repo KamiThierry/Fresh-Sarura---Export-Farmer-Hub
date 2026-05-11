@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import ExportBatch from '../models/ExportBatch.js';
 import ProcessingBatch from '../models/ProcessingBatch.js';
 import IntakeLog from '../models/IntakeLog.js';
@@ -5,6 +6,8 @@ import HarvestDeclaration from '../models/HarvestDeclaration.js';
 import CropCycle from '../models/CropCycle.js';
 import Shipment from '../models/Shipment.js';
 import Farmer from '../models/Farmer.js';
+import Vehicle from '../models/Vehicle.js';
+import Driver from '../models/Driver.js';
 
 export const getTraceabilityData = async (req, res) => {
     try {
@@ -12,6 +15,7 @@ export const getTraceabilityData = async (req, res) => {
         let exportBatch = null;
         let processingBatch = null;
 
+        // ── Resolve entry point ──
         if (id.startsWith('EB-')) {
             exportBatch = await ExportBatch.findOne({ batchId: id });
             if (!exportBatch) {
@@ -20,9 +24,7 @@ export const getTraceabilityData = async (req, res) => {
                     message: `Export batch "${id}" not found.`
                 });
             }
-            // Try direct link
             processingBatch = await ProcessingBatch.findById(exportBatch.processingBatchId);
-            // Fallback: find via cycleId if direct link is broken
             if (!processingBatch && exportBatch.cycleId) {
                 processingBatch = await ProcessingBatch.findOne({
                     cycleId: exportBatch.cycleId,
@@ -38,11 +40,9 @@ export const getTraceabilityData = async (req, res) => {
                     message: `Stock batch "${id}" not found.`
                 });
             }
+            // Only fetch export batch if one actually exists for this stock
             exportBatch = await ExportBatch.findOne({
-                $or: [
-                    { processingBatchId: processingBatch._id },
-                    { cycleId: processingBatch.cycleId }
-                ]
+                processingBatchId: processingBatch._id
             });
 
         } else {
@@ -52,7 +52,7 @@ export const getTraceabilityData = async (req, res) => {
             });
         }
 
-        // Trace backwards
+        // ── Trace backwards through the chain ──
         const intake = processingBatch
             ? await IntakeLog.findById(processingBatch.intakeLogId)
             : null;
@@ -67,11 +67,28 @@ export const getTraceabilityData = async (req, res) => {
             ? await Farmer.findById(cycle.farmer_id)
             : null;
 
-        // Trace forwards
+        // ── Vehicle and driver lookup ──
+        // truckId stores a short alias (e.g. "T1"), not a plate number.
+        // Reliable lookup: find driver who has an assigned vehicle, get vehicle from driver.
+        let vehicle = null;
+        let driver = null;
+
+        driver = await Driver.findOne({ assignedVehicle: { $ne: null } })
+          .populate('assignedVehicle');
+
+        if (driver?.assignedVehicle) {
+          vehicle = driver.assignedVehicle;
+        }
+
+        // ── Shipment — only if export batch exists and shipment is not cancelled ──
         const shipment = exportBatch
-            ? await Shipment.findOne({ exportBatches: exportBatch._id })
+            ? await Shipment.findOne({
+                exportBatches: exportBatch._id,
+                status: { $ne: 'Cancelled' }
+              })
             : null;
 
+        // ── Build nodes ──
         const nodes = [];
 
         // Node 1 — Farm origin
@@ -87,42 +104,69 @@ export const getTraceabilityData = async (req, res) => {
                 { label: 'Est. Weight', value: harvest?.estimatedWeightKg ? `${harvest.estimatedWeightKg} kg` : 'N/A' },
             ],
             badges: [{ label: 'Farmer Status', value: farmer?.status || 'Active' }],
-            action: { label: 'View Farmer Profile', link: farmer?._id ? `/pm/farmers?profileId=${farmer._id}` : '/pm/farmers' }
+            action: {
+                label: 'View Farmer Profile',
+                link: farmer?._id ? `/pm/farmers?profileId=${farmer._id}` : '/pm/farmers'
+            }
         });
 
-        // Node 2 — Intake
+        // Node 2 — Field pickup & intake
         if (intake) {
             nodes.push({
                 id: 'intake',
                 type: 'intake',
                 title: 'Field Pickup & Intake',
                 details: [
-                    { label: 'Arrived At',       value: intake.arrivedAt ? new Date(intake.arrivedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'N/A' },
+                    {
+                        label: 'Arrived At',
+                        value: intake.arrivedAt
+                            ? new Date(intake.arrivedAt).toLocaleString('en-GB', {
+                                day: '2-digit', month: 'short',
+                                hour: '2-digit', minute: '2-digit'
+                              })
+                            : 'N/A'
+                    },
                     { label: 'Picked Up Weight', value: `${intake.pickedUpWeightKg} kg` },
-                    { label: 'Truck',            value: intake.truckId || 'N/A' },
+                    {
+                        label: 'Vehicle',
+                        value: vehicle
+                            ? `${vehicle.plateNumber} — ${vehicle.type} (${vehicle.capacityKg} kg cap.)`
+                            : (intake.truckId || 'Not recorded')
+                    },
+                    {
+                        label: 'Driver',
+                        value: driver
+                            ? `${driver.firstName} ${driver.lastName} · ${driver.phoneNumber}`
+                            : 'Not assigned'
+                    },
                 ],
                 action: null
             });
         }
 
-        // Node 3 — Packhouse
+        // Node 3 — Packhouse processing
         if (processingBatch) {
             nodes.push({
                 id: 'stock',
                 type: 'stock',
                 title: `Packhouse: ${processingBatch.stockId || 'Processing Complete'}`,
                 details: [
+                    { label: 'Stock ID',  value: processingBatch.stockId || 'Pending confirmation' },
                     { label: 'Room',      value: processingBatch.assignedRoom || 'N/A' },
                     { label: 'Received',  value: processingBatch.receivedWeightKg ? `${processingBatch.receivedWeightKg} kg` : 'N/A' },
-                    { label: 'Processed', value: processingBatch.processedWeightKg ? `${processingBatch.processedWeightKg} kg` : 'N/A' },
-                    { label: 'Rejected',  value: processingBatch.rejectedWeightKg != null ? `${processingBatch.rejectedWeightKg} kg` : '0 kg' },
-                    { label: 'Status',    value: processingBatch.status, highlight: processingBatch.status === 'Done' ? 'text-green-600 font-bold' : '' },
+                    { label: 'Processed', value: processingBatch.processedWeightKg ? `${processingBatch.processedWeightKg} kg` : 'Not logged yet' },
+                    { label: 'Rejected',  value: processingBatch.rejectedWeightKg != null ? `${processingBatch.rejectedWeightKg} kg` : 'Not logged yet' },
+                    {
+                        label: 'Status',
+                        value: processingBatch.status,
+                        highlight: processingBatch.status === 'Done' ? 'text-green-600 font-bold' : ''
+                    },
                 ],
                 action: null
             });
         }
 
-        // Node 4 — Export batch
+        // Node 4 — Export batch (only if one exists for this stock)
         if (exportBatch) {
             nodes.push({
                 id: 'export',
@@ -134,7 +178,11 @@ export const getTraceabilityData = async (req, res) => {
                     { label: 'Weight',      value: `${exportBatch.allocatedWeightKg} kg` },
                     { label: 'Boxes',       value: String(exportBatch.boxCount) },
                     { label: 'Grade',       value: exportBatch.gradeLabel || 'Grade A' },
-                    { label: 'Status',      value: exportBatch.status, highlight: exportBatch.status === 'Shipped' ? 'text-green-600 font-bold' : '' },
+                    {
+                        label: 'Status',
+                        value: exportBatch.status,
+                        highlight: exportBatch.status === 'Shipped' ? 'text-green-600 font-bold' : ''
+                    },
                 ],
                 action: shipment
                     ? { label: `Shipment ${shipment.plNumber} — ${shipment.status}`, link: '/pm/inventory' }
@@ -142,19 +190,30 @@ export const getTraceabilityData = async (req, res) => {
             });
         }
 
-        // Node 5 — Shipment
+        // Node 5 — Shipment (only if exists and not cancelled)
         if (shipment) {
             nodes.push({
                 id: 'shipment',
                 type: 'shipment',
                 title: `Shipment: ${shipment.plNumber}`,
                 details: [
-                    { label: 'Flight',       value: shipment.flightNumber },
-                    { label: 'Destination',  value: shipment.destination },
-                    { label: 'Departure',    value: shipment.departureDate ? new Date(shipment.departureDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A' },
-                    { label: 'Total Weight', value: `${shipment.totalWeightKg} kg` },
-                    { label: 'Total Boxes',  value: String(shipment.totalBoxes) },
-                    { label: 'Status',       value: shipment.status, highlight: shipment.status === 'Dispatched' ? 'text-green-600 font-bold' : '' },
+                    { label: 'Flight',       value: shipment.flightNumber || 'N/A' },
+                    { label: 'Destination',  value: shipment.destination || 'N/A' },
+                    {
+                        label: 'Departure',
+                        value: shipment.departureDate
+                            ? new Date(shipment.departureDate).toLocaleDateString('en-GB', {
+                                day: '2-digit', month: 'short', year: 'numeric'
+                              })
+                            : 'N/A'
+                    },
+                    { label: 'Total Weight', value: shipment.totalWeightKg ? `${shipment.totalWeightKg} kg` : 'N/A' },
+                    { label: 'Total Boxes',  value: shipment.totalBoxes ? String(shipment.totalBoxes) : 'N/A' },
+                    {
+                        label: 'Status',
+                        value: shipment.status,
+                        highlight: shipment.status === 'Dispatched' ? 'text-green-600 font-bold' : ''
+                    },
                 ],
                 action: null
             });

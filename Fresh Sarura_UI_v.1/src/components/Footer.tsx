@@ -23,8 +23,29 @@ const Footer = () => {
           <div>
             <p className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Platform</p>
             <div className="flex flex-col gap-2">
-              {["How It Works", "For Your Team", "Production Chain"].map((l) => (
-                <span key={l} className="text-green-300/70 text-sm hover:text-green-300 cursor-pointer transition-colors">{l}</span>
+              {[
+                { label: "Home", id: "top" },
+                { label: "How It Works", id: "how-it-works" },
+                { label: "For Your Team", id: "for-your-team" },
+                { label: "Production Chain", id: "production-chain" }
+              ].map((l) => (
+                <button
+                  key={l.id}
+                  onClick={() => {
+                    if (window.location.pathname !== "/") {
+                      window.location.href = "/#" + l.id;
+                      return;
+                    }
+                    if (l.id === "top") {
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    } else {
+                      document.getElementById(l.id)?.scrollIntoView({ behavior: "smooth" });
+                    }
+                  }}
+                  className="text-green-300/70 text-sm hover:text-green-300 cursor-pointer transition-colors text-left"
+                >
+                  {l.label}
+                </button>
               ))}
             </div>
           </div>

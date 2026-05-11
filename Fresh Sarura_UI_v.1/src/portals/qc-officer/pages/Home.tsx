@@ -1,28 +1,65 @@
 import { useState, useEffect } from 'react';
-import { Truck, ClipboardList, CheckCircle, AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
+import { Truck, ClipboardList, CheckCircle, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { useNavigate } from 'react-router-dom';
 import RecordQCModal, { QCInspectionData } from '../components/RecordQCModal';
 import { api } from '../../../lib/api';
 
-// --- Types ---
-type InspectionStatus = 'RoomRequested' | 'Processing' | 'Done';
+type BatchStatus = 'RoomRequested' | 'Processing' | 'QCDone' | 'Done' | 'Spoiled';
 
-interface PriorityInspection {
+interface PriorityBatch {
     id: string;
     batchId: string;
     crop: string;
-    arrivalTime: string;
-    status: InspectionStatus;
+    status: BatchStatus;
     supplier: string;
     grossWeight: number;
+    assignedRoom?: string;
+}
+
+interface ActivityEvent {
+    id: string;
+    crop: string;
+    status: BatchStatus;
+    createdAt: string;
 }
 
 const statusStyles: Record<string, string> = {
-    'RoomRequested': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-    'Processing': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-    'Done': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    RoomRequested: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    Processing:    'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    QCDone:        'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+    Done:          'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    Spoiled:       'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+};
+
+const statusLabel: Record<string, string> = {
+    RoomRequested: 'Waiting for Room',
+    Processing:    'In Processing',
+    QCDone:        'Awaiting PM Confirmation',
+    Done:          'Done',
+    Spoiled:       'Spoiled',
+};
+
+const activityDescription: Record<string, string> = {
+    RoomRequested: 'Room requested — awaiting PM assignment',
+    Processing:    'Room assigned — processing in progress',
+    QCDone:        'Weights logged — awaiting PM confirmation',
+    Done:          'Confirmed and added to stock',
+    Spoiled:       'Marked as spoiled',
+};
+
+const DONUT_COLORS = ['#3b82f6', '#22c55e', '#ef4444'];
+
+
+const getWeekStart = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 6);
+    d.setHours(0, 0, 0, 0);
+    return d;
 };
 
 const Home = () => {
+    const navigate = useNavigate();
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : { name: 'QC Inspector' };
 
@@ -32,48 +69,93 @@ const Home = () => {
         passedToday: 0,
         rejectionRate: 0,
     });
-    const [inspections, setInspections] = useState<PriorityInspection[]>([]);
+    const [priorityQueue, setPriorityQueue] = useState<PriorityBatch[]>([]);
+    const [recentActivity, setRecentActivity] = useState<ActivityEvent[]>([]);
+    const [donutData, setDonutData] = useState([
+        { name: 'Received', value: 0 },
+        { name: 'Processed', value: 0 },
+        { name: 'Rejected', value: 0 },
+    ]);
     const [loading, setLoading] = useState(true);
     const [qcModalData, setQcModalData] = useState<QCInspectionData | null>(null);
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            // 1. Pending Intake (Declarations not picked up)
-            const resIntake = await api.get('/harvest-declarations?status=Pending');
+            const [resIntake, resBatches, resStock] = await Promise.all([
+                api.get('/harvest-declarations?status=Pending'),
+                api.get('/processing-batches/my'),
+                api.get('/stock'),
+            ]);
+
+            const allBatches: any[] = resBatches.data || [];
+            const weekStart = getWeekStart();
+
+            // --- KPI stats ---
             const pendingIntakeCount = resIntake.results || 0;
-
-            // 2. Pending QC (My Batches)
-            const resBatches = await api.get('/processing-batches/my');
-            const pendingQCBatches = (resBatches.data || []).filter((b: any) => b.status !== 'Done');
-
-            // 3. Today's Stats from Stock
-            const resStock = await api.get('/stock');
-            const doneToday = (resStock.data || []).filter((b: any) => 
-                new Date(b.updatedAt).toDateString() === new Date().toDateString()
+            const activeBatches = allBatches.filter(
+                b => b.status !== 'Done' && b.status !== 'Spoiled'
             );
 
-            const passedToday = doneToday.reduce((sum: number, b: any) => sum + (b.processedWeightKg || 0), 0);
-            const totalReceivedToday = doneToday.reduce((sum: number, b: any) => sum + (b.receivedWeightKg || 0), 0);
-            const totalRejectedToday = doneToday.reduce((sum: number, b: any) => sum + (b.rejectedWeightKg || 0), 0);
-            const rejectionRate = totalReceivedToday > 0 ? (totalRejectedToday / totalReceivedToday) * 100 : 0;
+            const stockItems: any[] = resStock.data || [];
+            const doneToday = stockItems.filter(
+                b => new Date(b.updatedAt).toDateString() === new Date().toDateString()
+            );
+            const passedToday = doneToday.reduce((s: number, b: any) => s + (b.processedWeightKg || 0), 0);
+            const totalReceivedToday = doneToday.reduce((s: number, b: any) => s + (b.receivedWeightKg || 0), 0);
+            const totalRejectedToday = doneToday.reduce((s: number, b: any) => s + (b.rejectedWeightKg || 0), 0);
+            const rejectionRate = totalReceivedToday > 0
+                ? (totalRejectedToday / totalReceivedToday) * 100
+                : 0;
 
             setStats({
                 pendingIntake: pendingIntakeCount,
-                pendingQC: pendingQCBatches.length,
+                pendingQC: activeBatches.length,
                 passedToday,
                 rejectionRate,
             });
 
-            setInspections(pendingQCBatches.map((b: any) => ({
-                id: b._id,
-                batchId: b._id,
-                crop: b.cropName,
-                arrivalTime: new Date(b.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                status: b.status,
-                supplier: b.intakeLogId?.farmerId?.full_name || 'Generic Source',
-                grossWeight: b.receivedWeightKg,
-            })));
+            // --- Priority queue: only RoomRequested and Processing ---
+            setPriorityQueue(
+                allBatches
+                    .filter(b => b.status === 'RoomRequested' || b.status === 'Processing')
+                    .map(b => ({
+                        id: b._id,
+                        batchId: b._id,
+                        crop: b.cropName,
+                        status: b.status,
+                        supplier: b.intakeLogId?.farmerId?.full_name || 'Generic Source',
+                        grossWeight: b.receivedWeightKg,
+                        assignedRoom: b.assignedRoom,
+                    }))
+            );
+
+            // --- Recent activity: last 5 batches sorted newest first ---
+            setRecentActivity(
+                [...allBatches]
+                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                    .slice(0, 5)
+                    .map(b => ({
+                        id: b._id,
+                        crop: b.cropName,
+                        status: b.status,
+                        createdAt: b.createdAt,
+                    }))
+            );
+
+            // --- Donut: this week's totals from all batches ---
+            const weekBatches = allBatches.filter(
+                b => new Date(b.createdAt) >= weekStart
+            );
+            const weekReceived  = weekBatches.reduce((s: number, b: any) => s + (b.receivedWeightKg || 0), 0);
+            const weekProcessed = weekBatches.reduce((s: number, b: any) => s + (b.processedWeightKg || 0), 0);
+            const weekRejected  = weekBatches.reduce((s: number, b: any) => s + (b.rejectedWeightKg || 0), 0);
+
+            setDonutData([
+                { name: 'Received', value: Math.round(weekReceived) },
+                { name: 'Processed', value: Math.round(weekProcessed) },
+                { name: 'Rejected', value: Math.round(weekRejected) },
+            ]);
 
         } catch (err) {
             console.error('Failed to fetch dashboard data:', err);
@@ -82,9 +164,7 @@ const Home = () => {
         }
     };
 
-    useEffect(() => {
-        fetchData();
-    }, []);
+    useEffect(() => { fetchData(); }, []);
 
     const kpiCards = [
         {
@@ -114,13 +194,12 @@ const Home = () => {
         {
             label: 'Rejection Rate',
             value: `${stats.rejectionRate.toFixed(1)}%`,
-            sub: 'Based on today\'s inspections',
+            sub: "Based on today's inspections",
             icon: AlertTriangle,
             color: 'text-red-600',
             bg: 'bg-red-50 dark:bg-red-900/20',
         },
     ];
-
 
     return (
         <>
@@ -129,28 +208,28 @@ const Home = () => {
                 {/* Welcome Banner */}
                 <div className="relative overflow-hidden rounded-2xl bg-[#5cb85c] p-8 text-white shadow-lg">
                     <div className="relative z-10">
-                        <h1 className="text-3xl font-bold mb-1">Welcome back, {user.name.split(' ')[0]}.</h1>
+                        <h1 className="text-3xl font-bold mb-1">
+                            Welcome back, {user.name.split(' ')[0]}.
+                        </h1>
                         <p className="text-green-100 text-base opacity-90">
                             Monitor today's intake, pending inspections, and packhouse floor status.
                         </p>
                     </div>
-                    <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-white opacity-10 blur-3xl"></div>
-                    <div className="absolute bottom-0 right-20 -mb-10 h-40 w-40 rounded-full bg-green-400 opacity-20 blur-2xl"></div>
+                    <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-white opacity-10 blur-3xl" />
+                    <div className="absolute bottom-0 right-20 -mb-10 h-40 w-40 rounded-full bg-green-400 opacity-20 blur-2xl" />
                 </div>
 
                 {/* KPI Ribbon */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    {kpiCards.map((card, index) => (
+                    {kpiCards.map((card, i) => (
                         <div
-                            key={index}
+                            key={i}
                             className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow"
                         >
                             <div className="flex justify-between items-start">
                                 <div>
                                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{card.label}</p>
-                                    <div className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">
-                                        {card.value}
-                                    </div>
+                                    <div className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">{card.value}</div>
                                     <p className="text-[11px] text-gray-400 mt-1">{card.sub}</p>
                                 </div>
                                 <div className={`p-3 rounded-lg ${card.bg}`}>
@@ -161,54 +240,76 @@ const Home = () => {
                     ))}
                 </div>
 
-                {/* Quick Action & Activity Area */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Main Area: Priority Queue | Donut | Quick Actions */}
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-                    {/* Left: Priority Inspections */}
-                    <div className="col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-theme overflow-hidden">
+                    {/* Priority Queue (2 cols) */}
+                    <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
                         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
                             <div>
                                 <h2 className="text-base font-bold text-gray-900 dark:text-white">Priority Queue</h2>
-                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Batches awaiting room or inspection</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                                    Batches awaiting room or ready to log
+                                </p>
                             </div>
-                            <button onClick={fetchData} className="p-2 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500 transition-colors">
-                                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                            </button>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead>
                                     <tr className="bg-gray-50 dark:bg-gray-700/50">
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Batch ID</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Crop</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action</th>
+                                        {['Batch ID', 'Crop', 'Weight', 'Status', 'Action'].map(h => (
+                                            <th key={h} className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                {h}
+                                            </th>
+                                        ))}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                                     {loading ? (
-                                        <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400">Loading queue...</td></tr>
-                                    ) : inspections.length === 0 ? (
-                                        <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400">No priority items today.</td></tr>
-                                    ) : inspections.map((row) => (
+                                        <tr>
+                                            <td colSpan={5} className="px-6 py-8 text-center text-gray-400 text-sm">
+                                                Loading queue...
+                                            </td>
+                                        </tr>
+                                    ) : priorityQueue.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={5} className="px-6 py-8 text-center text-gray-400 text-sm">
+                                                No active batches right now.
+                                            </td>
+                                        </tr>
+                                    ) : priorityQueue.map(row => (
                                         <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                                            <td className="px-6 py-4 text-sm font-semibold text-gray-900 dark:text-white font-mono">{row.id.slice(-6).toUpperCase()}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">{row.crop}</td>
+                                            <td className="px-6 py-4 text-sm font-semibold text-gray-900 dark:text-white font-mono">
+                                                {row.id.slice(-6).toUpperCase()}
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                                                {row.crop}
+                                            </td>
+                                            <td className="px-6 py-4 text-sm font-bold text-gray-900 dark:text-white">
+                                                {row.grossWeight.toLocaleString()} kg
+                                            </td>
                                             <td className="px-6 py-4">
                                                 <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${statusStyles[row.status]}`}>
-                                                    {row.status === 'RoomRequested' ? 'Waiting for Room' : row.status}
+                                                    {statusLabel[row.status]}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <button
                                                     disabled={row.status === 'RoomRequested'}
-                                                    onClick={() => setQcModalData({ intakeId: row.batchId, crop: row.crop, supplier: row.supplier, grossWeight: row.grossWeight })}
+                                                    onClick={() => setQcModalData({
+                                                        intakeId: row.batchId,
+                                                        crop: row.crop,
+                                                        supplier: row.supplier,
+                                                        grossWeight: row.grossWeight,
+                                                        assignedRoom: row.assignedRoom,
+                                                    })}
                                                     className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-colors shadow-sm ${
-                                                        row.status === 'RoomRequested' 
-                                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                                                        : 'bg-green-600 text-white hover:bg-green-700'
-                                                    }`}>
-                                                    {row.status === 'RoomRequested' ? 'Pending PM' : 'Start Inspection'} <ArrowRight size={12} />
+                                                        row.status === 'RoomRequested'
+                                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                            : 'bg-green-600 text-white hover:bg-green-700'
+                                                    }`}
+                                                >
+                                                    {row.status === 'RoomRequested' ? 'Pending PM' : 'Log Results'}
                                                 </button>
                                             </td>
                                         </tr>
@@ -218,29 +319,127 @@ const Home = () => {
                         </div>
                     </div>
 
-                    {/* Right: Quick Actions */}
-                    <div className="col-span-1 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-theme overflow-hidden">
+                    {/* Donut Chart (1 col) */}
+                    <div className="lg:col-span-1 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
                         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-                            <h2 className="text-base font-bold text-gray-900 dark:text-white">Summary</h2>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Quick insights</p>
+                            <h2 className="text-base font-bold text-gray-900 dark:text-white">This Week</h2>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                                Performance Overview (kg)
+                            </p>
                         </div>
-                        <div className="p-6 flex flex-col gap-4">
-                             <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700">
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Efficiency</p>
-                                <div className="flex items-end gap-2">
-                                    <span className="text-2xl font-bold text-gray-900 dark:text-white">95.8%</span>
-                                    <span className="text-xs text-green-600 mb-1 font-bold">+2.1% ↑</span>
+                        <div className="flex-1 flex flex-col justify-center p-4">
+                            {donutData.every(d => d.value === 0) ? (
+                                <div className="text-center py-8 text-gray-400 text-sm">
+                                    No batch data this week.
                                 </div>
-                             </div>
-                             <button 
-                                onClick={fetchData}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl border-2 border-green-600 text-green-700 dark:text-green-400 dark:border-green-500 font-semibold text-sm hover:bg-green-50 dark:hover:bg-green-900/20 transition-all"
-                             >
-                                Refresh Dashboard
-                             </button>
+                            ) : (
+                                <ResponsiveContainer width="100%" height={220}>
+                                    <PieChart>
+                                        <Pie
+                                            data={donutData}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={55}
+                                            outerRadius={80}
+                                            paddingAngle={3}
+                                            dataKey="value"
+                                        >
+                                            {donutData.map((_, i) => (
+                                                <Cell key={i} fill={DONUT_COLORS[i]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip
+                                            formatter={(value: any) => [`${value?.toLocaleString() ?? 0} kg`]}
+                                            contentStyle={{
+                                                borderRadius: '12px',
+                                                border: 'none',
+                                                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                                                fontSize: '12px',
+                                            }}
+                                        />
+                                        <Legend
+                                            verticalAlign="bottom"
+                                            iconType="circle"
+                                            iconSize={8}
+                                            formatter={(value) => (
+                                                <span className="text-[11px] text-gray-600 dark:text-gray-400 font-medium">{value}</span>
+                                            )}
+                                        />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            )}
                         </div>
                     </div>
 
+                    {/* Quick Actions (1 col) */}
+                    <div className="lg:col-span-1 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden p-6 flex flex-col">
+                        <h2 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                            <ShieldAlert size={18} className="text-green-500" /> Quick Actions
+                        </h2>
+                        <div className="flex flex-col gap-3 flex-1">
+                            {[
+                                { label: 'Request a processing room', onClick: () => navigate('/qc/intake') },
+                                { label: 'Log processing results',    onClick: () => navigate('/qc/processing') },
+                            ].map((q, idx) => (
+                                <button key={q.label} onClick={q.onClick}
+                                    className={`flex items-center justify-between p-3.5 rounded-xl transition-all text-left ${idx === 0 ? 'bg-[#5cb85c] text-white shadow-lg shadow-green-900/10 hover:bg-[#4cae4c] border-transparent' : 'border border-gray-100 dark:border-gray-700 hover:border-green-300 hover:bg-green-50 dark:hover:bg-green-900/10'}`}>
+                                    <span className={`text-sm font-bold ${idx === 0 ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`}>{q.label}</span>
+                                    {idx === 0 && <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">+</span>}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                </div>
+
+                {/* Bottom Row: Recent Activity Table (Full Width) */}
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                        <div>
+                            <h2 className="text-base font-bold text-gray-900 dark:text-white">Recent Activity</h2>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Real-time audit trail of batch processing events</p>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-gray-500 uppercase bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
+                                <tr>
+                                    <th className="px-6 py-3 font-semibold">Time</th>
+                                    <th className="px-6 py-3 font-semibold">Action</th>
+                                    <th className="px-6 py-3 font-semibold">Crop</th>
+                                    <th className="px-6 py-3 font-semibold text-right">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={4} className="px-6 py-8 text-center text-gray-400">Loading activity...</td>
+                                    </tr>
+                                ) : recentActivity.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={4} className="px-6 py-8 text-center text-gray-400">No recent activity on record.</td>
+                                    </tr>
+                                ) : recentActivity.map(event => (
+                                    <tr key={event.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                        <td className="px-6 py-4 text-gray-500 whitespace-nowrap">
+                                            {new Date(event.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                        </td>
+                                        <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
+                                            {activityDescription[event.status]}
+                                        </td>
+                                        <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
+                                            {event.crop}
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${statusStyles[event.status]}`}>
+                                                {statusLabel[event.status]}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -252,9 +451,12 @@ const Home = () => {
                 onSubmit={async (res) => {
                     try {
                         await api.patch(`/processing-batches/${res.intakeId}/complete`, {
-                            processedWeightKg: res.netWeight,
-                            rejectedWeightKg: res.rejectedWeight
+                            processedWeightKg: res.processedWeight,
+                            rejectedWeightKg: res.rejectedWeight,
+                            defectType: res.defectType,
+                            assignedGrade: res.grade,
                         });
+                        setQcModalData(null);
                         fetchData();
                     } catch (err) {
                         console.error('Failed to complete QC:', err);

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FlaskConical, PackageCheck, Loader2, RefreshCw, ClipboardCheck, ArrowRight } from 'lucide-react';
 import { api } from '../../../lib/api';
-import LogProcessingResultsModal from '../components/LogProcessingResultsModal';
+import RecordQCModal from '../components/RecordQCModal';
 import Toast from '../../shared/component/Toast';
 
 type IntakeLog = {
@@ -26,7 +26,7 @@ type ProcessingBatch = {
   assignedRoom?: string;
   status: 'RoomRequested' | 'Processing' | 'Done';
   createdAt: string;
-  intakeLogId: { pickedUpWeightKg: number; arrivedAt: string };
+  intakeLogId: any;
 };
 
 const Processing = () => {
@@ -34,8 +34,7 @@ const Processing = () => {
   const [batches, setBatches] = useState<ProcessingBatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [requestingRoomId, setRequestingRoomId] = useState<string | null>(null);
-  const [selectedBatch, setSelectedBatch] = useState<ProcessingBatch | null>(null);
-  const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
+  const [selectedBatch, setSelectedBatch] = useState<any | null>(null);
   const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -221,8 +220,8 @@ const Processing = () => {
                     <p className="text-sm font-bold text-gray-900 dark:text-white">{batch.cropName}</p>
                     <p className="text-xs text-gray-500">{batch.receivedWeightKg.toLocaleString()} kg received</p>
                   </div>
-                  <span className="text-xs font-semibold px-3 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                    Waiting for PM
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                    Room Requested
                   </span>
                 </div>
               ))}
@@ -261,7 +260,15 @@ const Processing = () => {
                     </div>
                   </div>
                   <button
-                    onClick={() => { setSelectedBatch(batch); setIsResultsModalOpen(true); }}
+                    onClick={() => { 
+                      setSelectedBatch({
+                        intakeId: batch._id,
+                        crop: batch.cropName,
+                        supplier: batch.intakeLogId?.farmerId?.full_name || 'Generic Source',
+                        grossWeight: batch.receivedWeightKg,
+                        assignedRoom: batch.assignedRoom
+                      }); 
+                    }}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-green-600 text-white hover:bg-green-700 transition-colors"
                   >
                     <ClipboardCheck size={13} /> Log Results
@@ -273,17 +280,27 @@ const Processing = () => {
         </div>
       </div>
 
-      <LogProcessingResultsModal
-        isOpen={isResultsModalOpen}
-        onClose={() => setIsResultsModalOpen(false)}
-        batch={selectedBatch}
-        onSuccess={() => { 
-          setIsResultsModalOpen(false); 
-          setToast({
-            message: 'Results Logged',
-            subtitle: `Final weights for ${selectedBatch?.cropName} have been recorded.`
-          });
-          fetchData(); 
+      <RecordQCModal
+        isOpen={!!selectedBatch}
+        onClose={() => setSelectedBatch(null)}
+        data={selectedBatch}
+        onSubmit={async (res) => {
+          try {
+            await api.patch(`/processing-batches/${res.intakeId}/complete`, {
+              processedWeightKg: res.processedWeight,
+              rejectedWeightKg: res.rejectedWeight,
+              defectType: res.defectType,
+              assignedGrade: res.grade
+            });
+            setSelectedBatch(null);
+            setToast({
+              message: 'Results Logged',
+              subtitle: `Final weights for ${selectedBatch?.crop} have been recorded.`
+            });
+            fetchData();
+          } catch (err) {
+            console.error('Failed to complete QC:', err);
+          }
         }}
       />
 

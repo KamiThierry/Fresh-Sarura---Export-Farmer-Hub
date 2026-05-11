@@ -79,6 +79,18 @@ const LoginPage = () => {
       />
       <div className="absolute inset-0 z-10 bg-[#0a1c12]/65" />
 
+      {/* Back to home */}
+      <Link
+        to="/"
+        className="absolute top-6 left-6 z-30 inline-flex items-center gap-1.5 text-white/85 hover:text-white text-[13px] font-medium transition-colors group"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          className="transition-transform group-hover:-translate-x-0.5 duration-200">
+          <path d="M19 12H5M12 5l-7 7 7 7"/>
+        </svg>
+        Back to Home
+      </Link>
+
       {/* Login Card */}
       <div
         className="relative z-20 w-full max-w-[400px] bg-[#0f2316]/72 backdrop-blur-[24px] saturate-[1.4] border border-white/14 rounded-[20px] p-[28px_24px] md:p-[36px_40px] shadow-[0_32px_80px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.08)] animate-in fade-in zoom-in duration-[350ms] ease-[cubic-bezier(0.34,1.2,0.64,1)]"

@@ -6,30 +6,74 @@ import User from '../models/User.js';
 
 export const getActivityStats = async (req, res) => {
     try {
-        const months = parseInt(req.query.months) || 3;
-        
+        const range = req.query.range || '90days';
         const now = new Date();
         const data = [];
 
-        for (let i = months - 1; i >= 0; i--) {
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
-            
-            const monthLabel = startOfMonth.toLocaleString('default', { month: 'short' });
+        if (range === '7days') {
+            for (let i = 6; i >= 0; i--) {
+                const startOfDay = new Date(now);
+                startOfDay.setDate(now.getDate() - i);
+                startOfDay.setHours(0, 0, 0, 0);
+                
+                const endOfDay = new Date(now);
+                endOfDay.setDate(now.getDate() - i);
+                endOfDay.setHours(23, 59, 59, 999);
 
-            const farmersCount = await Farmer.countDocuments({
-                createdAt: { $gte: startOfMonth, $lte: endOfMonth }
-            });
+                const label = startOfDay.toLocaleDateString('default', { weekday: 'short' });
 
-            const cyclesCount = await CropCycle.countDocuments({
-                createdAt: { $gte: startOfMonth, $lte: endOfMonth }
-            });
+                const farmersCount = await Farmer.countDocuments({
+                    createdAt: { $gte: startOfDay, $lte: endOfDay }
+                });
 
-            data.push({
-                month: monthLabel,
-                farmers: farmersCount,
-                cycles: cyclesCount
-            });
+                const cyclesCount = await CropCycle.countDocuments({
+                    createdAt: { $gte: startOfDay, $lte: endOfDay }
+                });
+
+                data.push({ label, farmers: farmersCount, cycles: cyclesCount });
+            }
+        } else if (range === '30days') {
+            // Weekly buckets for 30 days
+            for (let i = 3; i >= 0; i--) {
+                const startOfWeek = new Date(now);
+                startOfWeek.setDate(now.getDate() - (i * 7 + 6));
+                startOfWeek.setHours(0, 0, 0, 0);
+
+                const endOfWeek = new Date(now);
+                endOfWeek.setDate(now.getDate() - (i * 7));
+                endOfWeek.setHours(23, 59, 59, 999);
+
+                const label = `Week ${4 - i}`;
+
+                const farmersCount = await Farmer.countDocuments({
+                    createdAt: { $gte: startOfWeek, $lte: endOfWeek }
+                });
+
+                const cyclesCount = await CropCycle.countDocuments({
+                    createdAt: { $gte: startOfWeek, $lte: endOfWeek }
+                });
+
+                data.push({ label, farmers: farmersCount, cycles: cyclesCount });
+            }
+        } else {
+            // Default 3 months (90 days)
+            const months = 3;
+            for (let i = months - 1; i >= 0; i--) {
+                const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
+                
+                const label = startOfMonth.toLocaleString('default', { month: 'short' });
+
+                const farmersCount = await Farmer.countDocuments({
+                    createdAt: { $gte: startOfMonth, $lte: endOfMonth }
+                });
+
+                const cyclesCount = await CropCycle.countDocuments({
+                    createdAt: { $gte: startOfMonth, $lte: endOfMonth }
+                });
+
+                data.push({ label, farmers: farmersCount, cycles: cyclesCount });
+            }
         }
 
         res.status(200).json(data);
