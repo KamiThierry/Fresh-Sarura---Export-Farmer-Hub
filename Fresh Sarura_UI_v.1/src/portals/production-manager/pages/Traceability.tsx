@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import jsPDF from 'jspdf';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Search, XCircle as XCircleIcon, ShieldCheck, Box, Thermometer, Plane, Download, ExternalLink, AlertTriangle, CheckCircle, XCircle, Clock, Printer, FileCheck, User, Loader2 } from 'lucide-react';
+import { Search, XCircle as XCircleIcon, ShieldCheck, Box, Plane, ExternalLink, AlertTriangle, CheckCircle, XCircle, Clock, FileCheck, User, Loader2 } from 'lucide-react';
 import { api } from '../../../lib/api';
 import logo from '@/assets/sarura_logo_nav.png';
 import autoTable from 'jspdf-autotable';
@@ -302,7 +302,7 @@ const Traceability = () => {
                 pageWidth / 2, 280, { align: 'center' }
             );
             doc.text(
-                'Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw',
+                'Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com',
                 pageWidth / 2, 287, { align: 'center' }
             );
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, 287, { align: 'right' });
@@ -324,7 +324,7 @@ const Traceability = () => {
                     <button
                         onClick={() => setActiveTab('tracer')}
                         className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'tracer'
-                            ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                            ? 'bg-white dark:bg-gray-700 text-green-600 dark:text-green-400 shadow-sm'
                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                             }`}
                     >
@@ -333,7 +333,7 @@ const Traceability = () => {
                     <button
                         onClick={() => setActiveTab('compliance')}
                         className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'compliance'
-                            ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                            ? 'bg-white dark:bg-gray-700 text-green-600 dark:text-green-400 shadow-sm'
                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                             }`}
                     >
@@ -352,7 +352,7 @@ const Traceability = () => {
                                     <input
                                         type="text"
                                         placeholder="Enter Batch ID (e.g., EB-XXXXXX)..."
-                                        className="w-full pl-14 pr-4 py-5 rounded-l-2xl bg-white dark:bg-gray-800 border-2 border-transparent focus:border-blue-500 text-lg shadow-sm outline-none dark:text-white transition-all"
+                                        className="w-full pl-14 pr-4 py-5 rounded-l-2xl bg-white dark:bg-gray-800 border-2 border-transparent focus:border-green-500 text-lg shadow-sm outline-none dark:text-white transition-all"
                                         value={searchTerm}
                                         onFocus={() => setShowDropdown(true)}
                                         onChange={(e) => {
@@ -371,13 +371,13 @@ const Traceability = () => {
                                                         setSearchTerm(opt.id);
                                                         setShowDropdown(false);
                                                     }}
-                                                    className="w-full px-5 py-4 flex items-center justify-between hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors text-left border-b border-gray-50 dark:border-gray-700/50 last:border-0"
+                                                    className="w-full px-5 py-4 flex items-center justify-between hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors text-left border-b border-gray-50 dark:border-gray-700/50 last:border-0"
                                                 >
                                                     <div>
                                                         <p className="text-base font-bold text-gray-900 dark:text-white font-mono">{opt.id}</p>
                                                         <p className="text-xs text-gray-500 uppercase tracking-wider">{opt.produce || 'Unknown Produce'}</p>
                                                     </div>
-                                                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${opt.type === 'Stock' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${opt.type === 'Stock' ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600'}`}>
                                                         {opt.type}
                                                     </span>
                                                 </button>
@@ -388,7 +388,7 @@ const Traceability = () => {
                                 <button
                                     type="submit"
                                     disabled={isLoading}
-                                    className="px-8 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-50 flex items-center gap-2"
+                                    className="px-8 bg-green-600 hover:bg-green-700 text-white font-bold text-lg transition-colors shadow-lg shadow-green-900/20 disabled:opacity-50 flex items-center gap-2"
                                 >
                                     {isLoading && <Loader2 size={20} className="animate-spin" />}
                                     Search
@@ -418,7 +418,7 @@ const Traceability = () => {
 
                     {isLoading && (
                         <div className="flex flex-col items-center justify-center py-20 gap-4">
-                            <Loader2 size={40} className="animate-spin text-blue-600" />
+                            <Loader2 size={40} className="animate-spin text-green-600" />
                             <p className="text-gray-500 font-medium">Reconstructing Batch Lifecycle...</p>
                         </div>
                     )}
@@ -494,7 +494,7 @@ const Traceability = () => {
                                                 {node.action && (
                                                     <button 
                                                         onClick={() => node.action.link && navigate(node.action.link)}
-                                                        className="flex items-center gap-2 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:underline"
+                                                        className="flex items-center gap-2 text-sm font-semibold text-green-600 dark:text-green-400 hover:text-green-700 hover:underline"
                                                     >
                                                         <ExternalLink size={16} />
                                                         {node.action.label}
@@ -547,7 +547,7 @@ const Traceability = () => {
                                     <p className="text-xs text-gray-500">Monitor active certificates across the supply chain.</p>
                                 </div>
                                 <button
-                                    className="text-sm text-blue-600 font-semibold hover:underline"
+                                    className="text-sm text-green-600 font-semibold hover:underline"
                                     onClick={() => { setCertFilter(null); navigate('/traceability'); }}
                                 >
                                     {certFilter ? 'Clear Filter' : 'View All'}
@@ -555,13 +555,13 @@ const Traceability = () => {
                             </div>
 
                             {certFilter && (
-                                <div className="px-6 py-3 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800 flex items-center gap-3">
-                                    <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">
+                                <div className="px-6 py-3 bg-green-50 dark:bg-green-900/20 border-b border-green-100 dark:border-green-800 flex items-center gap-3">
+                                    <span className="text-xs font-semibold text-green-700 dark:text-green-300">
                                         Filtered: <strong>{certFilter.farmerName}</strong>{certFilter.certLabel ? ` — ${certFilter.certLabel}` : ''}
                                     </span>
                                     <button
                                         onClick={() => { setCertFilter(null); navigate('/traceability'); }}
-                                        className="ml-auto flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 transition-colors"
+                                        className="ml-auto flex items-center gap-1 text-xs text-green-500 hover:text-green-700 transition-colors"
                                     >
                                         <XCircleIcon size={14} /> Clear
                                     </button>

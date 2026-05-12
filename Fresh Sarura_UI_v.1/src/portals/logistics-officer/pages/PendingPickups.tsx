@@ -226,7 +226,7 @@ const PendingPickups = () => {
       doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
       doc.text('This is a computer generated report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
       const footerY = 288;
-      doc.text('Kigali - Rwanda | +250 788 123 456 | logistics@freshsarura.rw | www.freshsarura.rw', pageWidth / 2, footerY, { align: 'center' });
+      doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
       doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
     }
 

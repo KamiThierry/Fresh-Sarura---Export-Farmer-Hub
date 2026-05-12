@@ -261,7 +261,7 @@ const FindBatchModal = ({ isOpen, onClose }: FindBatchModalProps) => {
                 pageWidth / 2, 280, { align: 'center' }
             );
             doc.text(
-                'Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw',
+                'Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com',
                 pageWidth / 2, 287, { align: 'center' }
             );
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, 287, { align: 'right' });

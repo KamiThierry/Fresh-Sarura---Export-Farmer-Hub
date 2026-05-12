@@ -143,13 +143,15 @@ const ColdRoom = () => {
 
         autoTable(doc, {
             startY: yPos + 10,
-            head: [['BATCH ID', 'CROP', 'RECEIVED', 'PROCESSED', 'NET STOCK', 'STATUS']],
+            head: [['BATCH ID', 'CROP', 'RECEIVED', 'PROCESSED', 'REJECTED', 'NET STOCK', 'ENTRY DATE', 'STATUS']],
             body: filtered.map(r => [
                 r.batchId.slice(-8).toUpperCase(),
                 toTitleCase(r.crop),
                 `${r.received.toLocaleString()} kg`,
                 `${r.processed.toLocaleString()} kg`,
+                `${r.rejected.toLocaleString()} kg`,
                 `${r.netStock.toLocaleString()} kg`,
+                r.entryDate,
                 r.status === 'Done' ? 'Stocked' : r.status
             ]),
             theme: 'striped',
@@ -167,7 +169,7 @@ const ColdRoom = () => {
             doc.line(15, 275, pageWidth - 15, 275);
             doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
             doc.text('This is a computer generated report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
-            doc.text('Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw', pageWidth / 2, 287, { align: 'center' });
+            doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, 287, { align: 'center' });
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, 287, { align: 'right' });
         }
 

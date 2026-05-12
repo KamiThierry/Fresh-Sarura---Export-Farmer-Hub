@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import {
     Scale, Users, CloudSun, AlertTriangle,
     Activity, TrendingUp, Truck, Package,
-    Sprout, Leaf, Calendar, Loader2
+    Sprout, Leaf, Calendar, Loader2,
+    Clock, ArrowRight
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import HarvestReadyModal from '../components/HarvestReadyModal';
@@ -16,7 +17,7 @@ const FarmDashboard = () => {
     const [isSuppliesModalOpen, setIsSuppliesModalOpen] = useState(false);
     const [timeRange, setTimeRange] = useState(30); // days
 
-    const { dashboard, cycles, loading, submitBudgetRequest, declareHarvest } = useFarmManager();
+    const { dashboard, cycles, activity, loading, submitBudgetRequest, declareHarvest } = useFarmManager();
 
     // Get farmer name from localStorage user object (set at login)
     const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -319,6 +320,58 @@ const FarmDashboard = () => {
                                 View All Field Plans →
                             </button>
                         </div>
+                    </div>
+                </div>
+
+                {/* Recent Activity */}
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                        <div>
+                            <h2 className="text-base font-bold text-gray-900 dark:text-white">Recent Activity</h2>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Real-time update on your field tasks and reports</p>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
+                                <tr>
+                                    <th className="px-6 py-3 font-semibold">Time</th>
+                                    <th className="px-6 py-3 font-semibold">Event</th>
+                                    <th className="px-6 py-3 font-semibold text-right">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                {!activity || activity.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={3} className="px-6 py-8 text-center text-gray-400">No recent activity recorded</td>
+                                    </tr>
+                                ) : (
+                                    activity.map((item: any) => (
+                                        <tr key={item.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
+                                            <td className="px-6 py-4 text-gray-500">
+                                                {new Date(item.time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                            </td>
+                                            <td className="px-6 py-4 font-medium text-gray-800 dark:text-gray-200">
+                                                {item.event}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                                    item.status === 'Approved' || item.status === 'Verified' || item.status === 'Active' || item.status === 'Success'
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : item.status === 'Pending' || item.status === 'Submitted'
+                                                    ? 'bg-blue-100 text-blue-700'
+                                                    : item.status === 'Flagged' || item.status === 'Rejected'
+                                                    ? 'bg-red-100 text-red-700'
+                                                    : 'bg-gray-100 text-gray-700'
+                                                }`}>
+                                                    {item.status}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>

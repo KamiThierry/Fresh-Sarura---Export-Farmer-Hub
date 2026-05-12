@@ -86,7 +86,9 @@ const InventoryManagement = () => {
             const res = await api.get('/rooms');
             const data = res.data?.data || res.data || [];
             setAllRooms(data);
-            setAvailableRooms(data.filter((r: any) => r.status === 'Available'));
+            setAvailableRooms(
+                data.filter((r: any) => r.status === 'Available' && r.type === 'Cold Room')
+            );
         } catch (err) {
             console.error('Failed to fetch rooms:', err);
         }
@@ -205,7 +207,7 @@ const InventoryManagement = () => {
                             id: `pb-done-${b._id}`,
                             timestamp: new Date(b.updatedAt || b.createdAt || Date.now()),
                             type: 'Stock Recorded',
-                            description: `${b.cropName || 'Batch'} processed — ${approved} kg approved${rejected > 0 ? `, ${rejected} kg rejected` : ''}`,
+                            description: `${b.cropName || 'Batch'} processed — ${approved} kg approved${rejected > 0 ? `, ${rejected} kg rejected${b.primaryDefectType && b.primaryDefectType !== 'None' ? ` due to ${b.primaryDefectType}` : ''}` : ''}`,
                             impact: `+${approved} kg / −${rejected} kg`,
                             impactType: rejected > 0 ? 'mixed' : 'positive',
                             actor: b.requestedBy?.name || 'QC Officer',
@@ -518,14 +520,20 @@ const InventoryManagement = () => {
             ), 'Recent_Activity');
         } else if (activeTab === 'active_inventory') {
             XLSX.utils.book_append_sheet(wb, makeSheet(
-                ['Stock ID', 'Produce', 'Weight (kg)', 'Storage', 'Status', 'Days in Stock'],
+                ['Stock ID', 'Produce', 'Farmer / Source', 'Grade', 'Processed (kg)', 'Rejected (kg)', 'Defect Type', 'Allocated (kg)', 'Available (kg)', 'Storage', 'Date In Stock', 'Status'],
                 mappedInventoryItems.map((i: any) => [
                     i.id, 
                     i.produce, 
+                    i.farmerSource || '—',
+                    i.grade || '—',
                     i.processedKg, 
-                    i.storageLocation, 
-                    i.status, 
-                    Math.floor((Date.now() - i.dateInStock.getTime()) / (1000 * 60 * 60 * 24)) + ' days'
+                    i.rejectedKg || 0,
+                    i.primaryDefectType && i.primaryDefectType !== 'None' ? i.primaryDefectType : '—',
+                    i.totalAllocated || 0,
+                    i.availableKg || 0,
+                    i.storageLocation || '—', 
+                    i.dateInStock.toLocaleDateString(),
+                    i.status
                 ])
             ), 'Inventory_Stock');
         } else if (activeTab === 'export_batches') {
@@ -602,8 +610,20 @@ const InventoryManagement = () => {
         } else if (activeTab === 'active_inventory') {
             autoTable(doc, {
                 startY: yPos + 10,
-                head: [['STOCK ID', 'PRODUCE', 'WEIGHT (KG)', 'LOCATION', 'STATUS']],
-                body: inventoryItems.map(i => [i.id, i.produce, i.processedKg.toLocaleString(), i.storageLocation, i.status]),
+                head: [['ID', 'PRODUCE', 'SOURCE', 'GRADE', 'PROC.', 'REJ.', 'ALLOC.', 'AVAIL.', 'LOCATION', 'DATE', 'STATUS']],
+                body: inventoryItems.map(i => [
+                    i.id, 
+                    i.produce, 
+                    i.farmerSource || '—',
+                    i.grade || '—', 
+                    `${i.processedKg.toLocaleString()} kg`, 
+                    i.rejectedKg > 0 ? `${i.rejectedKg.toLocaleString()} kg${i.primaryDefectType && i.primaryDefectType !== 'None' ? `\n(${i.primaryDefectType})` : ''}` : '—', 
+                    `${i.totalAllocated || 0} kg`,
+                    `${i.availableKg || 0} kg`,
+                    i.storageLocation || '—', 
+                    i.dateInStock.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }),
+                    i.status
+                ]),
                 theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
                 margin: { left: 15, right: 15, bottom: 30 }
             });
@@ -638,7 +658,7 @@ const InventoryManagement = () => {
             doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
             doc.text('This is a computer generated report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
             const footerY = 288;
-            doc.text('Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw', pageWidth / 2, footerY, { align: 'center' });
+            doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
         }
 
@@ -974,6 +994,26 @@ const InventoryManagement = () => {
                             </div>
                         </>
                     )}
+
+                    {(searchTerm || eventTypeFilter !== 'all' || timeRangeFilter !== 'all' || produceFilter !== 'all' || roomFilter !== 'all' || exportClientFilter !== 'all' || exportStatusFilter !== 'all') && (
+                        <button
+                            onClick={() => {
+                                setSearchTerm('');
+                                setEventTypeFilter('all');
+                                setTimeRangeFilter('all');
+                                setProduceFilter('all');
+                                setRoomFilter('all');
+                                setExportClientFilter('all');
+                                setExportStatusFilter('all');
+                                setActivityPage(1);
+                                setInventoryPage(1);
+                                setExportPage(1);
+                            }}
+                            className="text-xs text-green-600 hover:text-green-700 font-bold transition-colors px-2 whitespace-nowrap"
+                        >
+                            Clear Filters
+                        </button>
+                    )}
                 </div>
 
 
@@ -1009,8 +1049,13 @@ const InventoryManagement = () => {
                                                         <span className="text-xs text-green-600 dark:text-green-400 font-medium">
                                                             ✓ {batch.processedWeightKg} kg approved
                                                         </span>
-                                                        <span className="text-xs text-red-500 dark:text-red-400 font-medium">
+                                                        <span className="text-xs text-red-500 dark:text-red-400 font-medium flex items-center gap-1">
                                                             ✗ {batch.rejectedWeightKg} kg rejected
+                                                            {batch.primaryDefectType && batch.primaryDefectType !== 'None' && (
+                                                                <span className="ml-1 text-[11px] text-gray-500 dark:text-gray-400">
+                                                                    ({batch.primaryDefectType})
+                                                                </span>
+                                                            )}
                                                         </span>
                                                         <span className="text-xs text-gray-400">
                                                             QC by {batch.requestedBy?.name || 'QC Officer'}
@@ -1037,14 +1082,14 @@ const InventoryManagement = () => {
                                                 <div className="border-t border-amber-100 dark:border-amber-800/20 bg-amber-50/40 dark:bg-amber-900/5 p-4 flex items-end gap-4">
                                                     <div className="flex flex-col gap-1 flex-1">
                                                         <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                                                            Assign Final Storage Room (optional — keeps current if blank)
+                                                            Select Cold Room for Long-term Storage <span className="text-red-500">*</span>
                                                         </label>
                                                         <select
                                                             value={selectedRoomForConfirm}
                                                             onChange={e => setSelectedRoomForConfirm(e.target.value)}
                                                             className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-400"
                                                         >
-                                                            <option value="">Keep current room ({batch.assignedRoom || 'none'})</option>
+                                                            <option value="">— Select a cold room —</option>
                                                             {availableRooms.map(room => (
                                                                 <option key={room._id} value={room._id}>
                                                                     {room.name} — {room.type} ({room.capacityKg} kg capacity)
@@ -1055,7 +1100,7 @@ const InventoryManagement = () => {
 
                                                     <button
                                                         onClick={() => handleConfirmBatch(batch._id)}
-                                                        disabled={isConfirming}
+                                                        disabled={isConfirming || !selectedRoomForConfirm}
                                                         className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors disabled:opacity-50 flex items-center gap-2"
                                                     >
                                                         {isConfirming ? (
@@ -1082,6 +1127,7 @@ const InventoryManagement = () => {
                                         <th className="px-6 py-4">Farmer / Source</th>
                                         <th className="px-6 py-4">Grade</th>
                                         <th className="px-6 py-4">Processed</th>
+                                        <th className="px-6 py-4">Rejected</th>
                                         <th className="px-6 py-4">Allocated</th>
                                         <th className="px-6 py-4">Available</th>
                                         <th className="px-6 py-4">Location</th>
@@ -1120,15 +1166,31 @@ const InventoryManagement = () => {
                                                     </td>
 
                                                     {/* Grade */}
-                                                    <td className="px-6 py-4">
-                                                        <span className="inline-flex px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                                                            {item.grade}
-                                                        </span>
+                                                    <td className="px-6 py-4 text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                        {item.grade || '—'}
                                                     </td>
 
-                                                    {/* Processed (total from QC) */}
-                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                                                    {/* Processed */}
+                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
                                                         {item.processedKg.toLocaleString()} kg
+                                                    </td>
+
+                                                    {/* Rejected */}
+                                                    <td className="px-6 py-4 text-sm">
+                                                        {item.rejectedKg > 0 ? (
+                                                            <div className="flex flex-col">
+                                                                <span className="text-red-500 dark:text-red-400 font-medium">
+                                                                    -{item.rejectedKg.toLocaleString()} kg
+                                                                </span>
+                                                                {item.primaryDefectType && item.primaryDefectType !== 'None' && (
+                                                                    <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                                                        {item.primaryDefectType}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-gray-400">—</span>
+                                                        )}
                                                     </td>
 
                                                     {/* Allocated (reserved in export batches) */}

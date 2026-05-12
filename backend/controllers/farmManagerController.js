@@ -396,3 +396,77 @@ export const getMyYieldForecasts = async (req, res) => {
         res.status(500).json({ status: 'error', message: err.message });
     }
 };
+
+// GET /api/v1/farm-manager/activity
+export const getMyActivity = async (req, res) => {
+    try {
+        const farmer = await getMyFarmer(req.user._id);
+        const limit = parseInt(req.query.limit) || 10;
+
+        // 1. Crop Cycles Assigned
+        const cycles = await CropCycle.find({ farmer_id: farmer._id })
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .lean();
+        const formattedCycles = cycles.map(c => ({
+            id: c._id,
+            type: 'cycle',
+            time: c.createdAt,
+            event: `New crop cycle assigned: ${c.crop_name}`,
+            status: c.status.charAt(0).toUpperCase() + c.status.slice(1)
+        }));
+
+        // 2. Budget Requests
+        const budgets = await BudgetRequest.find({ submittedBy: req.user._id })
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .lean();
+        const formattedBudgets = budgets.map(b => ({
+            id: b._id,
+            type: 'budget',
+            time: b.createdAt,
+            event: `Budget request submitted for ${b.cycleName}`,
+            status: b.approvalStatus
+        }));
+
+        // 3. Flagged Reports
+        const reports = await FieldReport.find({ submittedBy: req.user._id, status: 'Flagged' })
+            .sort({ updatedAt: -1 })
+            .limit(limit)
+            .lean();
+        const formattedReports = reports.map(r => ({
+            id: r._id,
+            type: 'report',
+            time: r.updatedAt,
+            event: `Field report flagged by PM: ${r.description}`,
+            status: 'Flagged'
+        }));
+
+        // 4. Yield Forecasts
+        const forecasts = await YieldForecast.find({ submittedBy: req.user._id })
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .lean();
+        const formattedForecasts = forecasts.map(f => ({
+            id: f._id,
+            type: 'forecast',
+            time: f.createdAt,
+            event: `Yield forecast submitted: ${f.predictionKg} kg`,
+            status: f.status
+        }));
+
+        const combined = [
+            ...formattedCycles,
+            ...formattedBudgets,
+            ...formattedReports,
+            ...formattedForecasts
+        ];
+
+        combined.sort((a, b) => new Date(b.time) - new Date(a.time));
+        const topRecent = combined.slice(0, limit);
+
+        res.status(200).json({ status: 'success', data: topRecent });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};

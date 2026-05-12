@@ -6,6 +6,7 @@ export const useFarmManager = () => {
   const [budgetRequests, setBudgetRequests] = useState<any[]>([]);
   const [fieldReports, setFieldReports] = useState<any[]>([]);
   const [forecasts, setForecasts] = useState<any[]>([]);
+  const [activity, setActivity] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,6 +50,15 @@ export const useFarmManager = () => {
     try {
       const res = await api.get('/farm-manager/yield-forecasts');
       setForecasts(res.data);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, []);
+
+  const fetchActivity = useCallback(async () => {
+    try {
+      const res = await api.get('/farm-manager/activity?limit=6');
+      setActivity(res.data);
     } catch (err: any) {
       setError(err.message);
     }
@@ -160,9 +170,10 @@ export const useFarmManager = () => {
       fetchBudgetRequests(),
       fetchFieldReports(),
       fetchForecasts(),
+      fetchActivity(),
     ]);
     setLoading(false);
-  }, [fetchDashboard, fetchCycles, fetchBudgetRequests, fetchFieldReports, fetchForecasts]);
+  }, [fetchDashboard, fetchCycles, fetchBudgetRequests, fetchFieldReports, fetchForecasts, fetchActivity]);
 
   useEffect(() => {
     refreshAll();
@@ -174,6 +185,7 @@ export const useFarmManager = () => {
     budgetRequests,
     fieldReports,
     forecasts,
+    activity,
     loading,
     error,
     submitBudgetRequest,
@@ -185,5 +197,6 @@ export const useFarmManager = () => {
     refreshAll,
     fetchCycles,
     fetchForecasts,
+    fetchActivity,
   };
 };

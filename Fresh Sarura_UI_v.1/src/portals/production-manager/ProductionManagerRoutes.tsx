@@ -5,14 +5,14 @@ import Dashboard from './pages/Dashboard';
 
 import FarmerManagement from './pages/FarmerManagement';
 import InventoryManagement from './pages/InventoryManagement';
-import QualityControl from './pages/QualityControl';
+import QCInsights from './pages/QCInsights';
 import Logistics from './pages/Logistics';
 import CreatePackingListModal from './components/CreatePackingListModal';
 import CropPlanning from './pages/CropPlanning';
 import Traceability from './pages/Traceability';
 import AnalyticsReporting from './pages/AnalyticsReporting';
 import SettingsPage from './pages/Settings';
-import ClientRequests from './pages/ClientRequests';
+// import ClientRequests from './pages/ClientRequests';
 import RoomManagement from './pages/RoomManagement';
 
 import QCInspectionModal from './components/QCInspectionModal';
@@ -27,10 +27,9 @@ const ProductionManagerRoutes = () => {
         </PMProvider>
     );
 };
-
 const ProductionManagerApp = () => {
     const [isIntakeOpen, setIsIntakeOpen] = useState(false);
-    const [isQCOpen, setIsQCOpen] = useState(false);
+    // const [isQCOpen, setIsQCOpen] = useState(false);
     const [isTraceabilityOpen, setIsTraceabilityOpen] = useState(false);
     const [isPackingListOpen, setIsPackingListOpen] = useState(false);
     const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
@@ -61,6 +60,7 @@ const ProductionManagerApp = () => {
         setIsIntakeOpen(false);
     };
 
+    /*
     const handleQCInspection = () => {
         setIsQCOpen(true);
     };
@@ -70,6 +70,7 @@ const ProductionManagerApp = () => {
         setIsQCOpen(false);
         alert(`QC Inspection Submitted! New Grade: ${result}`);
     };
+    */
 
     const handleFindBatch = () => {
         setIsTraceabilityOpen(true);
@@ -123,14 +124,14 @@ const ProductionManagerApp = () => {
                     <Route path="/farmers" element={<FarmerManagement />} />
                     <Route path="/crop-planning" element={<CropPlanning />} />
                     <Route path="/inventory" element={<InventoryManagement />} />
-                    <Route path="/quality-control" element={<QualityControl onPerformInspection={handleQCInspection} />} />
+                    <Route path="/quality-control" element={<QCInsights />} />
                     <Route path="/logistics" element={<Logistics onCreatePackingList={handleCreatePackingList} />} />
                     <Route path="/traceability" element={<Traceability />} />
                     <Route path="/analytics" element={<AnalyticsReporting />} />
                     <Route path="/settings" element={<SettingsPage />} />
 
                     {/* Client Orders & Requests */}
-                    <Route path="/communication" element={<ClientRequests />} />
+                    {/* <Route path="/communication" element={<ClientRequests />} /> */}
                     <Route path="/rooms" element={<RoomManagement />} />
 
                     {/* Catch all - redirect to dashboard */}
@@ -139,12 +140,14 @@ const ProductionManagerApp = () => {
             </Routes>
 
             {/* Global Modals */}
+            {/* 
             <QCInspectionModal
                 isOpen={isQCOpen}
                 onClose={() => setIsQCOpen(false)}
                 onSubmit={handleQCSubmit}
                 onConfirm={() => { }}
             />
+            */}
 
             <CreatePackingListModal
                 isOpen={isPackingListOpen}

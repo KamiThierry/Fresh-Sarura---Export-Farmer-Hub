@@ -310,7 +310,7 @@ export const assignRoom = async (req, res) => {
 // PATCH /api/v1/processing-batches/:id/complete  ← QC logs weights
 export const completeBatch = async (req, res) => {
     try {
-        const { processedWeightKg, rejectedWeightKg } = req.body;
+        const { processedWeightKg, rejectedWeightKg, defectType, assignedGrade } = req.body;
         if (processedWeightKg == null || rejectedWeightKg == null) {
             return res.status(400).json({ 
                 status: 'error', 
@@ -320,7 +320,13 @@ export const completeBatch = async (req, res) => {
 
         const batch = await ProcessingBatch.findByIdAndUpdate(
             req.params.id,
-            { processedWeightKg, rejectedWeightKg, status: 'QCDone' }, // ← was 'Done'
+            { 
+                processedWeightKg, 
+                rejectedWeightKg, 
+                primaryDefectType: defectType,
+                gradeLabel: assignedGrade,
+                status: 'QCDone' 
+            },
             { new: true }
         );
         if (!batch) return res.status(404).json({ 
@@ -357,48 +363,82 @@ export const completeBatch = async (req, res) => {
 // PATCH /api/v1/processing-batches/:id/confirm  ← PM confirms QC result + optionally reassigns room
 export const confirmBatch = async (req, res) => {
     try {
-        const { roomId } = req.body; // optional — PM can reassign room
+        const { roomId } = req.body;
+
+        if (!roomId) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'A cold room must be selected to confirm stock.'
+            });
+        }
 
         const batch = await ProcessingBatch.findById(req.params.id);
-        if (!batch) return res.status(404).json({ 
-            status: 'error', message: 'Batch not found.' 
-        });
-        if (batch.status !== 'QCDone') return res.status(400).json({ 
-            status: 'error', message: 'Batch is not in QCDone state.' 
+        if (!batch) return res.status(404).json({ status: 'error', message: 'Batch not found.' });
+        if (batch.status !== 'QCDone') return res.status(400).json({
+            status: 'error', message: 'Batch is not in QCDone state.'
         });
 
-        const updates = { status: 'Done', confirmedBy: req.user._id };
+        // Validate cold room
+        const coldRoom = await Room.findById(roomId);
+        if (!coldRoom) return res.status(404).json({ status: 'error', message: 'Cold room not found.' });
+        if (coldRoom.status === 'Maintenance') return res.status(400).json({
+            status: 'error', message: `Room "${coldRoom.name}" is under maintenance.`
+        });
 
-        // This save triggers the pre-save hook → generates STK- id
-        Object.assign(batch, updates);
+        const weightToStore = batch.processedWeightKg || 0;
+        const coldRoomRemaining = coldRoom.capacityKg - (coldRoom.currentLoadKg || 0);
+
+        if (weightToStore > coldRoomRemaining) {
+            return res.status(400).json({
+                status: 'error',
+                message: `Insufficient space in "${coldRoom.name}". ${coldRoomRemaining} kg remaining, ${weightToStore} kg needed.`,
+                data: {
+                    roomCapacity: coldRoom.capacityKg,
+                    currentLoad: coldRoom.currentLoadKg,
+                    remaining: coldRoomRemaining,
+                    required: weightToStore,
+                }
+            });
+        }
+
+        // Confirm the batch — save triggers STK- pre-save hook
+        batch.status      = 'Done';
+        batch.confirmedBy = req.user._id;
+        batch.coldRoomId  = roomId;
+        batch.coldRoomName = coldRoom.name;
+        // Also update primary location fields to the cold room
+        batch.assignedRoomId = roomId;
+        batch.assignedRoom = coldRoom.name;
         await batch.save();
 
-        // Recalculate room loads for all involved rooms
+        // Recalculate room loads for all rooms (Processing & Cold)
         await syncAllRoomLoads();
 
         await notifyByRole('quality_officer', {
             type: 'STOCK_CONFIRMED',
             title: 'Stock Confirmed',
-            message: `PM confirmed ${batch.cropName} — ${batch.processedWeightKg} kg added to stock as ${batch.stockId}.`,
+            message: `PM confirmed ${batch.cropName} — ${batch.processedWeightKg} kg added to stock as ${batch.stockId} in ${coldRoom.name}.`,
             refId: batch._id,
             refModel: 'ProcessingBatch',
         });
 
-        res.json({ status: 'success', message: 'Stock confirmed.', data: batch });
+        res.json({ status: 'success', message: 'Stock confirmed and moved to cold storage.', data: batch });
 
         await createEventLog({
             module: 'Production & QC',
             action: 'Stock Confirmed',
             severity: 'INFO',
-            description: `PM confirmed stock: ${batch.cropName} — ${batch.processedWeightKg} kg → ${batch.stockId}`,
+            description: `PM confirmed stock: ${batch.cropName} — ${batch.processedWeightKg} kg → ${batch.stockId} in cold room "${coldRoom.name}"`,
             actor: req.user.name,
-            metadata: { 
-                batchId: batch._id, 
+            metadata: {
+                batchId: batch._id,
                 stockId: batch.stockId,
                 processedWeightKg: batch.processedWeightKg,
-                roomAssigned: batch.assignedRoom
+                processingRoom: batch.assignedRoom,
+                coldRoom: coldRoom.name,
             }
         });
+
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -497,8 +537,12 @@ export const getAllBatches = async (req, res) => {
             .populate('intakeLogId', 'pickedUpWeightKg arrivedAt truckId')
             .populate('requestedBy', 'name role')
             .populate('assignedBy', 'name role')
-            .populate('confirmedBy', 'name role')   // add this
-            .populate('cycleId', 'crop_name farm_name cycleId')
+            .populate('confirmedBy', 'name role')
+            .populate({
+                path: 'cycleId',
+                select: 'crop_name farm_name farmer_id cycleId',
+                populate: { path: 'farmer_id', select: 'full_name cooperative_name' }
+            })
             .sort({ updatedAt: -1 });
         res.json({ status: 'success', results: batches.length, data: batches });
     } catch (err) {

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Truck, Scale, Plane, FileWarning, Loader2, Package, Activity, Clock, TrendingUp, Calendar } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import ActionCenter from '../components/ActionCenter';
 import ShipmentBuilderModal from '../components/ShipmentBuilderModal';
 import { api } from '../../../lib/api';
 
@@ -19,17 +18,20 @@ const Dashboard = () => {
         pendingDocs: 0,
     });
     const [chartData, setChartData] = useState<any[]>([]);
+    const [recentActivity, setRecentActivity] = useState<any[]>([]);
     const [timeRange, setTimeRange] = useState(7);
     const [loading, setLoading] = useState(true);
+    const [activityLoading, setActivityLoading] = useState(true);
 
     const fetchStats = async () => {
         setLoading(true);
         try {
-            const [vehiclesRes, pickupsRes, shipmentsRes, docsRes] = await Promise.all([
+            const [vehiclesRes, pickupsRes, shipmentsRes, docsRes, activityRes] = await Promise.all([
                 api.get('/fleet/vehicles'),
                 api.get('/harvest-declarations'),
                 api.get('/shipments'),
                 api.get('/export-documents'),
+                api.get('/logistics-activity?limit=6'),
             ]);
 
             const vehicles = vehiclesRes.data || [];
@@ -69,10 +71,13 @@ const Dashboard = () => {
                 activeShipments,
                 pendingDocs,
             });
+
+            setRecentActivity(activityRes.data || []);
         } catch (err) {
             console.error('Dashboard stats error:', err);
         } finally {
             setLoading(false);
+            setActivityLoading(false);
         }
     };
 
@@ -119,6 +124,12 @@ const Dashboard = () => {
         },
     ];
 
+    const severityStyles: Record<string, string> = {
+        INFO: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+        WARNING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+        CRITICAL: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    };
+
     return (
         <div className="space-y-6 animate-fade-in pb-20 md:pb-0">
             {/* Welcome Banner */}
@@ -161,68 +172,10 @@ const Dashboard = () => {
                 ))}
             </div>
 
-            {/* Quick Actions */}
-            <div>
-                <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">Quick Actions</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <button
-                        onClick={() => navigate('/logistics/pickups')}
-                        className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl border border-blue-100 dark:border-blue-900/30 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all group text-left"
-                    >
-                        <div className="w-12 h-12 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform shrink-0">
-                            <Scale size={24} />
-                        </div>
-                        <div>
-                            <h4 className="text-sm font-bold text-gray-900 dark:text-white">Log Pickup</h4>
-                            <p className="text-xs text-gray-500 mt-0.5">Record weight from field</p>
-                        </div>
-                    </button>
-
-                    <button
-                        onClick={() => setIsShipmentModalOpen(true)}
-                        className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl border border-green-100 dark:border-green-900/30 shadow-sm hover:shadow-md hover:border-green-300 dark:hover:border-green-700 transition-all group text-left"
-                    >
-                        <div className="w-12 h-12 rounded-lg bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform shrink-0">
-                            <Package size={24} />
-                        </div>
-                        <div>
-                            <h4 className="text-sm font-bold text-gray-900 dark:text-white">Create Packing List</h4>
-                            <p className="text-xs text-gray-500 mt-0.5">Build new export shipment</p>
-                        </div>
-                    </button>
-
-                    <button
-                        onClick={() => navigate('/logistics/shipments')}
-                        className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl border border-amber-100 dark:border-amber-900/30 shadow-sm hover:shadow-md hover:border-amber-300 dark:hover:border-amber-700 transition-all group text-left"
-                    >
-                        <div className="w-12 h-12 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform shrink-0">
-                            <Plane size={24} />
-                        </div>
-                        <div>
-                            <h4 className="text-sm font-bold text-gray-900 dark:text-white">Confirm Departure</h4>
-                            <p className="text-xs text-gray-500 mt-0.5">Update flight status</p>
-                        </div>
-                    </button>
-
-                    <button
-                        onClick={() => navigate('/logistics/shipments')}
-                        className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl border border-purple-100 dark:border-purple-900/30 shadow-sm hover:shadow-md hover:border-purple-300 dark:hover:border-purple-700 transition-all group text-left"
-                    >
-                        <div className="w-12 h-12 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center text-purple-600 group-hover:scale-110 transition-transform shrink-0">
-                            <Truck size={24} />
-                        </div>
-                        <div>
-                            <h4 className="text-sm font-bold text-gray-900 dark:text-white">Mark Dispatched</h4>
-                            <p className="text-xs text-gray-500 mt-0.5">Cargo delivery status</p>
-                        </div>
-                    </button>
-                </div>
-            </div>
-
             {/* Main Content */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm h-full">
                         <div className="flex items-center justify-between mb-8">
                             <div>
                                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">Pickups vs Shipments</h3>
@@ -233,7 +186,7 @@ const Dashboard = () => {
                                     <select
                                         value={timeRange}
                                         onChange={(e) => setTimeRange(Number(e.target.value))}
-                                        className="appearance-none bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl px-4 py-2 pr-10 text-xs font-bold text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer outline-none transition-all"
+                                        className="appearance-none bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl px-4 py-2 pr-10 text-xs font-bold text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500/20 cursor-pointer outline-none transition-all"
                                     >
                                         <option value={7}>Last 7 Days</option>
                                         <option value={30}>Last 30 Days</option>
@@ -241,28 +194,28 @@ const Dashboard = () => {
                                     </select>
                                     <Calendar size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                                 </div>
-                                <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-lg">
+                                <div className="p-2 bg-green-50 dark:bg-green-900/20 text-green-600 rounded-lg">
                                     <TrendingUp size={20} />
                                 </div>
                             </div>
                         </div>
 
-                        <div className="h-80 w-full">
+                        <div className="h-[250px] w-full">
                             {loading ? (
                                 <div className="h-full flex items-center justify-center">
-                                    <Loader2 className="animate-spin text-indigo-500" size={32} />
+                                    <Loader2 className="animate-spin text-green-500" size={32} />
                                 </div>
                             ) : (
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                         <defs>
                                             <linearGradient id="colorPickups" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1} />
-                                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
+                                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                                             </linearGradient>
                                             <linearGradient id="colorShipments" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
-                                                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                                <stop offset="5%" stopColor="#22c55e" stopOpacity={0.1} />
+                                                <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                                             </linearGradient>
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
@@ -287,16 +240,16 @@ const Dashboard = () => {
                                             }}
                                         />
                                         <Legend
-                                            verticalAlign="top"
-                                            align="right"
+                                            verticalAlign="bottom"
+                                            align="center"
                                             iconType="circle"
-                                            wrapperStyle={{ paddingBottom: '20px', fontSize: '12px', fontWeight: 600 }}
+                                            wrapperStyle={{ paddingTop: '20px', fontSize: '12px', fontWeight: 600 }}
                                         />
                                         <Area
                                             type="monotone"
                                             name="Field Pickups"
                                             dataKey="pickups"
-                                            stroke="#6366f1"
+                                            stroke="#3b82f6"
                                             strokeWidth={3}
                                             fillOpacity={1}
                                             fill="url(#colorPickups)"
@@ -305,7 +258,7 @@ const Dashboard = () => {
                                             type="monotone"
                                             name="Export Shipments"
                                             dataKey="shipments"
-                                            stroke="#10b981"
+                                            stroke="#22c55e"
                                             strokeWidth={3}
                                             fillOpacity={1}
                                             fill="url(#colorShipments)"
@@ -316,8 +269,78 @@ const Dashboard = () => {
                         </div>
                     </div>
                 </div>
-                <div>
-                    <ActionCenter />
+
+                <div className="h-full">
+                    {/* Quick Actions (Vertical Lineup Grid) */}
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden p-6 flex flex-col h-full">
+                        <h2 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                            <Activity size={18} className="text-green-500" /> Quick Actions
+                        </h2>
+                        <div className="flex flex-col gap-3 flex-1">
+                            {[
+                                { label: 'Log Field Pickup',      onClick: () => navigate('/logistics/pickups') },
+                                { label: 'Create Packing List',    onClick: () => setIsShipmentModalOpen(true) },
+                                { label: 'Confirm Departure',      onClick: () => navigate('/logistics/shipments') },
+                                { label: 'Mark Cargo Dispatched',  onClick: () => navigate('/logistics/shipments') },
+                            ].map((q, idx) => (
+                                <button key={q.label} onClick={q.onClick}
+                                    className={`flex items-center justify-between p-3.5 rounded-xl transition-all text-left ${idx === 0 ? 'bg-[#5cb85c] text-white shadow-lg shadow-green-900/10 hover:bg-[#4cae4c] border-transparent' : 'border border-gray-100 dark:border-gray-700 hover:border-green-300 hover:bg-green-50 dark:hover:bg-green-900/10'}`}>
+                                    <span className={`text-sm font-bold ${idx === 0 ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`}>{q.label}</span>
+                                    {idx === 0 && <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">+</span>}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Recent Activity Table (Full Width) */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                    <div>
+                        <h2 className="text-base font-bold text-gray-900 dark:text-white">Recent Activity</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Real-time audit trail of export operations and pickups</p>
+                    </div>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-gray-500 uppercase bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
+                            <tr>
+                                <th className="px-6 py-3 font-semibold">Time</th>
+                                <th className="px-6 py-3 font-semibold">Action</th>
+                                <th className="px-6 py-3 font-semibold">Event</th>
+                                <th className="px-6 py-3 font-semibold text-right">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                            {activityLoading ? (
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-8 text-center text-gray-400">Loading activity...</td>
+                                </tr>
+                            ) : recentActivity.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-8 text-center text-gray-400">No recent activity on record.</td>
+                                </tr>
+                            ) : recentActivity.map(event => (
+                                <tr key={event._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                    <td className="px-6 py-4 text-gray-500 whitespace-nowrap">
+                                        {new Date(event.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                    </td>
+                                    <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
+                                        {event.action}
+                                    </td>
+                                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 max-w-md truncate">
+                                        {event.description}
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${severityStyles[event.severity] || severityStyles.INFO}`}>
+                                            {event.severity === 'INFO' ? 'Confirmed' : event.severity === 'WARNING' ? 'Warning' : 'Alert'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 

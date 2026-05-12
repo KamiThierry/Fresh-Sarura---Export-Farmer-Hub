@@ -69,9 +69,12 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
         return {
           ...s,
+          rawId: s._id,
           id: s.stockId,
           produce: s.cropName,
           processedKg: processed,
+          rejectedKg: s.rejectedWeightKg ?? 0,
+          primaryDefectType: s.primaryDefectType || null,
           availableKg: available,
           totalAllocated: allocated,
           storageLocation: s.assignedRoom,

@@ -2,6 +2,7 @@ import ExportBatch from '../models/ExportBatch.js';
 import Shipment from '../models/Shipment.js';
 import ExportDocument from '../models/ExportDocument.js';
 import ProcessingBatch from '../models/ProcessingBatch.js';
+import EventLog from '../models/EventLog.js';
 import { notifyByRole } from './notificationController.js';
 import { createEventLog } from './eventLogController.js';
 
@@ -35,7 +36,7 @@ export const createExportBatch = async (req, res) => {
             cropName,
             clientName,
             destination,
-            gradeLabel: gradeLabel || 'Grade A',
+            gradeLabel: gradeLabel,
             allocatedWeightKg: Number(allocatedWeightKg),
             boxCount: Number(boxCount),
             weightPerBoxKg: Number(weightPerBoxKg),
@@ -375,5 +376,33 @@ export const getDocuments = async (req, res) => {
         res.json({ status: 'success', results: docs.length, data: docs });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// GET /api/v1/logistics-activity
+export const getLogisticsActivity = async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 10;
+        
+        // Fetch logs related to the export workcycle
+        const logs = await EventLog.find({
+            $or: [
+                { module: 'Export & Shipments' },
+                { module: 'Production & QC', action: 'Produce Picked Up' }
+            ]
+        })
+        .sort({ createdAt: -1 })
+        .limit(limit);
+
+        res.json({
+            status: 'success',
+            results: logs.length,
+            data: logs
+        });
+    } catch (err) {
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to fetch logistics activity'
+        });
     }
 };

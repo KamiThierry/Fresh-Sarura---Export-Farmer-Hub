@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Mail, MailOpen, Reply, RefreshCw, Send, X, Clock, Tag, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Search, RefreshCw, Send, Trash2, Check, Loader2, Lock, Mail } from 'lucide-react';
 import { api } from '../../../lib/api';
 
 interface ContactMessage {
@@ -14,27 +14,32 @@ interface ContactMessage {
     createdAt: string;
 }
 
-const statusStyles = {
-    Unread:  'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-    Read:    'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-    Replied: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000);
+    if (diffDays === 0) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return d.toLocaleDateString('en-GB', { weekday: 'short' });
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 };
 
-const typeStyles: Record<string, string> = {
-    'Export Sourcing':       'bg-blue-50 text-blue-700',
-    'Outgrower Partnership': 'bg-purple-50 text-purple-700',
-    'Platform Support':      'bg-amber-50 text-amber-700',
-    'Export Compliance':     'bg-orange-50 text-orange-700',
-    'General Inquiry':       'bg-gray-50 text-gray-600',
-};
+const formatDateTime = (dateStr: string) =>
+    new Date(dateStr).toLocaleString('en-GB', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+    });
 
-const timeAgo = (dateStr: string) => {
-    const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-    if (diff < 60) return `${diff}s ago`;
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return `${Math.floor(diff / 86400)}d ago`;
-};
+const getInitials = (name: string) =>
+    name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+const avatarColors = [
+    'bg-indigo-600', 'bg-violet-600', 'bg-blue-600', 'bg-teal-600',
+    'bg-rose-600', 'bg-orange-500', 'bg-emerald-600', 'bg-pink-600',
+];
+
+const getAvatarColor = (name: string) =>
+    avatarColors[name.charCodeAt(0) % avatarColors.length];
 
 const Messages = () => {
     const [messages, setMessages] = useState<ContactMessage[]>([]);
@@ -42,8 +47,10 @@ const Messages = () => {
     const [selected, setSelected] = useState<ContactMessage | null>(null);
     const [replyText, setReplyText] = useState('');
     const [sending, setSending] = useState(false);
-    const [filterStatus, setFilterStatus] = useState<'All' | 'Unread' | 'Read' | 'Replied'>('All');
+    const [tab, setTab] = useState<'All' | 'Unread'>('All');
+    const [search, setSearch] = useState('');
     const [toast, setToast] = useState<string | null>(null);
+    const chatEndRef = useRef<HTMLDivElement>(null);
 
     const showToast = (msg: string) => {
         setToast(msg);
@@ -64,6 +71,10 @@ const Messages = () => {
 
     useEffect(() => { fetchMessages(); }, []);
 
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [selected]);
+
     const handleSelect = async (msg: ContactMessage) => {
         setSelected(msg);
         setReplyText('');
@@ -82,39 +93,59 @@ const Messages = () => {
         setSending(true);
         try {
             await api.post(`/contact/${selected._id}/reply`, { replyNote: replyText });
+            const now = new Date().toISOString();
             setMessages(prev =>
                 prev.map(m => m._id === selected._id
-                    ? { ...m, status: 'Replied', replyNote: replyText, repliedAt: new Date().toISOString() }
+                    ? { ...m, status: 'Replied', replyNote: replyText, repliedAt: now }
                     : m
                 )
             );
-            setSelected(prev => prev ? { ...prev, status: 'Replied', replyNote: replyText } : null);
+            setSelected(prev => prev ? { ...prev, status: 'Replied', replyNote: replyText, repliedAt: now } : null);
             setReplyText('');
             showToast('Reply sent successfully.');
-        } catch (err) {
+        } catch {
             showToast('Failed to send reply. Check your email configuration.');
         } finally {
             setSending(false);
         }
     };
 
+    const handleDelete = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        try {
+            await api.delete(`/contact/${id}`);
+            setMessages(prev => prev.filter(m => m._id !== id));
+            if (selected?._id === id) setSelected(null);
+        } catch {
+            showToast('Failed to delete message.');
+        }
+    };
+
     const unreadCount = messages.filter(m => m.status === 'Unread').length;
-    const filtered = messages.filter(m => filterStatus === 'All' || m.status === filterStatus);
+
+    const filtered = messages.filter(m => {
+        const matchTab = tab === 'All' || m.status === 'Unread';
+        const matchSearch = !search || 
+            m.name.toLowerCase().includes(search.toLowerCase()) ||
+            m.email.toLowerCase().includes(search.toLowerCase()) ||
+            m.message.toLowerCase().includes(search.toLowerCase());
+        return matchTab && matchSearch;
+    });
 
     return (
-        <div className="p-6 space-y-6">
+        <div className="flex flex-col h-[calc(100vh-64px)] bg-gray-50 dark:bg-gray-900">
 
             {/* Toast */}
             {toast && (
-                <div className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium animate-fade-in">
+                <div className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium">
                     {toast}
                 </div>
             )}
 
-            {/* Header */}
-            <div className="flex items-center justify-between">
+            {/* Page header */}
+            <div className="px-6 py-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         Messages
                         {unreadCount > 0 && (
                             <span className="text-xs font-bold bg-red-500 text-white px-2 py-0.5 rounded-full">
@@ -122,175 +153,240 @@ const Messages = () => {
                             </span>
                         )}
                     </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                        Inquiries received from the FreshSarura landing page.
-                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Inquiries from the FreshSarura landing page</p>
                 </div>
                 <button
                     onClick={fetchMessages}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-semibold text-sm hover:bg-gray-200 transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                 >
-                    <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh
+                    <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
                 </button>
             </div>
 
-            {/* Filter tabs */}
-            <div className="flex gap-2">
-                {(['All', 'Unread', 'Read', 'Replied'] as const).map(s => (
-                    <button
-                        key={s}
-                        onClick={() => setFilterStatus(s)}
-                        className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-                            filterStatus === s
-                                ? 'bg-green-600 text-white'
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
-                        }`}
-                    >
-                        {s}
-                        {s === 'Unread' && unreadCount > 0 && (
-                            <span className="ml-1.5 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full">
-                                {unreadCount}
-                            </span>
-                        )}
-                    </button>
-                ))}
-            </div>
+            {/* Main split layout */}
+            <div className="flex flex-1 overflow-hidden">
 
-            {/* Main layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6" style={{ minHeight: '60vh' }}>
+                {/* ── LEFT: Inbox panel ── */}
+                <div className="w-80 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
 
-                {/* Left: message list */}
-                <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col">
-                    {loading ? (
-                        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
-                            Loading messages...
+                    {/* Inbox heading + All/Unread tabs */}
+                    <div className="px-4 pt-4 pb-3 border-b border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center justify-between mb-3">
+                            <h2 className="text-base font-bold text-gray-900 dark:text-white">
+                                Inbox
+                                {unreadCount > 0 && (
+                                    <span className="ml-2 text-xs font-bold bg-green-600 text-white px-2 py-0.5 rounded-full">
+                                        {unreadCount}
+                                    </span>
+                                )}
+                            </h2>
                         </div>
-                    ) : filtered.length === 0 ? (
-                        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 py-12">
-                            <Mail size={36} className="mb-3 opacity-30" />
-                            <p className="text-sm">No messages here.</p>
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-gray-100 dark:divide-gray-700 overflow-y-auto flex-1">
-                            {filtered.map(msg => (
+
+                        {/* All / Unread tabs */}
+                        <div className="flex gap-1">
+                            {(['All', 'Unread'] as const).map(t => (
                                 <button
-                                    key={msg._id}
-                                    onClick={() => handleSelect(msg)}
-                                    className={`w-full text-left px-5 py-4 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/40 ${
-                                        selected?._id === msg._id ? 'bg-green-50 dark:bg-green-900/10 border-l-4 border-green-500' : ''
+                                    key={t}
+                                    onClick={() => setTab(t)}
+                                    className={`px-4 py-1 rounded-full text-sm font-semibold transition-all ${
+                                        tab === t
+                                            ? 'bg-green-600 text-white shadow-sm'
+                                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                                     }`}
                                 >
-                                    <div className="flex items-start justify-between gap-2 mb-1">
-                                        <div className="flex items-center gap-2">
-                                            {msg.status === 'Unread'
-                                                ? <Mail size={14} className="text-red-500 shrink-0" />
-                                                : <MailOpen size={14} className="text-gray-400 shrink-0" />
-                                            }
-                                            <span className={`text-sm font-bold text-gray-900 dark:text-white ${msg.status === 'Unread' ? '' : 'font-medium'}`}>
-                                                {msg.name}
-                                            </span>
-                                        </div>
-                                        <span className="text-[11px] text-gray-400 shrink-0">{timeAgo(msg.createdAt)}</span>
-                                    </div>
-                                    <p className="text-xs text-gray-500 truncate mb-2">{msg.email}</p>
-                                    <div className="flex items-center gap-2">
-                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${typeStyles[msg.type] || 'bg-gray-50 text-gray-500'}`}>
-                                            {msg.type}
-                                        </span>
-                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusStyles[msg.status]}`}>
-                                            {msg.status}
-                                        </span>
-                                    </div>
+                                    {t}
                                 </button>
                             ))}
                         </div>
-                    )}
+                    </div>
+
+                    {/* Search */}
+                    <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
+                        <div className="relative">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Search..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="w-full pl-8 pr-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 dark:text-white"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Message list */}
+                    <div className="flex-1 overflow-y-auto">
+                        {loading ? (
+                            <div className="flex items-center justify-center py-12 text-gray-400 text-sm gap-2">
+                                <Loader2 size={16} className="animate-spin" /> Loading...
+                            </div>
+                        ) : filtered.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                                <Mail size={32} className="mb-2 opacity-30" />
+                                <p className="text-sm">No messages</p>
+                            </div>
+                        ) : filtered.map(msg => (
+                            <button
+                                key={msg._id}
+                                onClick={() => handleSelect(msg)}
+                                className={`w-full text-left px-4 py-3.5 flex items-start gap-3 transition-all border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 ${
+                                    selected?._id === msg._id
+                                        ? 'bg-green-50 dark:bg-green-900/20 border-l-4 border-l-green-600'
+                                        : msg.status === 'Unread' ? 'bg-white dark:bg-gray-800' : ''
+                                }`}
+                            >
+                                {/* Avatar */}
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${getAvatarColor(msg.name)}`}>
+                                    {getInitials(msg.name)}
+                                </div>
+
+                                {/* Content */}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between mb-0.5">
+                                        <span className={`text-sm truncate ${msg.status === 'Unread' ? 'font-bold text-gray-900 dark:text-white' : 'font-medium text-gray-700 dark:text-gray-300'}`}>
+                                            {msg.name}
+                                        </span>
+                                        <span className="text-[10px] text-gray-400 shrink-0 ml-2">{formatDate(msg.createdAt)}</span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 truncate">{msg.message}</p>
+                                    <p className="text-[10px] text-gray-400 truncate mt-0.5">{msg.email}</p>
+                                </div>
+
+                                {/* Unread dot */}
+                                {msg.status === 'Unread' && (
+                                    <div className="w-2 h-2 rounded-full bg-green-600 flex-shrink-0 mt-2" />
+                                )}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
-                {/* Right: message detail + reply */}
-                <div className="lg:col-span-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col overflow-hidden">
+                {/* ── RIGHT: Conversation panel ── */}
+                <div className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden">
+
                     {!selected ? (
-                        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 py-16">
-                            <MailOpen size={48} className="mb-4 opacity-20" />
-                            <p className="text-sm font-medium">Select a message to read</p>
+                        <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
+                            <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mb-4">
+                                <Mail size={36} className="opacity-40" />
+                            </div>
+                            <p className="text-base font-medium text-gray-500 dark:text-gray-400">Select a message to read</p>
+                            <p className="text-sm text-gray-400 mt-1">Choose from your inbox on the left</p>
                         </div>
                     ) : (
                         <>
-                            {/* Message header */}
-                            <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700 flex items-start justify-between">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h2 className="text-base font-bold text-gray-900 dark:text-white">{selected.name}</h2>
-                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusStyles[selected.status]}`}>
-                                            {selected.status}
-                                        </span>
+                            {/* Conversation header */}
+                            <div className="px-6 py-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${getAvatarColor(selected.name)}`}>
+                                        {getInitials(selected.name)}
                                     </div>
-                                    <div className="flex items-center gap-4 text-xs text-gray-500">
-                                        <span className="flex items-center gap-1"><Mail size={12} /> {selected.email}</span>
-                                        <span className="flex items-center gap-1"><Tag size={12} /> {selected.type}</span>
-                                        <span className="flex items-center gap-1"><Clock size={12} /> {new Date(selected.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                    <div>
+                                        <h3 className="text-sm font-bold text-gray-900 dark:text-white">{selected.name}</h3>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">{selected.email}</p>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => setSelected(null)}
-                                    className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                >
-                                    <X size={16} />
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    {/* Mark as read (tick) */}
+                                    {selected.status !== 'Replied' && (
+                                        <button
+                                            title="Mark as read"
+                                            className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                                        >
+                                            <Check size={16} />
+                                        </button>
+                                    )}
+                                    {/* Delete */}
+                                    <button
+                                        title="Delete message"
+                                        onClick={e => handleDelete(selected._id, e)}
+                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
                             </div>
 
-                            {/* Message body */}
-                            <div className="px-6 py-5 flex-1 overflow-y-auto space-y-5">
-                                <div className="bg-gray-50 dark:bg-gray-700/40 rounded-xl p-4 border border-gray-100 dark:border-gray-700">
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Message</p>
-                                    <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-line">
-                                        {selected.message}
-                                    </p>
+                            {/* Chat area */}
+                            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+
+                                {/* Original message bubble — left aligned (from sender) */}
+                                <div className="flex items-end gap-3">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${getAvatarColor(selected.name)}`}>
+                                        {getInitials(selected.name)}
+                                    </div>
+                                    <div className="max-w-[70%]">
+                                        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
+                                            <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">
+                                                Original Inquiry
+                                            </p>
+                                            <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-line">
+                                                {selected.message}
+                                            </p>
+                                        </div>
+                                        <p className="text-[10px] text-gray-400 mt-1 ml-1">
+                                            {formatDateTime(selected.createdAt)}
+                                            {' · '}
+                                            <span className="capitalize">{selected.type}</span>
+                                        </p>
+                                    </div>
                                 </div>
 
-                                {/* Previous reply */}
+                                {/* Admin reply bubble — right aligned */}
                                 {selected.status === 'Replied' && selected.replyNote && (
-                                    <div className="bg-green-50 dark:bg-green-900/10 rounded-xl p-4 border border-green-100 dark:border-green-900/30">
-                                        <p className="text-xs font-bold text-green-600 uppercase tracking-wider mb-2 flex items-center gap-1">
-                                            <Reply size={12} /> Your Reply · {selected.repliedAt ? new Date(selected.repliedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
-                                        </p>
-                                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line">
-                                            {selected.replyNote}
-                                        </p>
+                                    <div className="flex items-end gap-3 justify-end">
+                                        <div className="max-w-[70%]">
+                                            <div className="bg-green-600 text-white rounded-2xl rounded-br-sm px-4 py-3 shadow-sm">
+                                                <p className="text-sm leading-relaxed whitespace-pre-line">
+                                                    {selected.replyNote}
+                                                </p>
+                                            </div>
+                                            <p className="text-[10px] text-gray-400 mt-1 text-right mr-1">
+                                                {selected.repliedAt ? formatDateTime(selected.repliedAt) : ''}
+                                                {' · You'}
+                                            </p>
+                                        </div>
+                                        {/* Admin avatar placeholder */}
+                                        <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                            A
+                                        </div>
                                     </div>
                                 )}
 
-                                {/* Reply box */}
-                                <div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                                        <Reply size={12} />
-                                        {selected.status === 'Replied' ? 'Send Another Reply' : 'Reply'}
-                                        <span className="normal-case font-normal text-gray-400 ml-1">— will be sent to {selected.email}</span>
-                                    </p>
-                                    <textarea
-                                        value={replyText}
-                                        onChange={e => setReplyText(e.target.value)}
-                                        rows={5}
-                                        placeholder="Type your reply here..."
-                                        className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500 resize-none transition-all"
-                                    />
-                                </div>
+                                <div ref={chatEndRef} />
                             </div>
 
-                            {/* Footer */}
-                            <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/30 flex justify-end">
-                                <button
-                                    onClick={handleReply}
-                                    disabled={sending || !replyText.trim()}
-                                    className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all ${
-                                        sending || !replyText.trim()
-                                            ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-                                            : 'bg-green-600 hover:bg-green-700 text-white active:scale-95 shadow-green-900/20'
-                                    }`}
-                                >
-                                    {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-                                    {sending ? 'Sending...' : 'Send Reply'}
-                                </button>
+                            {/* Reply bar — fixed at bottom */}
+                            <div className="px-6 py-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+                                <textarea
+                                    value={replyText}
+                                    onChange={e => setReplyText(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                                            e.preventDefault();
+                                            handleReply();
+                                        }
+                                    }}
+                                    rows={3}
+                                    placeholder="Type your reply here..."
+                                    className="w-full px-4 py-3 mb-3 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 dark:text-white resize-none"
+                                />
+                                <div className="flex items-center justify-between">
+                                    <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+                                        <Lock size={11} /> Secure TLS
+                                    </span>
+                                    <button
+                                        onClick={handleReply}
+                                        disabled={sending || !replyText.trim()}
+                                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all ${
+                                            sending || !replyText.trim()
+                                                ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                                                : 'bg-green-600 hover:bg-green-700 text-white active:scale-95 shadow-green-900/20'
+                                        }`}
+                                    >
+                                        {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                                        {sending ? 'Sending...' : 'Send Reply'}
+                                    </button>
+                                </div>
                             </div>
                         </>
                     )}

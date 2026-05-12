@@ -135,7 +135,7 @@ const Logistics = ({ onCreatePackingList }: LogisticsProps) => {
                     </button>
                     <button
                         onClick={onCreatePackingList}
-                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
                     >
                         <Plus size={18} />
                         Create Packing List
@@ -176,7 +176,7 @@ const Logistics = ({ onCreatePackingList }: LogisticsProps) => {
                             className={`
                 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors
                 ${activeTab === tab.id
-                                    ? 'border-purple-500 text-purple-600 dark:text-purple-400'
+                                    ? 'border-green-600 text-green-600 dark:text-green-400'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'}
               `}
                         >

@@ -182,18 +182,19 @@ const UserManagement = () => {
 
         autoTable(doc, {
             startY: yPos + 10,
-            head: [['NAME', 'EMAIL', 'ROLE', 'STATUS', 'JOINED']],
+            head: [['NAME', 'EMAIL', 'ROLE', 'PHONE', 'STATUS', 'JOINED']],
             body: filtered.map(u => [
                 toTitleCase(u.name), 
                 u.email,
                 toTitleCase(ROLE_LABELS[u.role] || u.role),
+                u.phone || '—',
                 u.isActive ? 'Active' : 'Inactive',
                 new Date(u.createdAt).toLocaleDateString('en-GB')
             ]),
             theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
             margin: { left: 15, right: 15, bottom: 30 },
             didParseCell: (data) => {
-                if (data.section === 'body' && data.column.index === 3) {
+                if (data.section === 'body' && data.column.index === 4) {
                     if (String(data.cell.raw) === 'Active') data.cell.styles.textColor = [22, 163, 74];
                     else data.cell.styles.textColor = [220, 38, 38];
                 }
@@ -221,7 +222,7 @@ const UserManagement = () => {
             doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
             doc.text('This is a computer generated report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
             const footerY = 288;
-            doc.text('Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw', pageWidth / 2, footerY, { align: 'center' });
+            doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
         }
 

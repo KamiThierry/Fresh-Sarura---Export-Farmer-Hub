@@ -93,10 +93,12 @@ const Dashboard = () => {
         { label: 'Stock Batches',      value: loading ? '...' : String(stats.shipments), sub: 'Total on record',     icon: Boxes,       color: 'bg-purple-50 text-purple-600 dark:bg-purple-900/20' },
     ];
 
+    // Active = active + in_progress combined; remove Planned
+    const totalActiveCount = cycleStats.active + cycleStats.in_progress;
+    const totalCycles = totalActiveCount + cycleStats.completed;
+
     const cycleChartData = [
-        { name: 'Active', value: cycleStats.active, color: '#10B981' }, 
-        { name: 'In Progress', value: cycleStats.in_progress, color: '#F59E0B' }, 
-        { name: 'Planned', value: cycleStats.planned, color: '#6366F1' }, 
+        { name: 'Active', value: totalActiveCount, color: '#10B981' }, 
         { name: 'Completed', value: cycleStats.completed, color: '#6B7280' }, 
     ].filter(d => d.value > 0);
 
@@ -175,35 +177,90 @@ const Dashboard = () => {
                 </div>
 
                 {/* Donut Chart */}
-                <div className="xl:col-span-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5 flex flex-col">
-                    <div className="mb-2">
+                <div className="xl:col-span-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-6 flex flex-col h-full">
+                    <div className="mb-4">
                         <h2 className="text-base font-bold text-gray-900 dark:text-white">Crop Cycle Status</h2>
-                        <p className="text-sm text-gray-500">Current occupancy breakdown</p>
+                        <p className="text-sm text-gray-500">Current production breakdown</p>
                     </div>
-                    <div className="flex-1 min-h-[200px]">
-                        {cycleChartData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={cycleChartData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={60}
-                                        outerRadius={80}
-                                        paddingAngle={5}
-                                        dataKey="value"
-                                    >
-                                        {cycleChartData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.color} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
-                                    <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="flex items-center justify-center h-full text-sm text-gray-400">No active cycles</div>
-                        )}
+                    
+                    <div className="flex-1 flex flex-col">
+                        <div className="h-[200px] w-full relative mb-6">
+                            {cycleChartData.length > 0 ? (
+                                <>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={cycleChartData}
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius={65}
+                                                outerRadius={85}
+                                                paddingAngle={4}
+                                                dataKey="value"
+                                                stroke="none"
+                                            >
+                                                {cycleChartData.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }} />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                    {/* Central Label */}
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                        <span className="text-2xl font-black text-gray-900 dark:text-white leading-none">
+                                            {totalCycles > 0 ? Math.round(((cycleStats.active + cycleStats.in_progress) / totalCycles) * 100) : 0}%
+                                        </span>
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Active</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex items-center justify-center h-full text-sm text-gray-400">No active cycles</div>
+                            )}
+                        </div>
+
+                        {/* Custom Legend Table */}
+                        <div className="space-y-4 flex-1">
+                            {/* Active row */}
+                            <div className="flex items-center justify-between group">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />
+                                    <span className="text-sm font-bold text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Active</span>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <span className="text-sm font-bold text-gray-400">{totalCycles > 0 ? Math.round((totalActiveCount / totalCycles) * 100) : 0}%</span>
+                                    <span className="text-sm font-black text-gray-900 dark:text-white min-w-[24px] text-right">{totalActiveCount}</span>
+                                </div>
+                            </div>
+                            {/* In Progress (subset) row */}
+                            <div className="flex items-center justify-between group">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]" />
+                                    <span className="text-sm font-bold text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">In Progress</span>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <span className="text-sm font-bold text-gray-400">{totalCycles > 0 ? Math.round((cycleStats.in_progress / totalCycles) * 100) : 0}%</span>
+                                    <span className="text-sm font-black text-gray-900 dark:text-white min-w-[24px] text-right">{cycleStats.in_progress}</span>
+                                </div>
+                            </div>
+                            {/* Completed row */}
+                            <div className="flex items-center justify-between group">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-2.5 h-2.5 rounded-full bg-[#6B7280]" />
+                                    <span className="text-sm font-bold text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Completed</span>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <span className="text-sm font-bold text-gray-400">{totalCycles > 0 ? Math.round((cycleStats.completed / totalCycles) * 100) : 0}%</span>
+                                    <span className="text-sm font-black text-gray-900 dark:text-white min-w-[24px] text-right">{cycleStats.completed}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Total Row */}
+                        <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                            <span className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Total Cycles</span>
+                            <span className="text-lg font-black text-[#5cb85c]">{totalCycles}</span>
+                        </div>
                     </div>
                 </div>
 
@@ -232,7 +289,10 @@ const Dashboard = () => {
             {/* Bottom Row: Recent Activity Table */}
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-base font-bold text-gray-900 dark:text-white">Recent Activity</h2>
+                    <div>
+                        <h2 className="text-base font-bold text-gray-900 dark:text-white">Recent Activity</h2>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Global audit trail of system-wide events and registrations</p>
+                    </div>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">

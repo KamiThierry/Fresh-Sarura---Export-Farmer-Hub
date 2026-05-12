@@ -199,7 +199,7 @@ const StockDetailModal = ({ isOpen, onClose, stockItem, onMarkedSpoiled }: Stock
                     pageWidth / 2, 280, { align: 'center' }
                 );
                 doc.text(
-                    'Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw',
+                    'Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com',
                     pageWidth / 2, 288, { align: 'center' }
                 );
                 doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, 288, { align: 'right' });
@@ -255,7 +255,11 @@ const StockDetailModal = ({ isOpen, onClose, stockItem, onMarkedSpoiled }: Stock
                             { icon: User,          label: 'Farmer / Source',  value: stockItem.farmerSource },
                             { icon: MapPin,        label: 'Storage Room',     value: stockItem.storageLocation },
                             { icon: Weight,        label: 'Processed (QC)',   value: `${stockItem.processedKg?.toLocaleString()} kg` },
-                            { icon: AlertTriangle, label: 'Rejected (QC)',    value: `${stockItem.rejectedKg?.toLocaleString() ?? '—'} kg` },
+                            { icon: AlertTriangle, label: 'Rejected (QC)',    value: `${stockItem.rejectedKg?.toLocaleString() ?? '—'} kg${
+                                stockItem.primaryDefectType && stockItem.primaryDefectType !== 'None' 
+                                    ? ` — ${stockItem.primaryDefectType}` 
+                                    : ''
+                            }` },
                             { icon: Layers,        label: 'Allocated',        value: stockItem.totalAllocated > 0 ? `${stockItem.totalAllocated.toLocaleString()} kg` : '—' },
                             { icon: ClipboardCheck,label: 'Available',        value: `${stockItem.availableKg?.toLocaleString()} kg` },
                             { icon: Calendar,      label: 'Date In Stock',    value: stockItem.dateInStock?.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) },

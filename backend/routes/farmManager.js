@@ -10,6 +10,7 @@ import {
     getMyFieldReports,
     submitYieldForecast,
     getMyYieldForecasts,
+    getMyActivity,
 } from '../controllers/farmManagerController.js';
 
 const router = express.Router();
@@ -20,6 +21,7 @@ router.use(restrictTo('farm_manager', 'admin'));
 
 router.get('/profile', getMyProfile);
 router.get('/dashboard', getDashboard);
+router.get('/activity', getMyActivity);
 
 router.get('/cycles', getMyCycles);
 

@@ -5,6 +5,7 @@ import {
     createShipment, getShipments, getShipmentById, shipShipment,
     departShipment, cancelShipment,
     uploadDocument, getDocuments,
+    getLogisticsActivity,
 } from '../controllers/exportController.js';
 
 const router = express.Router();
@@ -26,5 +27,8 @@ router.patch('/shipments/:id/cancel',  restrictTo('logistic_officer', 'admin'), 
 // Export Documents
 router.post('/export-documents', restrictTo('logistic_officer', 'admin'), uploadDocument);
 router.get('/export-documents', restrictTo('logistic_officer', 'production_manager', 'admin'), getDocuments);
+
+// Logistics Activity
+router.get('/logistics-activity', restrictTo('logistic_officer', 'admin'), getLogisticsActivity);
 
 export default router;

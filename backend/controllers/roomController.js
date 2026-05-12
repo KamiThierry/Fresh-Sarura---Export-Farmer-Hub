@@ -16,15 +16,30 @@ export const syncAllRoomLoads = async () => {
     }, {});
 
     for (const room of rooms) {
-        const activeBatches = await ProcessingBatch.find({
-            assignedRoomId: room._id,
+        // Find batches where this room is either the processing area or the designated cold storage
+        const candidates = await ProcessingBatch.find({
+            $or: [
+                { assignedRoomId: room._id },
+                { coldRoomId: room._id }
+            ],
             status: { $in: ['Processing', 'QCDone', 'Done'] }
         });
 
+        // Resolve current location: if Done and has coldRoomId, it only belongs to the cold room.
+        // Otherwise, it belongs to its assignedRoomId.
+        const activeBatches = candidates.filter(b => {
+            if (b.status === 'Done' && b.coldRoomId) {
+                return b.coldRoomId.toString() === room._id.toString();
+            }
+            return b.assignedRoomId?.toString() === room._id.toString();
+        });
+
         const totalLoad = activeBatches.reduce((sum, b) => {
-            const actualWeight = b.processedWeightKg ?? b.receivedWeightKg ?? 0;
-            const allocated = allocationMap[b._id.toString()] || 0;
-            return sum + Math.max(0, actualWeight - allocated);
+            // Priority: processedWeight (if done) -> receivedWeight (if processing) -> 0
+            const actualWeight = Number(b.processedWeightKg || b.receivedWeightKg || 0);
+            const allocated = Number(allocationMap[b._id.toString()] || 0);
+            const available = Math.max(0, actualWeight - allocated);
+            return sum + available;
         }, 0);
 
         // Update room status based on load
@@ -171,17 +186,31 @@ export const clearRoom = async (req, res) => {
     }
 };
 
-// GET /api/v1/rooms/:id/batches  — fetch batches in a room
 export const getRoomBatches = async (req, res) => {
     try {
-        const batches = await ProcessingBatch.find({
-            assignedRoomId: req.params.id,
+        const room = await Room.findById(req.params.id);
+        if (!room) return res.status(404).json({ status: 'error', message: 'Room not found.' });
+
+        // Find batches where this room is either the processing area or the designated cold storage
+        const candidates = await ProcessingBatch.find({
+            $or: [
+                { assignedRoomId: room._id },
+                { coldRoomId: room._id }
+            ],
             status: { $in: ['Processing', 'QCDone', 'Done'] }
         }).populate('requestedBy', 'name')
           .sort({ updatedAt: -1 })
           .lean();
+
+        // Filter to only include batches currently residing in this room
+        const enrichedBatches = candidates.filter(b => {
+            if (b.status === 'Done' && b.coldRoomId) {
+                return b.coldRoomId.toString() === room._id.toString();
+            }
+            return b.assignedRoomId?.toString() === room._id.toString();
+        });
         
-        const batchIds = batches.map(b => b._id);
+        const batchIds = enrichedBatches.map(b => b._id);
         const allocations = await ExportBatch.aggregate([
             { $match: { processingBatchId: { $in: batchIds } } },
             { $group: { _id: '$processingBatchId', totalAllocated: { $sum: '$allocatedWeightKg' } } }
@@ -191,9 +220,9 @@ export const getRoomBatches = async (req, res) => {
             return acc;
         }, {});
 
-        const enriched = batches.map(b => {
-            const actual = b.processedWeightKg ?? b.receivedWeightKg ?? 0;
-            const allocated = allocationMap[b._id.toString()] || 0;
+        const enriched = enrichedBatches.map(b => {
+            const actual = Number(b.processedWeightKg || b.receivedWeightKg || 0);
+            const allocated = Number(allocationMap[b._id.toString()] || 0);
             return {
                 ...b,
                 availableWeightKg: Math.max(0, actual - allocated),

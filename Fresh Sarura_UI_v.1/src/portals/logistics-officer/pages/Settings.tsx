@@ -83,7 +83,7 @@ const ProfilePanel = ({ onSave }: { onSave: () => void }) => {
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Phone Number</label>
-                        <input type="tel" defaultValue="+250 788 123 456" className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                        <input type="tel" defaultValue="+250 780389786" className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
                     </div>
                 </div>
             </div>

@@ -466,6 +466,17 @@ const AnalyticsReporting = () => {
                         <span className="text-xs text-gray-400 font-medium ml-2">To:</span>
                         <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
                             className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer" />
+                        
+                        <button
+                            onClick={() => {
+                                const d = new Date(); d.setMonth(d.getMonth() - 3);
+                                setStartDate(d.toISOString().split('T')[0]);
+                                setEndDate(new Date().toISOString().split('T')[0]);
+                            }}
+                            className="ml-2 text-xs text-green-600 hover:text-green-700 font-bold transition-colors whitespace-nowrap"
+                        >
+                            Clear
+                        </button>
                     </div>
                     {loading && <span className="text-xs text-gray-400 animate-pulse">Loading…</span>}
 

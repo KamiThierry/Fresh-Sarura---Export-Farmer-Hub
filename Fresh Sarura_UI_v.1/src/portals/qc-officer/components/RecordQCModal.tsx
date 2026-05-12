@@ -19,12 +19,12 @@ interface RecordQCModalProps {
 
 const defectTypes = [
     'None',
-    'Pest Damage',
     'Bruising (Mechanical)',
+    'Pest Damage',
     'Undersized',
-    'Coloration',
-    'Fungal Infection',
-    'Dehydration'
+    // 'Coloration',
+    // 'Fungal Infection',
+    // 'Dehydration'
 ];
 
 const gradeOptions = [
@@ -59,6 +59,11 @@ const RecordQCModal = ({ isOpen, onClose, data, onSubmit }: RecordQCModalProps) 
     const procVal = parseFloat(processedWeight) || 0;
     const rejVal = parseFloat(rejectedWeight) || 0;
     const netWeight = Math.max(0, procVal - rejVal);
+
+    // Validations
+    const processedExceedsReceived = procVal > data.grossWeight;
+    const rejectedExceedsProcessed = rejVal > procVal;
+    const hasValidationError = processedExceedsReceived || rejectedExceedsProcessed;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -140,12 +145,25 @@ const RecordQCModal = ({ isOpen, onClose, data, onSubmit }: RecordQCModalProps) 
                                         type="number"
                                         required
                                         min="0"
+                                        max={data.grossWeight}
                                         step="0.1"
                                         value={processedWeight}
-                                        onChange={(e) => setProcessedWeight(e.target.value)}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setProcessedWeight(val);
+                                            const proc = parseFloat(val) || 0;
+                                            const autoRejected = Math.max(0, data.grossWeight - proc);
+                                            setRejectedWeight(autoRejected > 0 ? String(autoRejected) : '0');
+                                        }}
                                         placeholder="0.0"
-                                        className={inputClass}
+                                        className={`${inputClass} ${processedExceedsReceived ? 'border-red-400 dark:border-red-500 ring-2 ring-red-200 dark:ring-red-900/40' : ''}`}
                                     />
+                                    {processedExceedsReceived && (
+                                        <p className="text-[11px] text-red-500 font-semibold mt-1.5 ml-1 flex items-center gap-1">
+                                            <AlertTriangle size={11} />
+                                            Cannot exceed received weight ({data.grossWeight.toLocaleString()} kg)
+                                        </p>
+                                    )}
                                 </div>
                                 <div>
                                     <label className={labelClass}>Rejected Weight (kg) *</label>
@@ -153,12 +171,19 @@ const RecordQCModal = ({ isOpen, onClose, data, onSubmit }: RecordQCModalProps) 
                                         type="number"
                                         required
                                         min="0"
+                                        max={procVal || undefined}
                                         step="0.1"
                                         value={rejectedWeight}
                                         onChange={(e) => setRejectedWeight(e.target.value)}
                                         placeholder="0.0"
-                                        className={inputClass}
+                                        className={`${inputClass} ${rejectedExceedsProcessed ? 'border-red-400 dark:border-red-500 ring-2 ring-red-200 dark:ring-red-900/40' : ''}`}
                                     />
+                                    {rejectedExceedsProcessed && (
+                                        <p className="text-[11px] text-red-500 font-semibold mt-1.5 ml-1 flex items-center gap-1">
+                                            <AlertTriangle size={11} />
+                                            Cannot exceed processed weight ({procVal.toLocaleString()} kg)
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -224,7 +249,12 @@ const RecordQCModal = ({ isOpen, onClose, data, onSubmit }: RecordQCModalProps) 
                     <button
                         type="submit"
                         form="merged-qc-form"
-                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-700 active:scale-[0.98] transition-all shadow-sm shadow-green-900/20"
+                        disabled={hasValidationError}
+                        className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm font-bold active:scale-[0.98] transition-all shadow-sm shadow-green-900/20 ${
+                            hasValidationError
+                                ? 'bg-gray-400 cursor-not-allowed'
+                                : 'bg-green-600 hover:bg-green-700'
+                        }`}
                     >
                         Mark as Done →
                     </button>

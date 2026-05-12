@@ -31,7 +31,6 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
     const [clientName, setClientName] = useState('');
     const [destination, setDestination] = useState('');
     const [targetShipmentDate, setTargetShipmentDate] = useState('');
-    const [gradeLabel, setGradeLabel] = useState('Grade A');
     const [selectedLines, setSelectedLines] = useState<SelectedLine[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
@@ -42,7 +41,6 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
             setClientName('');
             setDestination('');
             setTargetShipmentDate('');
-            setGradeLabel('Grade A');
             setSelectedLines([]);
             setSubmitError('');
         }
@@ -125,7 +123,7 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
                     cropName: line.stockItem.cropName,
                     clientName,
                     destination,
-                    gradeLabel,
+                    gradeLabel: line.stockItem.gradeLabel || '—',
                     allocatedWeightKg: line.allocateKg,
                     boxCount: line.boxCount,
                     weightPerBoxKg: line.weightPerBoxKg,
@@ -211,17 +209,7 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                Grade
-                            </label>
-                            <select
-                                value={gradeLabel}
-                                onChange={e => setGradeLabel(e.target.value)}
-                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
-                            >
-                                <option>Grade A</option>
-                                <option>Grade B</option>
-                            </select>
+                            {/* Grade inherits from selected stock items automatically */}
                         </div>
                     </div>
 

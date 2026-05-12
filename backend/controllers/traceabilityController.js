@@ -185,7 +185,7 @@ export const getTraceabilityData = async (req, res) => {
                     { label: 'Destination', value: exportBatch.destination },
                     { label: 'Weight',      value: `${exportBatch.allocatedWeightKg} kg` },
                     { label: 'Boxes',       value: String(exportBatch.boxCount) },
-                    { label: 'Grade',       value: exportBatch.gradeLabel || 'Grade A' },
+                    { label: 'Grade',       value: exportBatch.gradeLabel || '—' },
                     {
                         label: 'Status',
                         value: exportBatch.status,

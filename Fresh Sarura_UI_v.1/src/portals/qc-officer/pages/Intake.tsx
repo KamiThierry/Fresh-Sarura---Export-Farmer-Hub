@@ -219,13 +219,14 @@ const Intake = () => {
 
         autoTable(doc, {
             startY: yPos + 10,
-            head: [['REF ID', 'CROP', 'SUPPLIER', 'ARRIVAL', 'WEIGHT', 'STATUS']],
+            head: [['REF ID', 'CROP', 'SUPPLIER', 'ARRIVAL', 'WEIGHT', 'DRIVER / VEHICLE', 'STATUS']],
             body: filtered.map(r => [
                 `INT${r.intakeLogId.slice(-6).toUpperCase()}`,
                 toTitleCase(r.crop),
                 r.supplier,
                 `${r.arrivalDate} ${r.arrivalTime}`,
                 r.weight,
+                `${r.driverName}\n${r.vehiclePlate}`,
                 statusConfig[r.status]?.label || r.status
             ]),
             theme: 'striped',
@@ -234,7 +235,7 @@ const Intake = () => {
             alternateRowStyles: alternateRowStyles,
             margin: { left: 15, right: 15, bottom: 30 },
             didParseCell: (data) => {
-                if (data.section === 'body' && data.column.index === 5) {
+                if (data.section === 'body' && data.column.index === 6) {
                     const statusKey = filtered[data.row.index].status;
                     const config = statusConfig[statusKey];
                     if (config?.pdfColor) {
@@ -268,7 +269,7 @@ const Intake = () => {
             doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
             doc.text('This is a computer generated report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
             const footerY = 288;
-            doc.text('Kigali - Rwanda | +250 788 123 456 | qc@freshsarura.rw | www.freshsarura.rw', pageWidth / 2, footerY, { align: 'center' });
+            doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
         }
 

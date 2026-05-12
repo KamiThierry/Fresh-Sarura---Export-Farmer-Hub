@@ -5,7 +5,6 @@ import {
     Sprout,
     Package,
     ShieldCheck,
-    MessageSquare,
     BarChart3,
     FileCheck,
     Settings,
@@ -28,8 +27,8 @@ const Sidebar = () => {
                 { path: '/pm/crop-planning', icon: Sprout, label: 'Crop Planning' },
                 { path: '/pm/inventory', icon: Package, label: 'Inventory & Batches' },
                 { path: '/pm/rooms', icon: DoorOpen, label: 'Room Management' },
-                { path: '/pm/quality-control', icon: ShieldCheck, label: 'Quality Control (QC)' },
-                { path: '/pm/communication', icon: MessageSquare, label: 'Client Requests' },
+                { path: '/pm/quality-control', icon: ShieldCheck, label: 'QC Insights' },
+                // { path: '/pm/communication', icon: MessageSquare, label: 'Client Requests' },
             ]
         },
         {

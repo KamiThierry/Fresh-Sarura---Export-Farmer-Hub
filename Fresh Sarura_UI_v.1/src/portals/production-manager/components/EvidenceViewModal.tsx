@@ -1,4 +1,4 @@
-import { X, CheckCircle2, XCircle, User, Calendar, ExternalLink } from 'lucide-react';
+import { X, CheckCircle2, XCircle, Calendar, ExternalLink } from 'lucide-react';
 
 interface EvidenceViewModalProps {
     isOpen: boolean;

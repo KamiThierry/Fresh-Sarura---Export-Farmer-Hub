@@ -90,7 +90,7 @@ const BatchDetailModal = ({ isOpen, onClose, batch, onStatusChange }: BatchDetai
             // ── 3. Summary Fields ─────────────────────────────────────
             const summaryFields = [
                 { label: 'Crop',            value: batch.cropName },
-                { label: 'Grade',           value: batch.gradeLabel || 'Grade A' },
+                { label: 'Grade',           value: batch.gradeLabel || '—' },
                 { label: 'Client',          value: batch.clientName },
                 { label: 'Destination',     value: batch.destination },
                 { label: 'Allocated Weight',value: `${batch.allocatedWeightKg?.toLocaleString()} kg` },
@@ -175,7 +175,7 @@ const BatchDetailModal = ({ isOpen, onClose, batch, onStatusChange }: BatchDetai
                     <div className="grid grid-cols-2 gap-3">
                         {[
                             { icon: Package, label: 'Crop', value: batch.cropName },
-                            { icon: Tag, label: 'Grade', value: batch.gradeLabel || 'Grade A' },
+                            { icon: Tag, label: 'Grade', value: batch.gradeLabel || '—' },
                             { icon: MapPin, label: 'Client', value: batch.clientName },
                             { icon: MapPin, label: 'Destination', value: batch.destination },
                             { icon: Weight, label: 'Total Weight', value: `${batch.allocatedWeightKg?.toLocaleString()} kg` },

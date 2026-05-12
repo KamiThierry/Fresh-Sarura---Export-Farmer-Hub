@@ -235,13 +235,15 @@ const FarmerManagement = () => {
     doc.text('REGISTERED FARMERS DIRECTORY', 15, yPos);
     autoTable(doc, {
       startY: yPos + 5,
-      head: [['FARMER / FARM', 'CONTACT INFO', 'PHYSICAL ADDRESS', 'MAIN CROP', 'SIZE', 'STATUS']],
+      head: [['FARMER / FARM', 'NATIONAL ID', 'CONTACT INFO', 'PHYSICAL ADDRESS', 'MAIN CROP', 'SIZE', 'JOINED', 'STATUS']],
       body: filteredFarmers.map(f => [
         `${toTitleCase(f.full_name)}\n${toTitleCase(f.farm_name || 'Individual')}`,
+        f.national_id || 'N/A',
         `${f.phone || 'N/A'}\n${f.email || 'N/A'}`,
         `${toTitleCase(f.district)}, ${toTitleCase(f.sector)}`,
         (f.produce_types || []).join(', '),
         `${f.farm_size_hectares || 0} ha`,
+        f.created_at ? new Date(f.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : 'N/A',
         toTitleCase(f.status || 'Active')
       ]),
       theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
@@ -276,7 +278,7 @@ const FarmerManagement = () => {
       doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
       doc.text('This is a computer generated report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
       const footerY = 288;
-      doc.text('Kigali - Rwanda | +250 788 123 456 | reports@freshsarura.rw | www.freshsarura.rw', pageWidth / 2, footerY, { align: 'center' });
+      doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
       doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
     }
 
@@ -469,6 +471,20 @@ const FarmerManagement = () => {
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
               </div>
+
+              {(searchQuery || statusFilter !== 'all' || cropFilter !== 'all') && (
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setStatusFilter('all');
+                    setCropFilter('all');
+                    setCurrentPage(1);
+                  }}
+                  className="text-xs text-green-600 hover:text-green-700 font-bold transition-colors px-2 whitespace-nowrap"
+                >
+                  Clear Filters
+                </button>
+              )}
             </div>
 
             {/* Directory Table */}
