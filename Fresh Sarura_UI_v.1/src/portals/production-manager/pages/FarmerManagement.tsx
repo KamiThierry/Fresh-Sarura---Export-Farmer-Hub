@@ -9,7 +9,7 @@ import FarmerRegistrationModal from '../components/FarmerRegistrationModal';
 import FarmNetworkMap from '../components/FarmNetworkMap';
 import FarmerProfile from '../components/FarmerProfile';
 import Pagination from '../../shared/component/Pagination';
-import Toast from '../../shared/component/Toast';
+import { useToastContext } from '@/context/ToastContext';
 import { Farmer } from '@/types';
 
 
@@ -30,7 +30,7 @@ const FarmerManagement = () => {
   const [selectedFarmer, setSelectedFarmer] = useState<Farmer | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 3;
-  const [successToast, setSuccessToast] = useState<{ name: string } | null>(null);
+  const { showToast } = useToastContext();
 
   const { 
     farmers, 
@@ -599,17 +599,11 @@ const FarmerManagement = () => {
             onFarmerAdded={(name) => {
               refreshFarmers();
               setIsRegistrationOpen(false);
-              setSuccessToast({ name });
+              showToast("Farmer Registered Successfully", `${name} has been added to the network`);
             }}
           />
 
-          {successToast && (
-            <Toast
-              message="Farmer Registered Successfully"
-              subtitle={`${successToast.name} has been added to the network`}
-              onClose={() => setSuccessToast(null)}
-            />
-          )}
+
         </>
       ) : (
         /* ── Detail view ── */

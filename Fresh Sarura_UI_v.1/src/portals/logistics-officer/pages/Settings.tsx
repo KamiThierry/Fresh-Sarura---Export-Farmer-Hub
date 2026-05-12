@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { User, Bell, Save, Shield, Mail, Smartphone } from 'lucide-react';
-import Toast from '../../shared/component/Toast';
+import { useToastContext } from '@/context/ToastContext';
 
 const Settings = () => {
     const [activeTab, setActiveTab] = useState<'profile' | 'notifications'>('profile');
-    const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
+    const { showToast } = useToastContext();
 
     const handleSaveNotification = (msg: string, sub: string) => {
-        setToast({ message: msg, subtitle: sub });
+        showToast(msg, sub);
     };
 
     return (
@@ -47,13 +47,6 @@ const Settings = () => {
 
             </div>
 
-            {toast && (
-                <Toast
-                    message={toast.message}
-                    subtitle={toast.subtitle}
-                    onClose={() => setToast(null)}
-                />
-            )}
         </div>
     );
 };

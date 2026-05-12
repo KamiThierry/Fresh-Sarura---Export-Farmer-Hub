@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { FlaskConical, PackageCheck, Loader2, RefreshCw, ClipboardCheck, ArrowRight } from 'lucide-react';
 import { api } from '../../../lib/api';
 import RecordQCModal from '../components/RecordQCModal';
-import Toast from '../../shared/component/Toast';
+import { useToastContext } from '@/context/ToastContext';
 
 type IntakeLog = {
   _id: string;
@@ -35,7 +35,7 @@ const Processing = () => {
   const [loading, setLoading] = useState(true);
   const [requestingRoomId, setRequestingRoomId] = useState<string | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<any | null>(null);
-  const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
+  const { showToast } = useToastContext();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -84,17 +84,17 @@ const Processing = () => {
         receivedWeightKg: intakeLog.pickedUpWeightKg,
         cropName: intakeLog.harvestDeclarationId.cropName,
       });
-      setToast({
-        message: 'Room Requested',
-        subtitle: `A request for ${intakeLog.harvestDeclarationId.cropName} has been sent to the PM.`
-      });
+      showToast(
+        'Room Requested',
+        `A request for ${intakeLog.harvestDeclarationId.cropName} has been sent to the PM.`
+      );
       await fetchData();
     } catch (err) {
       console.error('Failed to request room:', err);
-      setToast({
-        message: 'Request Failed',
-        subtitle: 'Could not send room request. Please try again.'
-      });
+      showToast(
+        'Request Failed',
+        'Could not send room request. Please try again.'
+      );
     } finally {
       setRequestingRoomId(null);
     }
@@ -293,10 +293,10 @@ const Processing = () => {
               assignedGrade: res.grade
             });
             setSelectedBatch(null);
-            setToast({
-              message: 'Results Logged',
-              subtitle: `Final weights for ${selectedBatch?.crop} have been recorded.`
-            });
+            showToast(
+              'Results Logged',
+              `Final weights for ${selectedBatch?.crop} have been recorded.`
+            );
             fetchData();
           } catch (err) {
             console.error('Failed to complete QC:', err);
@@ -304,13 +304,6 @@ const Processing = () => {
         }}
       />
 
-      {toast && (
-        <Toast
-          message={toast.message}
-          subtitle={toast.subtitle}
-          onClose={() => setToast(null)}
-        />
-      )}
     </>
   );
 };

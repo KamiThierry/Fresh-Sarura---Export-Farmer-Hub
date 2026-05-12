@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, CheckCircle2, Loader2, Package, MapPin, Calendar, Tag, Weight, Plane, Download } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { api } from '../../../lib/api';
+import { useToastContext } from '@/context/ToastContext';
 import jsPDF from 'jspdf';
 import logo from '@/assets/sarura_logo_nav.png';
 
@@ -23,6 +24,7 @@ const BatchDetailModal = ({ isOpen, onClose, batch, onStatusChange }: BatchDetai
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [linkedShipment, setLinkedShipment] = useState<any>(null);
+    const { showToast } = useToastContext();
 
     useEffect(() => {
         if (isOpen && batch?._id) {
@@ -45,6 +47,7 @@ const BatchDetailModal = ({ isOpen, onClose, batch, onStatusChange }: BatchDetai
         setError(null);
         try {
             await api.patch(`/export-batches/${batch._id}/ready`, {});
+            showToast("Batch Updated", "Export batch has been marked as ready for export");
             onStatusChange?.();
             onClose();
         } catch (err: any) {

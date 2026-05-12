@@ -5,13 +5,13 @@ import { Sprout, Plus, AlertTriangle, ChevronRight, BarChart2, AlertCircle } fro
 import CreateCropCycleModal from '../components/CreateCropCycleModal';
 import CropCycleDetailModal from '../components/CropCycleDetailModal';
 import BudgetRejectionModal from '../components/BudgetRejectionModal';
-import Toast from '../../shared/component/Toast';
+import { useToastContext } from '@/context/ToastContext';
 import { usePMContext } from '@/context/PMContext';
 
 const CropPlanning = () => {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [selectedCycle, setSelectedCycle] = useState<any>(null);
-    const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
+    const { showToast } = useToastContext();
     const [initialTab, setInitialTab] = useState<'overview' | 'financials' | 'requests' | 'forecasts'>('overview');
     const [rejectionModalConfig, setRejectionModalConfig] = useState<{ isOpen: boolean; requestId: string | null }>({
         isOpen: false,
@@ -42,7 +42,7 @@ const CropPlanning = () => {
     const handleApproveRequest = async (requestId: string, forceApprove = false) => {
         try {
             await api.patch(`/crop-cycles/budget-requests/${requestId}/approve`, { forceApprove, pmNote: 'Approved' });
-            setToast({ message: 'Request Approved', subtitle: 'The budget allocation has been updated.' });
+            showToast('Request Approved', 'The budget allocation has been updated.');
             setOverdraftWarning(null);
             refreshPendingRequests();
             refreshCycles();
@@ -51,7 +51,7 @@ const CropPlanning = () => {
                 setOverdraftWarning({ requestId, details: err.overdraftDetails });
             } else {
                 console.error('Failed to approve request:', err);
-                setToast({ message: 'Error', subtitle: err.message || 'Failed to approve request.' });
+                showToast('Error', err.message || 'Failed to approve request.');
             }
         }
     };
@@ -59,11 +59,11 @@ const CropPlanning = () => {
     const handleConfirmRejection = async (requestId: string, pmNote: string) => {
         try {
             await api.patch(`/crop-cycles/budget-requests/${requestId}/reject`, { pmNote });
-            setToast({ message: 'Request Rejected' });
+            showToast('Request Rejected');
             refreshPendingRequests();
         } catch (err) {
             console.error('Failed to reject request:', err);
-            setToast({ message: 'Error', subtitle: 'Failed to reject request.' });
+            showToast('Error', 'Failed to reject request.');
         }
     };
 
@@ -84,10 +84,10 @@ const CropPlanning = () => {
             });
             refreshCycles();
             setSelectedCycle(null);
-            setToast({ message: 'Crop Cycle Closed', subtitle: `Final yield recorded: ${finalYield}` });
+            showToast('Crop Cycle Closed', `Final yield recorded: ${finalYield}`);
         } catch (err) {
             console.error('Failed to close cycle:', err);
-            setToast({ message: 'Error', subtitle: 'Failed to close the cycle. Please try again.' });
+            showToast('Error', 'Failed to close the cycle. Please try again.');
         }
     };
 
@@ -325,14 +325,7 @@ const CropPlanning = () => {
                 </div>
             )}
 
-            {/* Toast Notification */}
-            {toast && (
-                <Toast
-                    message={toast.message}
-                    subtitle={toast.subtitle}
-                    onClose={() => setToast(null)}
-                />
-            )}
+
 
             {/* Modal 1: Create Cycle */}
             <CreateCropCycleModal
@@ -343,10 +336,10 @@ const CropPlanning = () => {
                         await api.post('/crop-cycles', formData);
                         setIsCreateModalOpen(false);
                         refreshCycles();
-                        setToast({ message: 'Crop Cycle Created!', subtitle: `${formData.crop_name} cycle is now active.` });
+                        showToast('Crop Cycle Created!', `${formData.crop_name} cycle is now active.`);
                     } catch (err) {
                         console.error('Failed to create cycle:', err);
-                        setToast({ message: 'Error', subtitle: 'Failed to create the crop cycle. Please try again.' });
+                        showToast('Error', 'Failed to create the crop cycle. Please try again.');
                     }
                 }}
             />

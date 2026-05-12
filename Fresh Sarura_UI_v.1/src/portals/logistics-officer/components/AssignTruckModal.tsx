@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Truck, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { useToastContext } from '@/context/ToastContext';
 
 interface AssignTruckModalProps {
     isOpen: boolean;
@@ -23,7 +24,7 @@ const AssignTruckModal = ({ isOpen, onClose, driver, availableVehicles, onSucces
         vehicleId: ''
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const { showToast } = useToastContext();
 
     const isLicenseExpiring = () => {
         if (!driver.licenseExpiry) return false;
@@ -38,17 +39,16 @@ const AssignTruckModal = ({ isOpen, onClose, driver, availableVehicles, onSucces
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
-        setError(null);
-
         try {
             await api.patch(`/fleet/drivers/${driver._id}/assign-vehicle`, {
                 vehicleId: formData.vehicleId
             });
+            showToast('Assignment Successful', `Vehicle has been assigned to ${driver.firstName} ${driver.lastName}.`);
             onSuccess();
             onClose();
         } catch (err: any) {
             console.error('Error assigning vehicle:', err);
-            setError(err.message || 'Failed to assign vehicle');
+            showToast('Assignment Error', err.message || 'Failed to assign vehicle');
         } finally {
             setIsSubmitting(false);
         }
@@ -96,12 +96,7 @@ const AssignTruckModal = ({ isOpen, onClose, driver, availableVehicles, onSucces
 
                 {/* Body */}
                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                    {error && (
-                        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-2xl flex items-center gap-3 text-red-600 dark:text-red-400 text-sm font-medium">
-                            <AlertCircle size={20} />
-                            {error}
-                        </div>
-                    )}
+
 
                     <div className="grid grid-cols-1 gap-6">
 

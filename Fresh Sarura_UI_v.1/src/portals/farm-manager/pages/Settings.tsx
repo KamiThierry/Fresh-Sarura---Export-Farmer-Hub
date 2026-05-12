@@ -4,12 +4,12 @@ import {
     Save, ChevronRight, Scale, Lock, Eye, EyeOff, Loader2
 } from 'lucide-react';
 import { useFarmManager } from '../../../lib/useFarmManager';
-import Toast from '../../shared/component/Toast';
+import { useToastContext } from '@/context/ToastContext';
 
 const Settings = () => {
     const { updateProfile, updatePassword } = useFarmManager();
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-    const [toastConfig, setToastConfig] = useState<{ message: string; subtitle?: string } | null>(null);
+    const { showToast } = useToastContext();
 
     // Section 1: User Profile State
     const [profile, setProfile] = useState({
@@ -69,15 +69,9 @@ const Settings = () => {
                 }
             });
             setIsEditing(false);
-            setToastConfig({
-                message: "Profile Updated",
-                subtitle: "Your changes have been saved successfully.",
-            });
+            showToast("Profile Updated", "Your changes have been saved successfully.");
         } catch (err: any) {
-            setToastConfig({
-                message: "Update Failed",
-                subtitle: err.message || "Failed to update profile",
-            });
+            showToast("Update Failed", err.message || "Failed to update profile");
         } finally {
             setIsSaving(false);
         }
@@ -86,10 +80,7 @@ const Settings = () => {
     const handleUpdatePassword = async (e: React.FormEvent) => {
         e.preventDefault();
         if (passwordData.newPassword !== passwordData.confirmPassword) {
-            setToastConfig({
-                message: "Mismatch",
-                subtitle: "New passwords do not match.",
-            });
+            showToast("Mismatch", "New passwords do not match.");
             return;
         }
         setIsSaving(true);
@@ -99,16 +90,10 @@ const Settings = () => {
                 newPassword: passwordData.newPassword
             });
             setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-            setToastConfig({
-                message: "Password Updated",
-                subtitle: "Your security settings have been updated.",
-            });
+            showToast("Password Updated", "Your security settings have been updated.");
         } catch (err: any) {
             console.error('Password update failure details:', err);
-            setToastConfig({
-                message: "Update Failed",
-                subtitle: err.message || "Incorrect current password or invalid data.",
-            });
+            showToast("Update Failed", err.message || "Incorrect current password or invalid data.");
         } finally {
             setIsSaving(false);
         }
@@ -366,14 +351,6 @@ const Settings = () => {
                     </div>
                 </div>
             </div>
-
-            {toastConfig && (
-                <Toast
-                    message={toastConfig.message}
-                    subtitle={toastConfig.subtitle}
-                    onClose={() => setToastConfig(null)}
-                />
-            )}
         </div>
     );
 };

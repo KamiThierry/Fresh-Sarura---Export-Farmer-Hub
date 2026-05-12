@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, DoorOpen, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { useToastContext } from '@/context/ToastContext';
 
 interface AddRoomModalProps {
     isOpen: boolean;
@@ -15,6 +16,7 @@ const AddRoomModal = ({ isOpen, onClose, onSuccess }: AddRoomModalProps) => {
     const [capacityKg, setCapacityKg] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const { showToast } = useToastContext();
 
     const reset = () => { setName(''); setType('Processing'); setCapacityKg(''); setError(null); };
 
@@ -26,6 +28,7 @@ const AddRoomModal = ({ isOpen, onClose, onSuccess }: AddRoomModalProps) => {
         setError(null);
         try {
             await api.post('/rooms', { name, type, capacityKg: Number(capacityKg) });
+            showToast('Room Created', `${name} has been added to the system.`);
             reset();
             onSuccess();
         } catch (err: any) {

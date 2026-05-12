@@ -11,7 +11,7 @@ import BudgetLedgerModal from './BudgetLedgerModal';
 import BudgetRejectionModal from './BudgetRejectionModal';
 import { api } from '@/lib/api';
 import { usePMContext } from '@/context/PMContext';
-import Toast from '../../shared/component/Toast';
+import { useToastContext } from '@/context/ToastContext';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -54,7 +54,7 @@ const CropCycleDetailModal = ({
 
   // ─── Per-forecast reply text ───────────────────────────────────────
   const [replyText, setReplyText] = useState<{ [id: string]: string }>({});
-  const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
+  const { showToast } = useToastContext();
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   const {
@@ -147,7 +147,7 @@ const CropCycleDetailModal = ({
       if (err.code === 'BUDGET_OVERDRAFT') {
         setOverdraftWarning({ requestId, details: err.overdraftDetails });
       } else if (err.code === 'CYCLE_CLOSED') {
-        alert(err.message);
+        showToast("Action Forbidden", err.message);
       } else {
         console.error(err);
       }
@@ -213,10 +213,7 @@ const CropCycleDetailModal = ({
   const handleCloseAttempt = () => {
     const pendingCount = budgetRequests.filter((r: any) => r.approvalStatus === 'Pending').length;
     if (pendingCount > 0) {
-      setToast({
-        message: "Pending Requests Found",
-        subtitle: `There are ${pendingCount} pending budget requests for this cycle. Reject or approve them before closing.`
-      });
+      showToast("Pending Requests Found", `There are ${pendingCount} pending budget requests for this cycle. Reject or approve them before closing.`);
       return;
     }
     setIsConfirmCloseOpen(true);
@@ -1134,7 +1131,7 @@ const CropCycleDetailModal = ({
         onConfirm={() => handleApproveRequest(overdraftWarning.requestId, true)}
         onAdjust={() => { setOverdraftWarning(null); setIsAdjustBudgetOpen(true); }}
       />
-      {toast && <Toast message={toast.message} subtitle={toast.subtitle} onClose={() => setToast(null)} />}
+
     </div>,
     document.body
   );

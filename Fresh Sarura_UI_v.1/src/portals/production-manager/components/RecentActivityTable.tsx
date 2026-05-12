@@ -54,7 +54,7 @@ const RecentActivityTable = () => {
   }, [shipments, stock]);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-[0_2px_6px_rgba(0,0,0,0.06)] transition-colors border-theme">
+    <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-[0_2px_6px_rgba(0,0,0,0.06)] transition-colors border-theme h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-base font-semibold text-[#222222] dark:text-white" style={{ fontFamily: 'Poppins, sans-serif' }}>
@@ -64,12 +64,9 @@ const RecentActivityTable = () => {
             Latest batch movements and updates
           </p>
         </div>
-        <button className="text-sm text-[#4CAF50] font-semibold hover:text-[#66BB6A] transition-colors">
-          View All
-        </button>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto flex-1">
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-100 dark:border-gray-700">

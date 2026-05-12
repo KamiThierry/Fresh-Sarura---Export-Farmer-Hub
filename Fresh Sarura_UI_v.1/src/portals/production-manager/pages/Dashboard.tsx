@@ -76,7 +76,7 @@ const Dashboard = ({
     }, []);
 
     return (
-        <div className="p-6">
+        <div className="p-6 min-h-[calc(100vh-70px)] flex flex-col">
             {/* Summary Cards */}
             <div className="mb-6">
                 <DashboardStats
@@ -122,7 +122,7 @@ const Dashboard = ({
             </div>
 
             {/* Loss Analytics and Recent Activity */}
-            <div className="grid grid-cols-3 gap-6 mt-6">
+            <div className="grid grid-cols-3 gap-6 mt-6 flex-1">
                 <div className="col-span-1">
                     <LossAnalyticsChart />
                 </div>

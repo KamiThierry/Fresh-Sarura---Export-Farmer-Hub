@@ -13,6 +13,12 @@ import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import logo from '../../../assets/sarura_logo_nav.png';
 
+const MASTER_DEFECT_TYPES = [
+    'Bruising (Mechanical)',
+    'Pest Damage',
+    'Undersized',
+];
+
 const QCInsights = () => {
     const [activeTab, setActiveTab] = useState('dashboard');
     const [batches, setBatches] = useState<any[]>([]);
@@ -42,63 +48,41 @@ const QCInsights = () => {
 
     useEffect(() => { fetchBatches(); }, []);
 
-    // ── Derived stats ──────────────────────────────────────────────
-    const totalReceivedKg = useMemo(() =>
-        batches.reduce((sum, b) => sum + (b.receivedWeightKg || 0), 0), [batches]);
-
-    const totalRejectedKg = useMemo(() =>
-        batches.reduce((sum, b) => sum + (b.rejectedWeightKg || 0), 0), [batches]);
-
-    const overallRejectionRate = totalReceivedKg > 0
-        ? ((totalRejectedKg / totalReceivedKg) * 100).toFixed(1)
-        : '0.0';
-
-    const gradeACount = batches.filter(b =>
-        b.gradeLabel?.toLowerCase().includes('grade a') || b.gradeLabel?.toLowerCase().includes('export')
-    ).length;
-
-    const gradeARate = batches.length > 0
-        ? ((gradeACount / batches.length) * 100).toFixed(1)
-        : '0.0';
-
-    const MASTER_DEFECT_TYPES = [
-        'Bruising (Mechanical)',
-        'Pest Damage',
-        'Undersized',
-        // 'Coloration',
-        // 'Fungal Infection',
-        // 'Dehydration'
-    ];
-
-    // Defect frequency map
-    const defectMap = useMemo(() => {
-        const map: Record<string, { count: number; rejectedKg: number }> = {};
-        
-        // Initialize with all master types (to show 0 values)
+    // ── Derived Stats & Analytics ──────────────────────────────────
+    const stats = useMemo(() => {
+        const dMap: Record<string, { count: number; rejectedKg: number }> = {};
         MASTER_DEFECT_TYPES.forEach(d => {
-            map[d] = { count: 0, rejectedKg: 0 };
+            dMap[d] = { count: 0, rejectedKg: 0 };
         });
+
+        let received = 0;
+        let rejected = 0;
+        let gACount = 0;
 
         batches.forEach(b => {
+            received += b.receivedWeightKg || 0;
+            rejected += b.rejectedWeightKg || 0;
+            
+            const isGradeA = b.gradeLabel?.toLowerCase().includes('grade a') || 
+                            b.gradeLabel?.toLowerCase().includes('export');
+            if (isGradeA) gACount++;
+
             const defect = b.primaryDefectType;
-            if (!defect || defect === 'None') return;
-            if (!map[defect]) map[defect] = { count: 0, rejectedKg: 0 };
-            map[defect].count += 1;
-            map[defect].rejectedKg += b.rejectedWeightKg || 0;
+            if (defect && defect !== 'None') {
+                if (!dMap[defect]) dMap[defect] = { count: 0, rejectedKg: 0 };
+                dMap[defect].count++;
+                dMap[defect].rejectedKg += b.rejectedWeightKg || 0;
+            }
         });
-        return map;
-    }, [batches]);
 
-    const topDefect = useMemo(() => {
-        const sorted = Object.entries(defectMap).sort((a, b) => b[1].rejectedKg - a[1].rejectedKg);
-        return (sorted.length > 0 && sorted[0][1].rejectedKg > 0) ? sorted[0][0] : 'None';
-    }, [defectMap]);
+        const sorted = Object.entries(dMap).sort((a, b) => b[1].rejectedKg - a[1].rejectedKg);
+        const tDefect = (sorted.length > 0 && sorted[0][1].rejectedKg > 0) ? sorted[0][0] : 'None';
+        
+        const rejectionRate = received > 0 ? ((rejected / received) * 100).toFixed(1) : '0.0';
+        const gARate = batches.length > 0 ? ((gACount / batches.length) * 100).toFixed(1) : '0.0';
 
-    const uniqueDefects = useMemo(() => MASTER_DEFECT_TYPES, []);
-
-    // Farmer rejection rates
-    const farmerMap = useMemo(() => {
-        const map: Record<string, { name: string; received: number; rejected: number }> = {};
+        // Farmer rejection rates
+        const fMap: Record<string, { name: string; received: number; rejected: number }> = {};
         batches.forEach(b => {
             const farmerId = b.cycleId?.farmer_id?._id || b.cycleId?.farmer_id || 'unknown';
             const farmerName =
@@ -106,22 +90,44 @@ const QCInsights = () => {
                 b.cycleId?.farmer_id?.cooperative_name ||
                 b.cycleId?.farm_name ||
                 'Unknown Farmer';
-            if (!map[farmerId]) map[farmerId] = { name: farmerName, received: 0, rejected: 0 };
-            map[farmerId].received += b.receivedWeightKg || 0;
-            map[farmerId].rejected += b.rejectedWeightKg || 0;
+            if (!fMap[farmerId]) fMap[farmerId] = { name: farmerName, received: 0, rejected: 0 };
+            fMap[farmerId].received += b.receivedWeightKg || 0;
+            fMap[farmerId].rejected += b.rejectedWeightKg || 0;
         });
-        return map;
+
+        const fRows = Object.entries(fMap)
+            .map(([id, f]) => ({
+                id,
+                name: f.name,
+                received: f.received,
+                rejected: f.rejected,
+                rate: f.received > 0 ? (f.rejected / f.received) * 100 : 0,
+            }))
+            .sort((a, b) => b.rate - a.rate);
+
+        return {
+            totalReceivedKg: received,
+            totalRejectedKg: rejected,
+            overallRejectionRate: rejectionRate,
+            gradeACount: gACount,
+            gradeARate: gARate,
+            defectMap: dMap,
+            topDefect: tDefect,
+            farmerRows: fRows
+        };
     }, [batches]);
 
-    const farmerRows = Object.entries(farmerMap)
-        .map(([id, f]) => ({
-            id,
-            name: f.name,
-            received: f.received,
-            rejected: f.rejected,
-            rate: f.received > 0 ? (f.rejected / f.received) * 100 : 0,
-        }))
-        .sort((a, b) => b.rate - a.rate);
+    const {
+        totalRejectedKg,
+        overallRejectionRate,
+        gradeACount,
+        gradeARate,
+        defectMap,
+        topDefect,
+        farmerRows
+    } = stats;
+
+    const uniqueDefects = MASTER_DEFECT_TYPES;
 
     const getFarmerStatus = (rate: number) => {
         if (rate > 30) return { label: 'Critical', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' };

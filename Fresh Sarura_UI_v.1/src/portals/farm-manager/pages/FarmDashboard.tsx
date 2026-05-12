@@ -10,12 +10,14 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cart
 import HarvestReadyModal from '../components/HarvestReadyModal';
 import RequestSuppliesModal from '../components/RequestSuppliesModal';
 import { useFarmManager } from '../../../lib/useFarmManager';
+import { useToastContext } from '@/context/ToastContext';
 
 const FarmDashboard = () => {
     const navigate = useNavigate();
     const [isHarvestModalOpen, setIsHarvestModalOpen] = useState(false);
     const [isSuppliesModalOpen, setIsSuppliesModalOpen] = useState(false);
     const [timeRange, setTimeRange] = useState(30); // days
+    const { showToast } = useToastContext();
 
     const { dashboard, cycles, activity, loading, submitBudgetRequest, declareHarvest } = useFarmManager();
 
@@ -381,7 +383,13 @@ const FarmDashboard = () => {
                 onClose={() => setIsHarvestModalOpen(false)}
                 cycles={activeCycles}
                 onSubmitConfirm={async (data) => {
-                    await declareHarvest(data);
+                    try {
+                        await declareHarvest(data);
+                        showToast('Harvest Declared', 'The logistics team has been notified for pickup.');
+                        setIsHarvestModalOpen(false);
+                    } catch (error) {
+                        console.error(error);
+                    }
                 }}
             />
             <RequestSuppliesModal
@@ -389,20 +397,26 @@ const FarmDashboard = () => {
                 onClose={() => setIsSuppliesModalOpen(false)}
                 cycles={cycles}
                 onSubmit={async (request) => {
-                    // Clean line items to match backend expected shape
-                    const cleanLineItems = request.lineItems.map(item => ({
-                        activityName: item.activityName,
-                        category: item.category,
-                        estimatedCostRwf: item.estimatedCostRwf
-                    }));
+                    try {
+                        // Clean line items to match backend expected shape
+                        const cleanLineItems = request.lineItems.map(item => ({
+                            activityName: item.activityName,
+                            category: item.category,
+                            estimatedCostRwf: item.estimatedCostRwf
+                        }));
 
-                    await submitBudgetRequest({
-                        cycleId: String(request.cycleId),
-                        cycleName: request.cycleName,
-                        startDate: request.startDate,
-                        endDate: request.endDate,
-                        lineItems: cleanLineItems,
-                    });
+                        await submitBudgetRequest({
+                            cycleId: String(request.cycleId),
+                            cycleName: request.cycleName,
+                            startDate: request.startDate,
+                            endDate: request.endDate,
+                            lineItems: cleanLineItems,
+                        });
+                        showToast('Supplies Requested', 'Your budget request has been sent to the Production Manager.');
+                        setIsSuppliesModalOpen(false);
+                    } catch (error) {
+                        console.error(error);
+                    }
                 }}
             />
         </>

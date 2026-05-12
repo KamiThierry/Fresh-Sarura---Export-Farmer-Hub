@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, User, Phone, Calendar, Save, AlertCircle, Loader2 } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { useToastContext } from '@/context/ToastContext';
 
 interface AddDriverModalProps {
     isOpen: boolean;
@@ -20,7 +21,7 @@ const AddDriverModal = ({ isOpen, onClose, onSuccess }: AddDriverModalProps) => 
     });
     const [isExpired, setIsExpired] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const { showToast } = useToastContext();
 
     useEffect(() => {
         if (formData.licenseExpiry) {
@@ -38,10 +39,9 @@ const AddDriverModal = ({ isOpen, onClose, onSuccess }: AddDriverModalProps) => 
         e.preventDefault();
         if (isExpired) return;
         setIsSubmitting(true);
-        setError(null);
-
         try {
             await api.post('/fleet/drivers', formData);
+            showToast('Driver Registered', `${formData.firstName} ${formData.lastName} has been added successfully.`);
             onSuccess();
             onClose();
             setFormData({
@@ -54,7 +54,7 @@ const AddDriverModal = ({ isOpen, onClose, onSuccess }: AddDriverModalProps) => 
             });
         } catch (err: any) {
             console.error('Error adding driver:', err);
-            setError(err.message || 'Failed to add driver');
+            showToast('Registration Error', err.message || 'Failed to add driver');
         } finally {
             setIsSubmitting(false);
         }
@@ -81,12 +81,7 @@ const AddDriverModal = ({ isOpen, onClose, onSuccess }: AddDriverModalProps) => 
 
                 {/* Body */}
                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                    {error && (
-                        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-2xl flex items-center gap-3 text-red-600 dark:text-red-400 text-sm font-medium">
-                            <AlertCircle size={20} />
-                            {error}
-                        </div>
-                    )}
+
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 

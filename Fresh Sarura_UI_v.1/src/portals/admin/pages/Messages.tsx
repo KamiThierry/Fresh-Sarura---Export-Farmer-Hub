@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, RefreshCw, Send, Trash2, Check, Loader2, Lock, Mail } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { useToastContext } from '@/context/ToastContext';
 
 interface ContactMessage {
     _id: string;
@@ -49,13 +50,8 @@ const Messages = () => {
     const [sending, setSending] = useState(false);
     const [tab, setTab] = useState<'All' | 'Unread'>('All');
     const [search, setSearch] = useState('');
-    const [toast, setToast] = useState<string | null>(null);
+    const { showToast } = useToastContext();
     const chatEndRef = useRef<HTMLDivElement>(null);
-
-    const showToast = (msg: string) => {
-        setToast(msg);
-        setTimeout(() => setToast(null), 3500);
-    };
 
     const fetchMessages = async () => {
         setLoading(true);
@@ -102,9 +98,9 @@ const Messages = () => {
             );
             setSelected(prev => prev ? { ...prev, status: 'Replied', replyNote: replyText, repliedAt: now } : null);
             setReplyText('');
-            showToast('Reply sent successfully.');
+            showToast('Reply Sent', 'Your message has been sent to the contact.');
         } catch {
-            showToast('Failed to send reply. Check your email configuration.');
+            showToast('Error', 'Failed to send reply. Check your email configuration.');
         } finally {
             setSending(false);
         }
@@ -116,8 +112,9 @@ const Messages = () => {
             await api.delete(`/contact/${id}`);
             setMessages(prev => prev.filter(m => m._id !== id));
             if (selected?._id === id) setSelected(null);
+            showToast('Message Deleted');
         } catch {
-            showToast('Failed to delete message.');
+            showToast('Error', 'Failed to delete message.');
         }
     };
 
@@ -135,12 +132,7 @@ const Messages = () => {
     return (
         <div className="flex flex-col h-[calc(100vh-64px)] bg-gray-50 dark:bg-gray-900">
 
-            {/* Toast */}
-            {toast && (
-                <div className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium">
-                    {toast}
-                </div>
-            )}
+
 
             {/* Page header */}
             <div className="px-6 py-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">

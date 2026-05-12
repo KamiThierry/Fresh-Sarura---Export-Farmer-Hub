@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Truck, PackageCheck, Clock, CheckCircle2, Loader2, RefreshCw, Search, Filter, ChevronDown, Users, Download, FileSpreadsheet, FileText } from 'lucide-react';
 import { api } from '../../../lib/api';
 import LogPickupModal from '../components/LogPickupModal';
-import Toast from '../../shared/component/Toast';
+import { useToastContext } from '@/context/ToastContext';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -34,7 +34,7 @@ const PendingPickups = () => {
   const [dateFilter, setDateFilter] = useState('All');
   const [selectedDeclaration, setSelectedDeclaration] = useState<Declaration | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
+  const { showToast } = useToastContext();
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -491,21 +491,14 @@ const PendingPickups = () => {
         } : null}
         onSuccess={() => {
           setIsModalOpen(false);
-          setToast({
-            message: 'Pickup Logged',
-            subtitle: `The harvest from ${selectedDeclaration?.farmName || selectedDeclaration?.farmerId?.full_name} has been marked as collected.`
-          });
+          showToast(
+            'Pickup Logged',
+            `The harvest from ${selectedDeclaration?.farmName || selectedDeclaration?.farmerId?.full_name} has been marked as collected.`
+          );
           fetchDeclarations();
         }}
       />
 
-      {toast && (
-        <Toast
-          message={toast.message}
-          subtitle={toast.subtitle}
-          onClose={() => setToast(null)}
-        />
-      )}
     </>
   );
 };

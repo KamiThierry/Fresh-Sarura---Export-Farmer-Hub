@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Truck } from 'lucide-react';
+import { useToastContext } from '@/context/ToastContext';
 
 interface LogIntakeModalProps {
     isOpen: boolean;
@@ -17,6 +18,7 @@ const LogIntakeModal = ({ isOpen, onClose, onSubmit }: LogIntakeModalProps) => {
         notes: '',
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const { showToast } = useToastContext();
 
     // Mock Farmers Data
     const farmers = [
@@ -36,8 +38,10 @@ const LogIntakeModal = ({ isOpen, onClose, onSubmit }: LogIntakeModalProps) => {
             const weightNum = parseFloat(formData.weight);
             if (!isNaN(weightNum)) {
                 onSubmit(weightNum);
+                showToast("Intake Logged", `${weightNum}kg of ${formData.produceType} recorded successfully.`);
             }
             setIsSubmitting(false);
+            onClose();
             // Reset form (optional, or keep state for next time)
             setFormData(prev => ({ ...prev, weight: '', notes: '' }));
         }, 1000);

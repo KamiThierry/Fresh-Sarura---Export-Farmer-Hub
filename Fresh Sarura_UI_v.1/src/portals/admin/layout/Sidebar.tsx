@@ -17,7 +17,9 @@ const portalSections = [
             { label: 'Crop Planning', path: '/admin/pm/crop-planning' },
             { label: 'Inventory & Batches', path: '/admin/pm/inventory' },
             { label: 'Room Management', path: '/admin/pm/rooms' },
+            { label: 'QC Insights', path: '/admin/pm/quality-control' },
             { label: 'Traceability', path: '/admin/pm/traceability' },
+            { label: 'Analytics & Reporting', path: '/admin/pm/analytics' },
 
         ],
     },
@@ -28,6 +30,7 @@ const portalSections = [
         items: [
             { label: 'Crop Planning', path: '/admin/fm/crop-planning' },
             { label: 'Yield Forecast', path: '/admin/fm/yield-forecast' },
+            { label: 'Performance', path: '/admin/fm/performance' },
         ],
     },
     {
@@ -35,6 +38,8 @@ const portalSections = [
         icon: FlaskConical,
         color: 'text-purple-600',
         items: [
+            { label: 'Home', path: '/admin/qc/home' },
+            { label: 'Intake', path: '/admin/qc/intake' },
             { label: 'Processing', path: '/admin/qc/processing' },
             { label: 'Cold Room (Stock)', path: '/admin/qc/cold-room' },
         ],
@@ -44,8 +49,10 @@ const portalSections = [
         icon: Truck,
         color: 'text-blue-600',
         items: [
+            { label: 'Dashboard', path: '/admin/logistics/dashboard' },
             { label: 'Pending Pickup', path: '/admin/logistics/pickup' },
             { label: 'Export Shipments', path: '/admin/logistics/shipments' },
+            { label: 'Fleet', path: '/admin/logistics/fleet' },
             { label: 'Documents', path: '/admin/logistics/documents' },
         ],
     },

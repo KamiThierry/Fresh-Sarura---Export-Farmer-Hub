@@ -13,6 +13,7 @@ interface PMContextType {
   pendingReports: any[];
   pendingRoomRequests: any[];
   exportBatches: any[];
+  processingBatches: any[];
   loading: boolean;
   error: string | null;
   refreshCycles: () => Promise<void>;
@@ -25,6 +26,7 @@ interface PMContextType {
   refreshPendingReports: () => Promise<void>;
   refreshPendingRoomRequests: () => Promise<void>;
   refreshExportBatches: () => Promise<void>;
+  refreshProcessingBatches: () => Promise<void>;
   inventoryItems: any[];
   refreshAll: () => Promise<void>;
 }
@@ -42,6 +44,7 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [pendingReports, setPendingReports] = useState<any[]>([]);
   const [pendingRoomRequests, setPendingRoomRequests] = useState<any[]>([]);
   const [exportBatches, setExportBatches] = useState<any[]>([]);
+  const [processingBatches, setProcessingBatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -189,6 +192,16 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   }, []);
 
+  const refreshProcessingBatches = useCallback(async () => {
+    try {
+      const res = await api.get('/processing-batches');
+      const data = res.data?.data ?? res?.data ?? res ?? [];
+      setProcessingBatches(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error('PMContext: Failed to fetch processing batches', err);
+    }
+  }, []);
+
   const refreshAll = useCallback(async () => {
     setLoading(true);
     await Promise.all([
@@ -202,9 +215,10 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       refreshStock(),
       refreshIntakeLogs(),
       refreshExportBatches(),
+      refreshProcessingBatches(),
     ]);
     setLoading(false);
-  }, [refreshCycles, refreshFarmers, refreshPendingRequests, refreshPendingForecasts, refreshPendingReports, refreshPendingRoomRequests, refreshShipments, refreshStock, refreshIntakeLogs, refreshExportBatches]);
+  }, [refreshCycles, refreshFarmers, refreshPendingRequests, refreshPendingForecasts, refreshPendingReports, refreshPendingRoomRequests, refreshShipments, refreshStock, refreshIntakeLogs, refreshExportBatches, refreshProcessingBatches]);
 
   useEffect(() => {
     refreshAll();
@@ -222,6 +236,7 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       pendingReports,
       pendingRoomRequests,
       exportBatches,
+      processingBatches,
       inventoryItems,
       loading,
       error,
@@ -235,6 +250,7 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       refreshPendingReports,
       refreshPendingRoomRequests,
       refreshExportBatches,
+      refreshProcessingBatches,
       refreshAll
     }}>
       {children}

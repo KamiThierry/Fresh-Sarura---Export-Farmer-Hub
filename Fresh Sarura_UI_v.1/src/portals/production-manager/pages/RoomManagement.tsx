@@ -5,7 +5,7 @@ import { api } from '../../../lib/api';
 import AddRoomModal from '../components/AddRoomModal';
 import RoomRequestsPanel from '../components/RoomRequestsPanel';
 import AssignRoomModal from '../components/AssignRoomModal';
-import Toast from '../../shared/component/Toast';
+import { useToastContext } from '@/context/ToastContext';
 import { usePMContext } from '@/context/PMContext';
 
 type Room = {
@@ -32,7 +32,7 @@ const RoomManagement = () => {
     const [updatingId, setUpdatingId] = useState<string | null>(null);
     const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
     const [selectedBatch, setSelectedBatch] = useState<any>(null);
-    const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
+    const { showToast } = useToastContext();
     const [expandingRoom, setExpandingRoom] = useState<Room | null>(null);
     const [expandKg, setExpandKg] = useState('');
     const [clearingRoom, setClearingRoom] = useState<Room | null>(null);
@@ -81,12 +81,9 @@ const RoomManagement = () => {
             setExpandingRoom(null);
             setExpandKg('');
             fetchRooms();
-            setToast({
-                message: 'Capacity Expanded',
-                subtitle: `${expandingRoom.name} now has ${Number(expandingRoom.capacityKg) + Number(expandKg)} kg capacity.`
-            });
+            showToast('Capacity Expanded', `${expandingRoom.name} now has ${Number(expandingRoom.capacityKg) + Number(expandKg)} kg capacity.`);
         } catch (err: any) {
-            setToast({ message: 'Failed', subtitle: err.response?.data?.message || err.message });
+            showToast('Failed', err.response?.data?.message || err.message);
         }
     };
 
@@ -96,9 +93,9 @@ const RoomManagement = () => {
             await api.patch(`/rooms/${clearingRoom._id}/clear`, {});
             setClearingRoom(null);
             fetchRooms();
-            setToast({ message: 'Room Cleared', subtitle: `${clearingRoom.name} is now available.` });
+            showToast('Room Cleared', `${clearingRoom.name} is now available.`);
         } catch (err: any) {
-            setToast({ message: 'Failed', subtitle: err.response?.data?.message || err.message });
+            showToast('Failed', err.response?.data?.message || err.message);
         }
     };
 
@@ -406,21 +403,9 @@ const RoomManagement = () => {
                 batch={selectedBatch}
                 onSuccess={() => {
                     refreshPendingRoomRequests();
-                    setToast({
-                        message: 'Room Assigned!',
-                        subtitle: `${selectedBatch?.cropName} batch is now storage-tracked.`
-                    });
+                    showToast('Room Assigned!', `${selectedBatch?.cropName} batch is now storage-tracked.`);
                 }}
             />
-
-            {toast && (
-                <Toast
-                    message={toast.message}
-                    subtitle={toast.subtitle}
-                    onClose={() => setToast(null)}
-                />
-            )}
-
             {/* Expand Capacity Modal */}
             {expandingRoom && createPortal(
                 <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">

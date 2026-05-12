@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Wrench, AlertTriangle, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { useToastContext } from '@/context/ToastContext';
 
 interface LogMaintenanceModalProps {
     isOpen: boolean;
@@ -19,21 +20,20 @@ const LogMaintenanceModal = ({ isOpen, onClose, vehicleId, vehiclePlate, onSucce
         markAsMaintenance: true
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const { showToast } = useToastContext();
 
     if (!isOpen) return null;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
-        setError(null);
-
         try {
             // Update vehicle status and set next maintenance date
             await api.patch(`/fleet/vehicles/${vehicleId}`, {
                 status: formData.markAsMaintenance ? 'Maintenance' : 'Available',
                 nextMaintenanceDate: formData.returnDate
             });
+            showToast('Maintenance Logged', `Service record updated for ${vehiclePlate}.`);
             onSuccess();
             onClose();
             setFormData({
@@ -44,7 +44,7 @@ const LogMaintenanceModal = ({ isOpen, onClose, vehicleId, vehiclePlate, onSucce
             });
         } catch (err: any) {
             console.error('Error logging maintenance:', err);
-            setError(err.message || 'Failed to log maintenance');
+            showToast('Sync Error', err.message || 'Failed to log maintenance');
         } finally {
             setIsSubmitting(false);
         }
@@ -84,12 +84,7 @@ const LogMaintenanceModal = ({ isOpen, onClose, vehicleId, vehiclePlate, onSucce
 
                 {/* Body */}
                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                    {error && (
-                        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-2xl flex items-center gap-3 text-red-600 dark:text-red-400 text-sm font-medium">
-                            <AlertCircle size={20} />
-                            {error}
-                        </div>
-                    )}
+
 
                     {/* Reason */}
                     <div className="space-y-2">

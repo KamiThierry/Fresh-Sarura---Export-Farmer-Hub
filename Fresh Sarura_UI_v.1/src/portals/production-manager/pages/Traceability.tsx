@@ -64,8 +64,10 @@ const Traceability = () => {
         const docType = searchParams.get('docType');
         const certLabel = searchParams.get('certLabel');
         if (farmerId && docType === 'Certification') {
+        /* 
             setActiveTab('compliance');
             setCertFilter({ farmerName: farmerName ?? '', certLabel: certLabel ?? '' });
+        */
         }
     }, [searchParams]);
 
@@ -330,6 +332,7 @@ const Traceability = () => {
                     >
                         Product Tracer
                     </button>
+                    {/* 
                     <button
                         onClick={() => setActiveTab('compliance')}
                         className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'compliance'
@@ -339,6 +342,7 @@ const Traceability = () => {
                     >
                         Compliance Manager
                     </button>
+                    */}
                 </div>
             </div>
 
@@ -515,6 +519,7 @@ const Traceability = () => {
                 </div>
             )}
 
+            {/* 
             {activeTab === 'compliance' && (
                 <div className="space-y-8 animate-fade-in">
                     {filteredAlerts.length > 0 && (
@@ -632,6 +637,7 @@ const Traceability = () => {
                     </div>
                 </div>
             )}
+            */}
         </div>
     );
 };

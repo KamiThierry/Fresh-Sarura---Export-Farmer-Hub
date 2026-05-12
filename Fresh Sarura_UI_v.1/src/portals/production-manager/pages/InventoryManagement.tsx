@@ -12,6 +12,7 @@ import Pagination from '../../shared/component/Pagination';
 
 import { api } from '../../../lib/api';
 import { usePMContext } from '@/context/PMContext';
+import { useToastContext } from '@/context/ToastContext';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -24,6 +25,7 @@ const InventoryManagement = () => {
         inventoryItems,
         shipments, refreshShipments
     } = usePMContext();
+    const { showToast } = useToastContext();
 
     // Tab State: 'intake' | 'active_inventory' | 'export_batches' | 'recent_activity'
     const [activeTab, setActiveTab] = useState('recent_activity');
@@ -100,6 +102,7 @@ const InventoryManagement = () => {
             await api.patch(`/processing-batches/${batchId}/confirm`, {
                 roomId: selectedRoomForConfirm || undefined,
             });
+            showToast("Stock Confirmed", "Batch has been successfully moved to active inventory");
             setConfirmingBatchId(null);
             setSelectedRoomForConfirm('');
             // Refresh everything affected

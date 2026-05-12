@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Users, Search, UserPlus, Edit2, PowerOff, Trash2, Filter, CheckCircle, ShieldOff, Clock, X, ChevronDown, Download, FileSpreadsheet, FileText, AlertTriangle } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AddUserModal from '../components/AddUserModal';
-import Toast from '../../shared/component/Toast';
+import { useToastContext } from '@/context/ToastContext';
 import { api } from '@/lib/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -41,7 +41,7 @@ const UserManagement = () => {
     const [editingUser, setEditingUser] = useState<any | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 8;
-    const [successToast, setSuccessToast] = useState<{ name: string; message?: string } | null>(null);
+    const { showToast } = useToastContext();
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [deletingUser, setDeletingUser] = useState<any | null>(null);
 
@@ -50,11 +50,11 @@ const UserManagement = () => {
 
     useEffect(() => {
         if (location.state?.newUser) {
-            setSuccessToast({ name: location.state.newUser });
+            showToast("User Created Successfully", `${location.state.newUser} has been added to the system.`);
             // Clear the state so refreshing doesn't show the toast again
             navigate(location.pathname, { replace: true });
         }
-    }, [location.state, navigate, location.pathname]);
+    }, [location.state, navigate, location.pathname, showToast]);
 
     const fetchUsers = useCallback(async () => {
         try {
@@ -74,6 +74,7 @@ const UserManagement = () => {
     const toggleActive = async (user: any) => {
         try {
             await api.patch(`/auth/users/${user._id}`, { isActive: !user.isActive });
+            showToast('User Status Updated', `${user.name} is now ${!user.isActive ? 'Active' : 'Inactive'}.`);
             fetchUsers();
         } catch (err) { console.error('Failed to update user', err); }
     };
@@ -84,6 +85,7 @@ const UserManagement = () => {
             await api.patch(`/auth/users/${editingUser._id}`, {
                 name: editingUser.name, role: editingUser.role, phone: editingUser.phone,
             });
+            showToast('User Profile Updated', `Changes for ${editingUser.name} have been saved.`);
             setEditingUser(null);
             fetchUsers();
         } catch (err) { console.error('Failed to save edit', err); }
@@ -93,7 +95,7 @@ const UserManagement = () => {
         if (!deletingUser) return;
         try {
             await api.delete(`/auth/users/${deletingUser._id}/permanent`);
-            setSuccessToast({ name: deletingUser.name, message: 'User permanently deleted' });
+            showToast('User Deleted', `The record for ${deletingUser.name} has been permanently removed.`);
             setDeletingUser(null);
             fetchUsers();
         } catch (err) {
@@ -561,17 +563,9 @@ const UserManagement = () => {
                 onClose={() => setIsAddUserOpen(false)}
                 onUserAdded={(name) => {
                     fetchUsers();
-                    setSuccessToast({ name });
+                    showToast("User Created Successfully", `${name} has been added to the system.`);
                 }}
             />
-
-            {successToast && (
-                <Toast
-                    message={successToast.message || "User Created Successfully"}
-                    subtitle={successToast.message ? `The record for ${successToast.name} has been removed.` : `${successToast.name} has been added to the system.`}
-                    onClose={() => setSuccessToast(null)}
-                />
-            )}
         </div>
     );
 };

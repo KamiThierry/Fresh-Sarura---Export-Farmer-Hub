@@ -28,7 +28,6 @@ const Dashboard = () => {
     const [cycleStats, setCycleStats] = useState({ active: 0, in_progress: 0, planned: 0, completed: 0 });
     const [recentEvents, setRecentEvents] = useState([]);
     const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
-    const [successToast, setSuccessToast] = useState<{ name: string } | null>(null);
 
     const [activityRange, setActivityRange] = useState('90days');
     const [isRangeDropdownOpen, setIsRangeDropdownOpen] = useState(false);

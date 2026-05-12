@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Download, AlertTriangle, Loader2, Package, MapPin, Calendar, Weight, User, ClipboardCheck, Layers, Tag } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { api } from '../../../lib/api';
+import { useToastContext } from '@/context/ToastContext';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import logo from '@/assets/sarura_logo_nav.png';
@@ -27,6 +28,7 @@ const StockDetailModal = ({ isOpen, onClose, stockItem, onMarkedSpoiled }: Stock
     const [confirmSpoil, setConfirmSpoil] = useState(false);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const { showToast } = useToastContext();
 
     useEffect(() => {
         if (isOpen && stockItem?.rawId) {
@@ -62,6 +64,7 @@ const StockDetailModal = ({ isOpen, onClose, stockItem, onMarkedSpoiled }: Stock
         try {
             // PATCH /processing-batches/:id/spoil — PM marks stock as spoiled
             await api.patch(`/processing-batches/${stockItem.rawId}/spoil`, {});
+            showToast("Stock Updated", "Item has been marked as spoiled and removed from active inventory");
             onMarkedSpoiled?.();
             onClose();
         } catch (err: any) {

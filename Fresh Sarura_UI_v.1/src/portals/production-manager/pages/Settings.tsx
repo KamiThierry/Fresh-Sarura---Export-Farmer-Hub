@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
+import { useToastContext } from '@/context/ToastContext';
 
 const Settings = () => {
     const navigate = useNavigate();
@@ -12,14 +13,10 @@ const Settings = () => {
     // ── Profile state ──────────────────────────────────────────────────
     const [profile, setProfile] = useState({ name: '', email: '', phone: '' });
     const [profileLoading, setProfileLoading] = useState(true);
-    const [profileSaving, setProfileSaving] = useState(false);
-    const [profileToast, setProfileToast] = useState<{ ok: boolean; msg: string } | null>(null);
-
-    // ── Password state ─────────────────────────────────────────────────
     const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
     const [pwSaving, setPwSaving] = useState(false);
     const [showPw, setShowPw] = useState(false);
-    const [pwToast, setPwToast] = useState<{ ok: boolean; msg: string } | null>(null);
+    const { showToast } = useToastContext();
 
     // ── Other settings state ───────────────────────────────────────────
     const [language, setLanguage] = useState('en');
@@ -62,13 +59,7 @@ const Settings = () => {
             .finally(() => setProfileLoading(false));
     }, []);
 
-    // Auto-dismiss toasts
-    useEffect(() => {
-        if (profileToast) { const t = setTimeout(() => setProfileToast(null), 4000); return () => clearTimeout(t); }
-    }, [profileToast]);
-    useEffect(() => {
-        if (pwToast) { const t = setTimeout(() => setPwToast(null), 4000); return () => clearTimeout(t); }
-    }, [pwToast]);
+
 
     // ── Handlers ───────────────────────────────────────────────────────
     const handleSaveProfile = async () => {
@@ -80,9 +71,9 @@ const Settings = () => {
             if (stored) {
                 localStorage.setItem('user', JSON.stringify({ ...JSON.parse(stored), name: profile.name, email: profile.email }));
             }
-            setProfileToast({ ok: true, msg: 'Profile updated successfully.' });
+            showToast('Profile Updated', 'Your profile details have been saved successfully.');
         } catch (err: any) {
-            setProfileToast({ ok: false, msg: err?.response?.data?.message || 'Failed to save profile.' });
+            showToast('Update Failed', err?.response?.data?.message || 'Failed to save profile.');
         } finally {
             setProfileSaving(false);
         }
@@ -90,11 +81,11 @@ const Settings = () => {
 
     const handleChangePassword = async () => {
         if (pwForm.newPassword !== pwForm.confirm) {
-            setPwToast({ ok: false, msg: 'New passwords do not match.' });
+            showToast('Password Mismatch', 'New passwords do not match.');
             return;
         }
         if (pwForm.newPassword.length < 6) {
-            setPwToast({ ok: false, msg: 'Password must be at least 6 characters.' });
+            showToast('Password Too Short', 'Password must be at least 6 characters.');
             return;
         }
         setPwSaving(true);
@@ -104,9 +95,9 @@ const Settings = () => {
                 newPassword: pwForm.newPassword,
             });
             setPwForm({ currentPassword: '', newPassword: '', confirm: '' });
-            setPwToast({ ok: true, msg: 'Password changed successfully.' });
+            showToast('Password Changed', 'Your password has been updated successfully.');
         } catch (err: any) {
-            setPwToast({ ok: false, msg: err?.response?.data?.message || 'Incorrect current password.' });
+            showToast('Update Failed', err?.response?.data?.message || 'Incorrect current password.');
         } finally {
             setPwSaving(false);
         }
@@ -167,13 +158,7 @@ const Settings = () => {
                         <h2 className="font-semibold text-gray-900 dark:text-white">My Profile</h2>
                     </div>
 
-                    {/* Profile toast */}
-                    {profileToast && (
-                        <div className={`mx-6 mt-4 px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 ${profileToast.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                            {profileToast.ok ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
-                            {profileToast.msg}
-                        </div>
-                    )}
+
 
                     <div className="p-6">
                         {profileLoading ? (
@@ -270,12 +255,7 @@ const Settings = () => {
                         <h2 className="font-semibold text-gray-900 dark:text-white">Change Password</h2>
                     </div>
 
-                    {pwToast && (
-                        <div className={`mx-6 mt-4 px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 ${pwToast.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                            {pwToast.ok ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
-                            {pwToast.msg}
-                        </div>
-                    )}
+
 
                     <div className="p-6 space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

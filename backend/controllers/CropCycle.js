@@ -289,8 +289,9 @@ export const approveBudgetRequest = async (req, res) => {
         // Trigger transition to 'in_progress' on first budget approval
         if (cycle.status === 'active') {
             cycle.status = 'in_progress';
-            await cycle.save();
         }
+        
+        await cycle.save();
 
         res.status(200).json({ status: 'success', data: updatedRequest });
 

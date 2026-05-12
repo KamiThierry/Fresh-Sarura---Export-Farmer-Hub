@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plane, Package, Plus, Trash2, ArrowRight, AlertCircle } from 'lucide-react';
 import { api } from '../../../lib/api';
+import { useToastContext } from '@/context/ToastContext';
 
 interface StockItem {
     _id: string;
@@ -34,6 +35,7 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
     const [selectedLines, setSelectedLines] = useState<SelectedLine[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
+    const { showToast } = useToastContext();
 
     // Reset form when modal opens
     useEffect(() => {
@@ -130,6 +132,7 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
                     targetShipmentDate,
                 })
             ));
+            showToast("Export Batch Created", `Successfully created ${selectedLines.length} export batch${selectedLines.length !== 1 ? 'es' : ''}`);
             onSuccess();
             onClose();
         } catch (err: any) {

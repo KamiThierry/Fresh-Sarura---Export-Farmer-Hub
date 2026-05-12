@@ -15,10 +15,10 @@ import SettingsPage from './pages/Settings';
 // import ClientRequests from './pages/ClientRequests';
 import RoomManagement from './pages/RoomManagement';
 
-import QCInspectionModal from './components/QCInspectionModal';
 import FarmerRegistrationModal from './components/FarmerRegistrationModal';
 import CreateCropCycleModal from './components/CreateCropCycleModal';
 import { PMProvider, usePMContext } from '@/context/PMContext';
+// import { useToastContext } from '@/context/ToastContext';
 
 const ProductionManagerRoutes = () => {
     return (
@@ -34,8 +34,9 @@ const ProductionManagerApp = () => {
     const [isPackingListOpen, setIsPackingListOpen] = useState(false);
     const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
     const [isCreateCycleOpen, setIsCreateCycleOpen] = useState(false);
+    // const { showToast } = useToastContext();
 
-    const { stock, intakeLogs } = usePMContext();
+    const { intakeLogs } = usePMContext();
 
     const todayStr = new Date().toISOString().split('T')[0];
 
@@ -45,11 +46,7 @@ const ProductionManagerApp = () => {
             .reduce((sum, log) => sum + (log.pickedUpWeightKg || 0), 0)
     , [intakeLogs, todayStr]);
 
-    const _coldRoomStock = useMemo(() =>
-        stock.reduce((sum, b) => sum + ((b.processedWeightKg || 0) - (b.rejectedWeightKg || 0)), 0)
-    , [stock]);
-
-    const [qualityGrade, setQualityGrade] = useState("96% Class A");
+    const [qualityGrade] = useState("96% Class A");
     const scheduledExports = 8000;
 
     const handleLogIntake = () => {
@@ -68,7 +65,7 @@ const ProductionManagerApp = () => {
     const handleQCSubmit = (result: string) => {
         setQualityGrade(result);
         setIsQCOpen(false);
-        alert(`QC Inspection Submitted! New Grade: ${result}`);
+        showToast('Inspection Submitted', `QC Inspection Submitted! New Grade: ${result}`);
     };
     */
 

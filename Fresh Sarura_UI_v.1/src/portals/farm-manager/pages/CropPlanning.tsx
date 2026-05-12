@@ -4,7 +4,7 @@ import {
     Plus, Leaf, Coins, Camera,
     Clock, ScrollText, ChevronRight, Loader2
 } from 'lucide-react';
-import Toast from '../../shared/component/Toast';
+import { useToastContext } from '@/context/ToastContext';
 import TaskExecutionModal from '../components/TaskExecutionModal';
 import BudgetActivityRequestModal from '../components/BudgetActivityRequestModal';
 import FMActivityLogModal from '../components/FMActivityLogModal';
@@ -27,7 +27,7 @@ const CropPlanning = () => {
     const [selectedCycle, setSelectedCycle] = useState<any>(null);
     const [selectedTask, setSelectedTask] = useState<any>(null);
     const [logCycle, setLogCycle] = useState<any>(null);
-    const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
+    const { showToast } = useToastContext();
 
     const handleRequestClick = (cycle: any) => {
         setSelectedCycle(cycle);
@@ -74,17 +74,11 @@ const CropPlanning = () => {
                 proofUrl: proofUrl || undefined
             });
             console.log('CropPlanning: Field report success, fetching cycles...');
-            setToast({
-                message: "Activity Logged",
-                subtitle: `Successfully recorded "${selectedTask.title}" operations.`
-            });
+            showToast("Activity Logged", `Successfully recorded "${selectedTask.title}" operations.`);
             fetchCycles();
         } catch (err) {
             console.error('CropPlanning: Failed to submit field report:', err);
-            setToast({
-                message: "Reporting Error",
-                subtitle: "Failed to save the field report. Please try again."
-            });
+            showToast("Reporting Error", "Failed to save the field report. Please try again.");
         }
         setSelectedTask(null);
     };
@@ -107,16 +101,10 @@ const CropPlanning = () => {
             });
             setIsRequestModalOpen(false);
             setSelectedCycle(null);
-            setToast({
-                message: "Request Submitted",
-                subtitle: "Your budget proposal has been sent to the Production Manager."
-            });
+            showToast("Request Submitted", "Your budget proposal has been sent to the Production Manager.");
         } catch (err) {
             console.error('Failed to submit budget request:', err);
-            setToast({
-                message: "Request Failed",
-                subtitle: "Could not submit budget request. Please check your connection."
-            });
+            showToast("Request Failed", "Could not submit budget request. Please check your connection.");
             throw err; // Re-throw to allow modal to handle it
         }
     };
@@ -293,7 +281,6 @@ const CropPlanning = () => {
                     }}
                 />
             )}
-            {toast && <Toast message={toast.message} subtitle={toast.subtitle} onClose={() => setToast(null)} />}
         </div>
     );
 };
