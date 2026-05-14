@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, FileText, Plane, Package, ArrowUpRight, 
-         Search, Filter, Loader2, RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react';
+         Search, Filter, Loader2, RefreshCw, AlertTriangle, CheckCircle, ChevronDown } from 'lucide-react';
 import ShipmentBuilderModal from '../components/ShipmentBuilderModal';
 import ShipmentDetailsModal from '../components/ShipmentDetailsModal';
 import Pagination from '../../shared/component/Pagination';
@@ -213,46 +213,43 @@ const Shipments = () => {
                 ))}
             </div>
 
-            {/* Toolbar */}
-            <div className="flex items-center gap-3 flex-wrap">
-                <div className="relative flex-1 max-w-md">
-                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                        type="text"
-                        placeholder="Search PL #, Flight or Client..."
-                        value={searchTerm}
-                        onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                        className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                </div>
-                <div className="relative">
-                    <Filter size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    <select
-                        value={statusFilter}
-                        onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                        className="pl-9 pr-8 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer"
-                    >
-                        <option value="all">All Statuses</option>
-                        <option value="PackingListGenerated">Scheduled</option>
-                        <option value="Departed">In Transit</option>
-                        <option value="Shipped">Shipped</option>
-                        <option value="Cancelled">Cancelled</option>
-                    </select>
-                </div>
-                {(searchTerm || statusFilter !== 'all') && (
-                    <button
-                        onClick={() => { setSearchTerm(''); setStatusFilter('all'); setCurrentPage(1); }}
-                        className="text-xs text-indigo-500 hover:text-indigo-700 font-medium whitespace-nowrap"
-                    >
-                        Clear filters
-                    </button>
-                )}
-            </div>
-
             {/* Table */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                    <h3 className="font-bold text-gray-900 dark:text-white">Active Export Schedule</h3>
+                <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-800/20 flex flex-wrap items-center gap-3">
+                    {/* Unified Search & Filter Bar */}
+                    <div className="relative flex-1 max-w-md">
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Search PL #, Flight or Client..."
+                            value={searchTerm}
+                            onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                            className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-all"
+                        />
+                    </div>
+                    <div className="relative">
+                        <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <select
+                            value={statusFilter}
+                            onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer shadow-sm"
+                        >
+                            <option value="all">All Statuses</option>
+                            <option value="PackingListGenerated">Scheduled</option>
+                            <option value="Departed">In Transit</option>
+                            <option value="Shipped">Shipped</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                    </div>
+                    {(searchTerm || statusFilter !== 'all') && (
+                        <button
+                            onClick={() => { setSearchTerm(''); setStatusFilter('all'); setCurrentPage(1); }}
+                            className="text-xs text-indigo-500 hover:text-indigo-700 font-bold px-2"
+                        >
+                            Clear
+                        </button>
+                    )}
                 </div>
 
                 {loading ? (

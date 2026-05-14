@@ -374,11 +374,11 @@ const Fleet = () => {
             {/* Main Content Card */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden min-h-[400px]">
 
-                {/* Table Header & Controls */}
-                <div className="border-b border-gray-100 dark:border-gray-700">
-                    <div className="flex items-center justify-between p-4">
+                {/* Unified Header with Tabs and Search */}
+                <div className="border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between p-4 gap-4">
                         {/* Tabs */}
-                        <div className="flex gap-1 bg-gray-100 dark:bg-gray-900/50 p-1 rounded-lg">
+                        <div className="flex gap-1 bg-gray-100 dark:bg-gray-900/50 p-1 rounded-lg w-fit">
                             <button
                                 onClick={() => { setActiveTab('vehicles'); setFilterStatus('All'); setFilterType('All'); setFilterLicense('All'); setVehiclePage(1); }}
                                 className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'vehicles'
@@ -398,83 +398,86 @@ const Fleet = () => {
                                 <Users size={16} /> Drivers
                             </button>
                         </div>
+
+                        {/* Search in the same row if possible */}
+                        <div className="relative flex-1 max-w-md">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                            <input
+                                type="text"
+                                placeholder={`Search ${activeTab === 'vehicles' ? 'by plate or type...' : 'by name...'}`}
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-9 pr-4 py-2 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm transition-all"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Filters Row */}
+                    <div className="p-4 pt-0 flex flex-wrap items-center gap-3">
+                        <div className="relative">
+                            <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                            <select
+                                value={filterStatus}
+                                onChange={(e) => setFilterStatus(e.target.value)}
+                                className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer shadow-sm"
+                            >
+                                <option value="All">All Statuses</option>
+                                {activeTab === 'vehicles' ? (
+                                    <>
+                                        <option value="Available">Available</option>
+                                        <option value="On Trip">On Trip</option>
+                                        <option value="Maintenance">Maintenance</option>
+                                    </>
+                                ) : (
+                                    <>
+                                        <option value="Idle">Idle</option>
+                                        <option value="Driving">Driving</option>
+                                        <option value="Off Duty">Off Duty</option>
+                                    </>
+                                )}
+                            </select>
+                            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                        </div>
+
+                        {activeTab === 'vehicles' ? (
+                            <div className="relative">
+                                <Truck size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                <select
+                                    value={filterType}
+                                    onChange={(e) => setFilterType(e.target.value)}
+                                    className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer shadow-sm"
+                                >
+                                    <option value="All">All Types</option>
+                                    <option value="Refrigerated Truck">Refrigerated Truck</option>
+                                    <option value="Standard Truck">Standard Truck</option>
+                                    <option value="Pickup">Pickup</option>
+                                    <option value="Van">Van</option>
+                                </select>
+                                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                            </div>
+                        ) : (
+                            <div className="relative">
+                                <FileText size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                <select
+                                    value={filterLicense}
+                                    onChange={(e) => setFilterLicense(e.target.value)}
+                                    className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer shadow-sm"
+                                >
+                                    <option value="All">All Licenses</option>
+                                    <option value="A">Category A</option>
+                                    <option value="B">Category B</option>
+                                    <option value="C">Category C</option>
+                                    <option value="D">Category D</option>
+                                    <option value="E">Category E</option>
+                                    <option value="F">Category F</option>
+                                </select>
+                                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {/* Unified Search & Filter Bar */}
-                <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/10 flex flex-wrap items-center gap-3">
-                    <div className="relative flex-1 max-w-md">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                        <input
-                            type="text"
-                            placeholder={`Search ${activeTab === 'vehicles' ? 'by plate or type...' : 'by name...'}`}
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-9 pr-4 py-2 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm transition-all"
-                        />
-                    </div>
 
-                    <div className="relative">
-                        <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                        <select
-                            value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value)}
-                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer shadow-sm"
-                        >
-                            <option value="All">All Statuses</option>
-                            {activeTab === 'vehicles' ? (
-                                <>
-                                    <option value="Available">Available</option>
-                                    <option value="On Trip">On Trip</option>
-                                    <option value="Maintenance">Maintenance</option>
-                                </>
-                            ) : (
-                                <>
-                                    <option value="Idle">Idle</option>
-                                    <option value="Driving">Driving</option>
-                                    <option value="Off Duty">Off Duty</option>
-                                </>
-                            )}
-                        </select>
-                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
-                    </div>
-
-                    {activeTab === 'vehicles' ? (
-                        <div className="relative">
-                            <Truck size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                            <select
-                                value={filterType}
-                                onChange={(e) => setFilterType(e.target.value)}
-                                className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer shadow-sm"
-                            >
-                                <option value="All">All Types</option>
-                                <option value="Refrigerated Truck">Refrigerated Truck</option>
-                                <option value="Standard Truck">Standard Truck</option>
-                                <option value="Pickup">Pickup</option>
-                                <option value="Van">Van</option>
-                            </select>
-                            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                        </div>
-                    ) : (
-                        <div className="relative">
-                            <FileText size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                            <select
-                                value={filterLicense}
-                                onChange={(e) => setFilterLicense(e.target.value)}
-                                className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer shadow-sm"
-                            >
-                                <option value="All">All Licenses</option>
-                                <option value="A">Category A</option>
-                                <option value="B">Category B</option>
-                                <option value="C">Category C</option>
-                                <option value="D">Category D</option>
-                                <option value="E">Category E</option>
-                                <option value="F">Category F</option>
-                            </select>
-                            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                        </div>
-                    )}
-                </div>
 
                 <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">

@@ -14,6 +14,7 @@ interface PMContextType {
   pendingRoomRequests: any[];
   exportBatches: any[];
   processingBatches: any[];
+  qcDoneBatches: any[];
   loading: boolean;
   error: string | null;
   refreshCycles: () => Promise<void>;
@@ -87,6 +88,10 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         };
       });
   }, [stock, exportBatches]);
+
+  const qcDoneBatches = useMemo(() => {
+    return processingBatches.filter((b: any) => b.status === 'QCDone');
+  }, [processingBatches]);
 
   const refreshCycles = useCallback(async () => {
     try {
@@ -237,6 +242,7 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       pendingRoomRequests,
       exportBatches,
       processingBatches,
+      qcDoneBatches,
       inventoryItems,
       loading,
       error,

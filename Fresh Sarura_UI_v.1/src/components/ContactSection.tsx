@@ -20,7 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
+import { useToastContext } from "@/context/ToastContext";
+import { useState } from "react";
 
 const formSchema = z.object({
   name: z.string().min(2, {
@@ -36,6 +37,9 @@ const formSchema = z.object({
 });
 
 const ContactSection = () => {
+  const { showToast } = useToastContext();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -47,6 +51,7 @@ const ContactSection = () => {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsSubmitting(true);
     try {
       const res = await fetch('http://localhost:3000/api/v1/contact', {
         method: 'POST',
@@ -55,10 +60,19 @@ const ContactSection = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Submission failed.');
-      toast.success('Thank you! Our team will respond within 24 hours.');
+      
+      showToast(
+        'Message Sent Successfully',
+        'Thank you! Our team will respond to your inquiry within 24 hours.'
+      );
       form.reset();
     } catch (err: any) {
-      toast.error(err.message || 'Something went wrong. Please try again.');
+      showToast(
+        'Submission Error',
+        err.message || 'Something went wrong. Please try again later.'
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -196,9 +210,17 @@ const ContactSection = () => {
 
                 <Button
                   type="submit"
-                  className="w-full bg-green-700 hover:bg-green-800 text-white font-medium py-6 rounded-md shadow-sm transition-all duration-200 text-lg"
+                  disabled={isSubmitting}
+                  className="w-full bg-green-700 hover:bg-green-800 text-white font-medium py-6 rounded-md shadow-sm transition-all duration-200 text-lg flex items-center justify-center gap-2"
                 >
-                  Send Message
+                  {isSubmitting ? (
+                    <>
+                      <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    "Send Message"
+                  )}
                 </Button>
               </form>
             </Form>

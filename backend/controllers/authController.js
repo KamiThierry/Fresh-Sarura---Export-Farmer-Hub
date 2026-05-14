@@ -328,10 +328,10 @@ export const getAllUsers = async (req, res) => {
 // @route PATCH /api/v1/auth/users/:id  (Admin only)
 export const updateUser = async (req, res) => {
     try {
-        const { name, role, isActive, phone } = req.body;
+        const { name, email, role, isActive, phone } = req.body;
         const user = await User.findByIdAndUpdate(
             req.params.id,
-            { name, role, isActive, phone },
+            { name, email, role, isActive, phone },
             { new: true, runValidators: true }
         ).select('-password');
         if (!user) return res.status(404).json({ status: 'error', message: 'User not found.' });
@@ -398,3 +398,57 @@ export const permanentlyDeleteUser = async (req, res) => {
         res.status(500).json({ status: 'error', message: err.message });
     }
 };
+
+// @route PATCH /api/v1/auth/profile
+export const updateProfile = async (req, res) => {
+    try {
+        const { name, email, phone, currentPassword, newPassword } = req.body;
+        
+        // Find user and include password for verification
+        const user = await User.findById(req.user.id).select('+password');
+        if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+        // Update basic info
+        if (name)  user.name  = name.trim();
+        if (email) user.email = email.trim().toLowerCase();
+        if (phone) user.phone = phone.trim();
+
+        // Password change logic
+        if (newPassword) {
+            if (!currentPassword) {
+                return res.status(400).json({ success: false, message: 'Current password is required to set a new password.' });
+            }
+            
+            const isMatch = await user.comparePassword(currentPassword);
+            if (!isMatch) {
+                return res.status(401).json({ success: false, message: 'Current password is incorrect.' });
+            }
+            
+            if (newPassword.length < 6) {
+                return res.status(400).json({ success: false, message: 'New password must be at least 6 characters.' });
+            }
+            
+            user.password = newPassword; // Will be hashed by pre-save hook
+        }
+
+        await user.save();
+        
+        await createEventLog({
+            module: 'User Management',
+            action: 'Profile Updated',
+            severity: 'INFO',
+            description: `User updated their own profile: ${user.email}`,
+            actor: user.name,
+            metadata: { userId: user._id, fieldsUpdated: { name: !!name, email: !!email, password: !!newPassword } }
+        });
+
+        res.json({
+            success: true,
+            message: 'Profile updated successfully.',
+            data: { id: user._id, name: user.name, email: user.email, role: user.role, phone: user.phone }
+        });
+    } catch (err) {
+        logger.error('Update profile error:', err.message);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};

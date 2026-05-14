@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
-import { Sprout, Plus, AlertTriangle, ChevronRight, BarChart2, AlertCircle } from 'lucide-react';
+import { X, Sprout, Plus, AlertTriangle, ChevronRight, AlertCircle } from 'lucide-react';
 import CreateCropCycleModal from '../components/CreateCropCycleModal';
 import CropCycleDetailModal from '../components/CropCycleDetailModal';
 import BudgetRejectionModal from '../components/BudgetRejectionModal';
@@ -20,6 +20,11 @@ const CropPlanning = () => {
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
     const [overdraftWarning, setOverdraftWarning] = useState<any>(null); // { requestId, details }
     const [initialAdjust, setInitialAdjust] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+    const [filterFarm, setFilterFarm]     = useState('');
+    const [filterSeason, setFilterSeason] = useState('');
+    const [filterCrop, setFilterCrop]     = useState('');
+    const [filterStatus, setFilterStatus] = useState('');
 
 
 
@@ -34,10 +39,23 @@ const CropPlanning = () => {
         refreshPendingForecasts,
         refreshPendingReports
     } = usePMContext();
-    
-    // Split cycles into active/in_progress and completed
-    const activeCycles = cycles.filter((c: any) => c.status !== 'completed');
-    const completedCycles = cycles.filter((c: any) => c.status === 'completed');
+
+    // Unique values for dropdowns — derived from the cycles array
+    const uniqueFarms = [...new Set(cycles.map((c: any) => c.farm_name).filter(Boolean))];
+    const uniqueCrops = [...new Set(cycles.map((c: any) => c.crop_name || c.crop).filter(Boolean))];
+
+    // Filtered cycles logic
+    const filteredCycles = cycles.filter((c: any) => {
+        if (filterFarm   && (c.farm_name) !== filterFarm) return false;
+        if (filterSeason && c.season !== filterSeason)     return false;
+        if (filterCrop   && (c.crop_name || c.crop) !== filterCrop) return false;
+        if (filterStatus && c.status !== filterStatus)     return false;
+        return true;
+    });
+
+    // Split filtered cycles into active/in_progress and completed
+    const activeCyclesFiltered = filteredCycles.filter((c: any) => c.status !== 'completed');
+    const completedCyclesFiltered = filteredCycles.filter((c: any) => c.status === 'completed');
 
     const handleApproveRequest = async (requestId: string, forceApprove = false) => {
         try {
@@ -76,12 +94,22 @@ const CropPlanning = () => {
         return Math.min(percentage, 100);
     };
 
+    const handleDeleteCycle = async () => {
+        if (!deleteTarget) return;
+        try {
+            await api.delete(`/crop-cycles/${deleteTarget.id}`);
+            setDeleteTarget(null);
+            showToast('Cycle Deleted', `${deleteTarget.name} has been removed.`);
+            refreshCycles();
+        } catch (err: any) {
+            console.error('Failed to delete cycle:', err);
+            showToast('Error', err.response?.data?.message || 'Failed to delete cycle.');
+        }
+    };
+
     const handleCloseCycle = async (cycleId: string, finalYield: string) => {
         try {
-            await api.patch(`/crop-cycles/${cycleId}`, {
-                status: 'completed',
-                final_yield: finalYield,
-            });
+            await api.patch(`/crop-cycles/${cycleId}/close`, { finalYield });
             refreshCycles();
             setSelectedCycle(null);
             showToast('Crop Cycle Closed', `Final yield recorded: ${finalYield}`);
@@ -274,21 +302,102 @@ const CropPlanning = () => {
                 );
             })()}
 
-            {/* Section 2: Active Crop Cycles (The Dashboard Grid) */}
-            <div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Active Crop Cycles</h3>
+            {/* Section 2: Active Crop Cycles */}
+            <div className="mb-12">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 mb-6">
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Active Crop Cycles</h3>
+                        <p className="text-sm text-gray-500 mt-1">Overview of ongoing production</p>
+                    </div>
+
+                    {/* Filter Bar */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        
+                        {/* Farm filter */}
+                        <select
+                            value={filterFarm}
+                            onChange={e => setFilterFarm(e.target.value)}
+                            className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-green-500 outline-none transition-all shadow-sm"
+                        >
+                            <option value="">All Farms</option>
+                            {uniqueFarms.map(farm => (
+                                <option key={farm} value={farm}>{farm}</option>
+                            ))}
+                        </select>
+
+                        {/* Season filter */}
+                        <select
+                            value={filterSeason}
+                            onChange={e => setFilterSeason(e.target.value)}
+                            className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-green-500 outline-none transition-all shadow-sm"
+                        >
+                            <option value="">All Seasons</option>
+                            <option value="Season A">Season A</option>
+                            <option value="Season B">Season B</option>
+                            <option value="Season C">Season C</option>
+                        </select>
+
+                        {/* Crop filter */}
+                        <select
+                            value={filterCrop}
+                            onChange={e => setFilterCrop(e.target.value)}
+                            className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-green-500 outline-none transition-all shadow-sm"
+                        >
+                            <option value="">All Crops</option>
+                            {uniqueCrops.map(crop => (
+                                <option key={crop} value={crop}>{crop}</option>
+                            ))}
+                        </select>
+
+                        {/* Status filter */}
+                        <select
+                            value={filterStatus}
+                            onChange={e => setFilterStatus(e.target.value)}
+                            className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-green-500 outline-none transition-all shadow-sm"
+                        >
+                            <option value="">All Statuses</option>
+                            <option value="active">Active</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+
+                        {/* Clear filters */}
+                        {(filterFarm || filterSeason || filterCrop || filterStatus) && (
+                            <button
+                                onClick={() => { setFilterFarm(''); setFilterSeason(''); setFilterCrop(''); setFilterStatus(''); }}
+                                className="px-3 py-2 rounded-lg text-xs font-bold text-green-600 hover:bg-green-50 dark:hover:bg-green-900/10 transition-colors"
+                            >
+                                Clear filters
+                            </button>
+                        )}
+
+                        {/* Result count */}
+                        <span className="text-[10px] bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md text-gray-400 font-bold uppercase tracking-wider ml-1">
+                            {filteredCycles.length} cycle{filteredCycles.length !== 1 ? 's' : ''}
+                        </span>
+                    </div>
+                </div>
 
                 {loading ? (
-                    <p className="text-gray-500 dark:text-gray-400 text-sm py-4">Loading crop cycles...</p>
-                ) : activeCycles.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-center bg-gray-50/50 dark:bg-gray-800/10 rounded-2xl border-2 border-dashed border-gray-100 dark:border-gray-800">
-                        <Sprout size={40} className="text-gray-300 dark:text-gray-600 mb-3" />
-                        <p className="font-semibold text-gray-500 dark:text-gray-400">No active crop cycles.</p>
-                        <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Click "Start New Crop Cycle" above to create your first one.</p>
+                    <div className="flex flex-col items-center justify-center py-20 bg-gray-50 dark:bg-gray-900/40 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
+                        <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin mb-4" />
+                        <p className="text-gray-500 font-medium italic">Loading latest production data...</p>
+                    </div>
+                ) : activeCyclesFiltered.length === 0 ? (
+                    <div className="text-center py-20 bg-gray-50 dark:bg-gray-900/40 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
+                        <Sprout size={48} className="mx-auto text-gray-300 dark:text-gray-700 mb-4" />
+                        <h4 className="text-lg font-bold text-gray-800 dark:text-gray-200">No active cycles found</h4>
+                        <p className="text-sm text-gray-500 max-w-xs mx-auto mt-1">
+                            { (filterFarm || filterSeason || filterCrop || filterStatus) 
+                                ? "Try adjusting your filters to see more results."
+                                : "Start a new crop cycle to begin tracking production."
+                            }
+                        </p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {activeCycles.map((cycle) => (
+                        {activeCyclesFiltered.map((cycle) => (
                             <CycleCard 
                                 key={cycle._id} 
                                 cycle={cycle} 
@@ -296,6 +405,7 @@ const CropPlanning = () => {
                                     setInitialTab('overview');
                                     handleOpenDetail(cycle);
                                 }}
+                                onDeleteRequest={(id) => setDeleteTarget({ id, name: cycle.crop_name })}
                                 calculateProgress={calculateProgress}
                                 pendingCount={pendingRequests.filter((r: any) => r.cycleId === cycle._id).length}
                             />
@@ -305,11 +415,11 @@ const CropPlanning = () => {
             </div>
 
             {/* Section 3: Completed Crop Cycles (History) */}
-            {!loading && completedCycles.length > 0 && (
+            {!loading && completedCyclesFiltered.length > 0 && (
                 <div className="pt-8 border-t border-gray-100 dark:border-gray-700">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Completed Crop Cycles</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 opacity-80 hover:opacity-100 transition-opacity">
-                        {completedCycles.map((cycle) => (
+                        {completedCyclesFiltered.map((cycle) => (
                             <CycleCard 
                                 key={cycle._id} 
                                 cycle={cycle} 
@@ -395,16 +505,25 @@ const CropPlanning = () => {
                 }}
             />
 
+            {/* Modal 5: Delete Confirmation */}
+            <DeleteConfirmationModal 
+                isOpen={!!deleteTarget}
+                onClose={() => setDeleteTarget(null)}
+                onConfirm={handleDeleteCycle}
+                cycleName={deleteTarget?.name || ''}
+            />
+
 
         </div>
     );
 };
 
 // ── Local Component: CycleCard ──────────────────────────────────────────
-const CycleCard = ({ cycle, onSelect, calculateProgress, pendingCount = 0 }: { cycle: any, onSelect: () => void, calculateProgress: any, pendingCount?: number }) => {
+const CycleCard = ({ cycle, onSelect, calculateProgress, onDeleteRequest, pendingCount = 0 }: { cycle: any, onSelect: () => void, calculateProgress: any, onDeleteRequest?: (id: string) => void, pendingCount?: number }) => {
     const total = cycle.total_budget ?? 0;
     const approved = cycle.approved ?? 0;
     const progress = calculateProgress(approved, total);
+    const isCompleted = cycle.status === 'completed';
     
     const statusLabel = cycle.status === 'active' ? '● Active'
         : (cycle.status === 'in_progress' || cycle.status === 'harvesting') ? '◉ In Progress'
@@ -412,7 +531,20 @@ const CycleCard = ({ cycle, onSelect, calculateProgress, pendingCount = 0 }: { c
         : cycle.status;
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all group">
+        <div className="relative group bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all">
+            {/* Delete button (only for non-completed cycles) */}
+            {!isCompleted && onDeleteRequest && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteRequest(cycle._id);
+                    }}
+                    className="absolute top-3 right-3 w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-400 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 transition-all flex items-center justify-center z-10"
+                    title="Delete cycle"
+                >
+                    <X size={14} />
+                </button>
+            )}
             {/* Card Header */}
             <div className="flex justify-between items-start mb-4">
                 <div>
@@ -427,20 +559,13 @@ const CycleCard = ({ cycle, onSelect, calculateProgress, pendingCount = 0 }: { c
                         {cycle.crop_name}
                     </h4>
                 </div>
-                <div className="flex items-center gap-2">
-                    {pendingCount > 0 && (
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 animate-pulse">
-                            {pendingCount} pending
-                        </span>
-                    )}
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${cycle.status === 'completed' ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-600'}`}>
-                        <BarChart2 size={16} />
-                    </div>
+                <div className="flex items-center gap-2 pr-8">
+                    {/* Empty space for the absolute X button */}
                 </div>
             </div>
 
             {/* Status badge */}
-            <div className="mb-3">
+            <div className="mb-3 flex items-center gap-2">
                 <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
                     (cycle.status === 'in_progress' || cycle.status === 'harvesting') ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 animate-pulse' :
                     cycle.status === 'completed' ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' :
@@ -448,6 +573,11 @@ const CycleCard = ({ cycle, onSelect, calculateProgress, pendingCount = 0 }: { c
                 }`}>
                     {statusLabel}
                 </span>
+                {pendingCount > 0 && (
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 animate-pulse shadow-sm border border-amber-200 dark:border-amber-800/50">
+                        <AlertCircle size={10} /> {pendingCount} Pending Request
+                    </span>
+                )}
             </div>
 
             {/* Cycle Progress */}
@@ -482,6 +612,40 @@ const CycleCard = ({ cycle, onSelect, calculateProgress, pendingCount = 0 }: { c
                 Manage Cycle <ChevronRight size={16} />
             </button>
         </div>
+    );
+};
+
+const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, cycleName }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, cycleName: string }) => {
+    if (!isOpen) return null;
+    return createPortal(
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-md transition-opacity" onClick={onClose} />
+            <div className="relative w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="px-6 py-4 bg-red-50 dark:bg-red-900/10 border-b border-red-100 dark:border-red-900/30">
+                    <h3 className="text-base font-bold text-red-800 dark:text-red-300">Delete Crop Cycle</h3>
+                </div>
+                <div className="p-6 space-y-4">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                        Are you sure you want to delete the <strong className="text-gray-900 dark:text-white">{cycleName}</strong> cycle? This cannot be undone and will remove all associated budget records.
+                    </p>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={onClose}
+                            className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={onConfirm}
+                            className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors shadow-md"
+                        >
+                            Delete Cycle
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
     );
 };
 

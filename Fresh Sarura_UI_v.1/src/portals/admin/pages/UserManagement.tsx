@@ -83,7 +83,7 @@ const UserManagement = () => {
         if (!editingUser) return;
         try {
             await api.patch(`/auth/users/${editingUser._id}`, {
-                name: editingUser.name, role: editingUser.role, phone: editingUser.phone,
+                name: editingUser.name, email: editingUser.email, role: editingUser.role, phone: editingUser.phone,
             });
             showToast('User Profile Updated', `Changes for ${editingUser.name} have been saved.`);
             setEditingUser(null);
@@ -488,6 +488,14 @@ const UserManagement = () => {
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Full Name</label>
                                 <input type="text" value={editingUser.name || ''}
                                     onChange={e => setEditingUser({ ...editingUser, name: e.target.value })}
+                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 dark:text-white transition-all" />
+                            </div>
+
+                            {/* Email */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email Address</label>
+                                <input type="email" value={editingUser.email || ''}
+                                    onChange={e => setEditingUser({ ...editingUser, email: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 dark:text-white transition-all" />
                             </div>
 

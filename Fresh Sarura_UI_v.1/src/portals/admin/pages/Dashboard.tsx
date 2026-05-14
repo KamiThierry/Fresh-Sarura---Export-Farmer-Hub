@@ -60,6 +60,8 @@ const Dashboard = () => {
                     api.get('/admin/activity/recent?limit=10')
                 ]);
 
+                console.log('Admin Dashboard: cycleStatsRes:', cycleStatsRes);
+
                 const users   = usersRes.status   === 'fulfilled' && Array.isArray(usersRes.value.data)    ? usersRes.value.data    : [];
                 const farmers = farmersRes.status === 'fulfilled' && Array.isArray(farmersRes.value.farmers) ? farmersRes.value.farmers : [];
                 const cycles  = cyclesRes.status  === 'fulfilled' && Array.isArray(cyclesRes.value.data)   ? cyclesRes.value.data   : [];
@@ -73,7 +75,15 @@ const Dashboard = () => {
                 });
 
                 if (activityRes.status === 'fulfilled') setActivityData(activityRes.value || []);
-                if (cycleStatsRes.status === 'fulfilled') setCycleStats(cycleStatsRes.value || { active: 0, in_progress: 0, planned: 0, completed: 0 });
+                if (cycleStatsRes.status === 'fulfilled') {
+                    const raw = cycleStatsRes.value?.data || cycleStatsRes.value || {};
+                    setCycleStats({
+                        active:      raw.active      ?? 0,
+                        in_progress: raw.in_progress ?? 0,
+                        planned:     raw.planned     ?? 0,
+                        completed:   raw.completed   ?? 0,
+                    });
+                }
                 if (recentRes.status === 'fulfilled') setRecentEvents(recentRes.value || []);
 
             } catch (err) {
@@ -93,12 +103,13 @@ const Dashboard = () => {
     ];
 
     // Active = active + in_progress combined; remove Planned
-    const totalActiveCount = cycleStats.active + cycleStats.in_progress;
-    const totalCycles = totalActiveCount + cycleStats.completed;
+    const totalActiveCount = (cycleStats.active ?? 0) + (cycleStats.in_progress ?? 0);
+    const totalCycles = (cycleStats.active ?? 0) + (cycleStats.in_progress ?? 0) + (cycleStats.completed ?? 0);
 
     const cycleChartData = [
-        { name: 'Active', value: totalActiveCount, color: '#10B981' }, 
-        { name: 'Completed', value: cycleStats.completed, color: '#6B7280' }, 
+        { name: 'Active', value: cycleStats.active ?? 0, color: '#10B981' }, 
+        { name: 'In Progress', value: cycleStats.in_progress ?? 0, color: '#F59E0B' }, 
+        { name: 'Completed', value: cycleStats.completed ?? 0, color: '#6B7280' }, 
     ].filter(d => d.value > 0);
 
     return (
@@ -127,7 +138,7 @@ const Dashboard = () => {
             {/* Middle Row: Line Chart | Donut Chart | Quick Actions */}
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
                 {/* Line Chart */}
-                <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+                <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5 flex flex-col h-full">
                     <div className="mb-4 flex items-center justify-between">
                         <div>
                             <h2 className="text-base font-bold text-gray-900 dark:text-white">Platform Activity</h2>
@@ -157,7 +168,7 @@ const Dashboard = () => {
                             )}
                         </div>
                     </div>
-                    <div className="h-[250px] w-full">
+                    <div className="flex-1 w-full min-h-[320px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={activityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
@@ -264,7 +275,7 @@ const Dashboard = () => {
                 </div>
 
                 {/* Quick Actions */}
-                <div className="xl:col-span-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+                <div className="xl:col-span-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5 flex flex-col h-full">
                     <h2 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                         <ShieldAlert size={18} className="text-green-500" /> Quick Actions
                     </h2>

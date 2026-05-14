@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, Scale, Plane, FileWarning, Loader2, Package, Activity, Clock, TrendingUp, Calendar } from 'lucide-react';
+import { Truck, Scale, Plane, FileWarning, Loader2, Activity, TrendingUp, Calendar } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import ShipmentBuilderModal from '../components/ShipmentBuilderModal';
 import { api } from '../../../lib/api';
@@ -98,7 +98,7 @@ const Dashboard = () => {
         {
             label: 'Active Fleet',
             value: loading ? '—' : `${stats.activeFleet} Vehicles`,
-            sub: 'Available or on trip',
+            sub: 'Available',
             icon: Truck,
             bg: 'bg-green-50 dark:bg-green-900/20',
             color: 'text-green-600',
@@ -278,10 +278,10 @@ const Dashboard = () => {
                         </h2>
                         <div className="flex flex-col gap-3 flex-1">
                             {[
-                                { label: 'Log Field Pickup',      onClick: () => navigate('/logistics/pickups') },
-                                { label: 'Create Packing List',    onClick: () => setIsShipmentModalOpen(true) },
-                                { label: 'Confirm Departure',      onClick: () => navigate('/logistics/shipments') },
-                                { label: 'Mark Cargo Dispatched',  onClick: () => navigate('/logistics/shipments') },
+                                { label: 'Log Field Pickup', onClick: () => navigate('/logistics/pickups') },
+                                { label: 'Create Packing List', onClick: () => setIsShipmentModalOpen(true) },
+                                { label: 'Confirm Departure', onClick: () => navigate('/logistics/shipments') },
+                                { label: 'Mark Cargo Dispatched', onClick: () => navigate('/logistics/shipments') },
                             ].map((q, idx) => (
                                 <button key={q.label} onClick={q.onClick}
                                     className={`flex items-center justify-between p-3.5 rounded-xl transition-all text-left ${idx === 0 ? 'bg-[#5cb85c] text-white shadow-lg shadow-green-900/10 hover:bg-[#4cae4c] border-transparent' : 'border border-gray-100 dark:border-gray-700 hover:border-green-300 hover:bg-green-50 dark:hover:bg-green-900/10'}`}>

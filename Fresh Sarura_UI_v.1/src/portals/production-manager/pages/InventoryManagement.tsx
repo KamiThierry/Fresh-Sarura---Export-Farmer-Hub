@@ -23,7 +23,9 @@ const InventoryManagement = () => {
         stock, refreshStock, 
         exportBatches, refreshExportBatches, 
         inventoryItems,
-        shipments, refreshShipments
+        shipments, refreshShipments,
+        qcDoneBatches,
+        refreshProcessingBatches
     } = usePMContext();
     const { showToast } = useToastContext();
 
@@ -43,7 +45,6 @@ const InventoryManagement = () => {
     const [activityLoading, setActivityLoading] = useState(false);
 
     // New states for QC Confirmation
-    const [qcDoneBatches, setQcDoneBatches] = useState<any[]>([]);
     const [availableRooms, setAvailableRooms] = useState<any[]>([]);
     const [confirmingBatchId, setConfirmingBatchId] = useState<string | null>(null);
     const [selectedRoomForConfirm, setSelectedRoomForConfirm] = useState<string>('');
@@ -73,15 +74,7 @@ const InventoryManagement = () => {
 
 
 
-    const fetchQcDoneBatches = async () => {
-        try {
-            const res = await api.get('/processing-batches');
-            const all = res.data?.data || res.data || [];
-            setQcDoneBatches(all.filter((b: any) => b.status === 'QCDone'));
-        } catch (err) {
-            console.error('Failed to fetch QCDone batches:', err);
-        }
-    };
+    // (Removed local fetchQcDoneBatches, using PMContext instead)
 
     const fetchRooms = async () => {
         try {
@@ -106,7 +99,7 @@ const InventoryManagement = () => {
             setConfirmingBatchId(null);
             setSelectedRoomForConfirm('');
             // Refresh everything affected
-            await Promise.all([refreshStock(), fetchQcDoneBatches(), fetchActivityFeed()]);
+            await Promise.all([refreshStock(), refreshProcessingBatches(), fetchActivityFeed()]);
         } catch (err) {
             console.error('Failed to confirm batch:', err);
         } finally {
@@ -314,7 +307,7 @@ const InventoryManagement = () => {
         if (shipments.length === 0) refreshShipments();
         
         fetchActivityFeed();
-        fetchQcDoneBatches();
+        // fetchQcDoneBatches(); // No longer needed
         fetchRooms();
     }, []);
 

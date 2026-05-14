@@ -1,4 +1,4 @@
-import { Search, Bell, ChevronDown, Loader2 } from 'lucide-react';
+import { Search, Bell, ChevronDown, Loader2, Mail } from 'lucide-react';
 import logo from '@/assets/sarura_logo_nav.png';
 import ThemeToggle from '../../shared/component/ThemeToggle';
 import NotificationsModal from '../../shared/component/NotificationsModal';
@@ -20,14 +20,16 @@ const Header = () => {
     const [notifications, setNotifications] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [unreadContactMessages, setUnreadContactMessages] = useState(0);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
 
     const fetchNotifications = async () => {
         try {
-            const [notifRes, logsRes] = await Promise.all([
+            const [notifRes, logsRes, contactRes] = await Promise.all([
                 api.get('/notifications'),
-                api.get('/event-logs?limit=15')
+                api.get('/event-logs?limit=15'),
+                api.get('/contact')
             ]);
             
             const notifs = notifRes.data?.data ?? notifRes.data ?? [];
@@ -58,6 +60,11 @@ const Header = () => {
                         isLog: true
                     };
                 });
+
+            // Handle contact messages unread count
+            const contactMessages = contactRes.data?.data ?? contactRes.data ?? [];
+            const unreadContactCount = contactMessages.filter((m: any) => m.status === 'Unread').length;
+            setUnreadContactMessages(unreadContactCount);
 
             // Combine and sort by date
             const combined = [...(Array.isArray(notifs) ? notifs : []), ...logNotifs]
@@ -210,6 +217,24 @@ const Header = () => {
                 {/* Right controls */}
                 <div className="flex items-center gap-3">
                     <ThemeToggle />
+                    
+                    {/* Contact Message Notification */}
+                    <button
+                        onClick={() => navigate('/admin/messages')}
+                        className={`relative p-2.5 rounded-xl transition-all shadow-sm ${
+                            unreadContactMessages > 0 
+                                ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400' 
+                                : 'bg-white/80 dark:bg-gray-700/50 text-gray-500 dark:text-gray-200 hover:bg-red-500 hover:text-white'
+                        }`}
+                        title="View Messages"
+                    >
+                        <Mail size={18} />
+                        {unreadContactMessages > 0 && (
+                            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center bg-red-600 rounded-full text-[10px] font-bold text-white ring-2 ring-white dark:ring-gray-800">
+                                {unreadContactMessages}
+                            </span>
+                        )}
+                    </button>
 
                     <button
                         onClick={() => setIsNotificationsOpen(true)}
@@ -227,7 +252,10 @@ const Header = () => {
                         )}
                     </button>
 
-                    <div className="flex items-center gap-3 pl-2 border-l border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors">
+                    <div 
+                        onClick={() => navigate('/admin/settings')}
+                        className="flex items-center gap-3 pl-2 border-l border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors"
+                    >
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-bold shadow-md hover:saturate-150 transition-all active:scale-95">
                             {initials}
                         </div>

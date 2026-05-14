@@ -283,6 +283,22 @@ const CropCycleDetailModal = ({
     );
     XLSX.utils.book_append_sheet(wb, reqWs, 'Budget Requests');
 
+    if (hasPnL) {
+      const pnlWs = makeSheet(
+        ['Metric', 'Projected', 'Actual'],
+        [
+          ['Yield (kg)',       yieldGoalKg,   finalYieldKg || 'N/A'],
+          ['Selling Price (Rwf/kg)', pricePerKg, pricePerKg],
+          ['Revenue (Rwf)',   projRevenue,   finalYieldKg ? actualRevenue : 'N/A'],
+          ['Production Cost (Rwf)', displayBudget, totalSpent],
+          ['Profit (Rwf)',    projProfit,    finalYieldKg ? actualProfit : 'N/A'],
+          ['Profit Margin (%)', `${projMargin.toFixed(1)}%`, finalYieldKg ? `${actualMargin.toFixed(1)}%` : 'N/A'],
+          ['Cost per kg (Rwf)', Math.round(projCostPerKg), finalYieldKg ? Math.round(actualCostPerKg) : 'N/A'],
+        ]
+      );
+      XLSX.utils.book_append_sheet(wb, pnlWs, 'P&L Summary');
+    }
+
     // Sheet 4: Yield Forecasts
     if (forecasts.length > 0) {
       const forecastWs = makeSheet(
@@ -388,6 +404,47 @@ const CropCycleDetailModal = ({
 
     yPos = (doc as any).lastAutoTable.finalY + 15;
 
+    // 5. P&L Summary Table
+    if (hasPnL) {
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+      doc.text(isClosed ? 'ACTUAL PROFIT & LOSS' : 'PROJECTED PROFIT & LOSS', 15, yPos);
+
+      autoTable(doc, {
+        startY: yPos + 5,
+        head: [['METRIC', 'PROJECTED', isClosed ? 'ACTUAL' : '—']],
+        body: [
+          ['Yield (kg)',         `${yieldGoalKg.toLocaleString()} kg`,  isClosed && finalYieldKg ? `${finalYieldKg.toLocaleString()} kg` : '—'],
+          ['Selling Price',      `${fmt(pricePerKg)} Rwf/kg`,           `${fmt(pricePerKg)} Rwf/kg`],
+          ['Revenue',            `${fmt(projRevenue)} Rwf`,             isClosed && finalYieldKg ? `${fmt(actualRevenue)} Rwf` : '—'],
+          ['Production Cost',    `${fmt(displayBudget)} Rwf`,           isClosed ? `${fmt(totalSpent)} Rwf` : '—'],
+          ['Profit / Loss',      `${projProfit >= 0 ? '+' : ''}${fmt(projProfit)} Rwf`, isClosed && finalYieldKg ? `${actualProfit >= 0 ? '+' : ''}${fmt(actualProfit)} Rwf` : '—'],
+          ['Profit Margin',      `${projMargin.toFixed(1)}%`,           isClosed && finalYieldKg ? `${actualMargin.toFixed(1)}%` : '—'],
+          ['Cost per kg',        `${fmt(projCostPerKg)} Rwf`,           isClosed && finalYieldKg ? `${fmt(actualCostPerKg)} Rwf` : '—'],
+        ],
+        theme: 'striped',
+        headStyles: { ...commonHeadStyles, fillColor: [124, 58, 237] }, // Purple for P&L
+        bodyStyles: commonBodyStyles,
+        alternateRowStyles,
+        margin: { left: 15, right: 15 },
+        didParseCell: (data) => {
+          if (data.section === 'body' && data.row.index === 4) {
+            // Profit row — color based on value (Col 1: Projected, Col 2: Actual)
+            const isProj   = data.column.index === 1;
+            const isActual = data.column.index === 2;
+            const val      = isProj ? projProfit : (isActual ? actualProfit : 0);
+            
+            if ((isProj || isActual) && val < 0) {
+              data.cell.styles.textColor = [220, 38, 38]; // Red
+            } else if ((isProj || isActual) && val > 0) {
+              data.cell.styles.textColor = [21, 128, 61]; // Green
+            }
+          }
+        }
+      });
+
+      yPos = (doc as any).lastAutoTable.finalY + 15;
+    }
+
     // 5. Recent Budget Requests (Detailed Table)
     if (budgetRequests.length > 0) {
       doc.setFontSize(11); doc.setFont('helvetica', 'bold');
@@ -443,19 +500,32 @@ const CropCycleDetailModal = ({
   // Display values — normalise shape from DB vs passed-in cycle prop
   const displayCrop       = fullData?.cycle?.crop_name || cycle.crop || '—';
   const displayLandSize   = fullData?.cycle?.block_size_hectares ? `${fullData.cycle.block_size_hectares} Ha` : cycle.landSize || '—';
-  const displayStartDate  = fmtDate(fullData?.cycle?.start_date || cycle.start_date);
+  const displayStartDate  = fmtDate(fullData?.cycle?.planting_date || cycle.planting_date);
   const displayEndDate    = fmtDate(fullData?.cycle?.expected_harvest_date || cycle.expected_harvest_date);
   const displayCycleId    = fullData?.cycle?.cycleId || cycle.cycleId || cycle._id;
   const displayBudget     = fullData?.cycle?.total_budget || cycle.budget || 0;
   const displaySpent      = fullData?.cycle?.spent || cycle.spent || 0;
   const displayYieldGoal  = fullData?.cycle?.yield_goal_kg ? `${fullData.cycle.yield_goal_kg.toLocaleString()} kg` : cycle.yieldGoal || '—';
   const displayFarmer     = fullData?.cycle?.farmer_id?.full_name || '—';
+  
+  const yieldGoalKg        = fullData?.cycle?.yield_goal_kg || cycle.yield_goal_kg || 0;
+  const finalYieldKg       = fullData?.cycle?.final_yield || 0;
+  const pricePerKg         = fullData?.cycle?.expected_price_per_kg || cycle.expected_price_per_kg || 0;
+  const projRevenue        = yieldGoalKg * pricePerKg;
+  const actualRevenue      = finalYieldKg * pricePerKg;
+  const projProfit         = projRevenue - displayBudget;
+  const actualProfit       = actualRevenue - totalSpent;
+  const projMargin         = projRevenue > 0 ? (projProfit / projRevenue) * 100 : 0;
+  const actualMargin       = actualRevenue > 0 ? (actualProfit / actualRevenue) * 100 : 0;
+  const projCostPerKg      = yieldGoalKg > 0 ? displayBudget / yieldGoalKg : 0;
+  const actualCostPerKg    = finalYieldKg > 0 ? totalSpent / finalYieldKg : 0;
+  const hasPnL             = pricePerKg > 0 && yieldGoalKg > 0;
 
   const isClosed = (cycleStatus || '').toLowerCase() === 'completed';
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-md transition-opacity" onClick={onClose} />
 
       <div className="relative w-full max-w-4xl bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700 max-h-[85vh]">
 
@@ -720,6 +790,123 @@ const CropCycleDetailModal = ({
                   </div>
                 )}
               </div>
+
+              {hasPnL && (
+                <div className={`rounded-2xl border p-6 shadow-sm ${
+                  (isClosed ? actualProfit : projProfit) >= 0
+                    ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/40'
+                    : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/40'
+                }`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                      {isClosed ? 'Actual P&L' : 'Projected P&L'}
+                    </h3>
+                    {isClosed && finalYieldKg > 0 && (
+                      <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
+                        Final yield: {fmt(finalYieldKg)} kg
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-6">
+                    {/* Left column */}
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {isClosed ? 'Actual revenue' : 'Expected revenue'}
+                        </span>
+                        <span className="font-bold text-gray-800 dark:text-gray-100">
+                          {fmt(isClosed ? actualRevenue : projRevenue)} Rwf
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {isClosed ? 'Actual cost' : 'Production budget'}
+                        </span>
+                        <span className="font-bold text-gray-800 dark:text-gray-100">
+                          {fmt(isClosed ? totalSpent : displayBudget)} Rwf
+                        </span>
+                      </div>
+                      <div className="h-px bg-gray-200 dark:bg-gray-600" />
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-gray-700 dark:text-gray-200">
+                          {isClosed ? 'Net profit' : 'Est. profit'}
+                        </span>
+                        <span className={`font-bold text-lg ${
+                          (isClosed ? actualProfit : projProfit) >= 0
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-600 dark:text-red-400'
+                        }`}>
+                          {(isClosed ? actualProfit : projProfit) >= 0 ? '+' : ''}
+                          {fmt(isClosed ? actualProfit : projProfit)} Rwf
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Right column */}
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">Profit margin</span>
+                        <span className={`font-bold ${
+                          (isClosed ? actualMargin : projMargin) >= 0
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-600 dark:text-red-400'
+                        }`}>
+                          {(isClosed ? actualMargin : projMargin).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">Cost per kg</span>
+                        <span className="font-bold text-gray-800 dark:text-gray-100">
+                          {fmt(isClosed ? actualCostPerKg : projCostPerKg)} Rwf
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">Selling price</span>
+                        <span className="font-bold text-gray-800 dark:text-gray-100">{fmt(pricePerKg)} Rwf/kg</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {isClosed ? 'Yield achieved' : 'Yield target'}
+                        </span>
+                        <span className="font-bold text-gray-800 dark:text-gray-100">
+                          {fmt(isClosed ? finalYieldKg : yieldGoalKg)} kg
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Projected vs Actual comparison row — only show when cycle is closed and both exist */}
+                  {isClosed && yieldGoalKg > 0 && finalYieldKg > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 grid grid-cols-3 gap-4 text-xs text-center">
+                      <div>
+                        <p className="text-gray-400 mb-1">Yield vs Target</p>
+                        <p className={`font-bold text-sm ${finalYieldKg >= yieldGoalKg ? 'text-green-600' : 'text-red-500'}`}>
+                          {finalYieldKg >= yieldGoalKg ? '+' : ''}{fmt(finalYieldKg - yieldGoalKg)} kg
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 mb-1">Revenue vs Projected</p>
+                        <p className={`font-bold text-sm ${actualRevenue >= projRevenue ? 'text-green-600' : 'text-red-500'}`}>
+                          {actualRevenue >= projRevenue ? '+' : ''}{fmt(actualRevenue - projRevenue)} Rwf
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 mb-1">Profit vs Projected</p>
+                        <p className={`font-bold text-sm ${actualProfit >= projProfit ? 'text-green-600' : 'text-red-500'}`}>
+                          {actualProfit >= projProfit ? '+' : ''}{fmt(actualProfit - projProfit)} Rwf
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {!isClosed && (
+                    <p className="text-xs text-gray-400 mt-3">
+                      Estimates based on yield goal of {fmt(yieldGoalKg)} kg at {fmt(pricePerKg)} Rwf/kg. Actuals will be calculated on cycle close.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -762,6 +949,39 @@ const CropCycleDetailModal = ({
                   )}
                 </div>
               </div>
+
+              {hasPnL && (
+                <div className={`rounded-xl border p-5 ${
+                  (isClosed ? actualProfit : projProfit) >= 0
+                    ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/40'
+                    : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/40'
+                }`}>
+                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
+                    {isClosed ? 'Actual P&L Summary' : 'Projected P&L Summary'}
+                  </p>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <p className="text-xs text-gray-400 mb-1">{isClosed ? 'Actual Revenue' : 'Projected Revenue'}</p>
+                      <p className="font-bold text-gray-800 dark:text-gray-100">{fmt(isClosed ? actualRevenue : projRevenue)} Rwf</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{fmt(pricePerKg)} Rwf/kg × {fmt(isClosed ? finalYieldKg : yieldGoalKg)} kg</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 mb-1">{isClosed ? 'Actual Cost' : 'Production Budget'}</p>
+                      <p className="font-bold text-gray-800 dark:text-gray-100">{fmt(isClosed ? totalSpent : displayBudget)} Rwf</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Cost/kg: {fmt(isClosed ? actualCostPerKg : projCostPerKg)} Rwf</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 mb-1">{isClosed ? 'Net Profit' : 'Est. Profit'}</p>
+                      <p className={`font-bold text-lg ${(isClosed ? actualProfit : projProfit) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                        {(isClosed ? actualProfit : projProfit) >= 0 ? '+' : ''}{fmt(isClosed ? actualProfit : projProfit)} Rwf
+                      </p>
+                      <p className={`text-xs font-bold ${(isClosed ? actualMargin : projMargin) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                        {(isClosed ? actualMargin : projMargin).toFixed(1)}% margin
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Category Cards */}
               {budgetCategories.length > 0 ? (
@@ -1417,8 +1637,6 @@ const FieldReportDetailsModal = ({
   );
 };
 
-export default CropCycleDetailModal;
-
 const OverdraftWarningModal = ({
     isOpen, onClose, details, onConfirm, onAdjust
 }: {
@@ -1489,3 +1707,5 @@ const OverdraftWarningModal = ({
         document.body
     );
 };
+
+export default CropCycleDetailModal;

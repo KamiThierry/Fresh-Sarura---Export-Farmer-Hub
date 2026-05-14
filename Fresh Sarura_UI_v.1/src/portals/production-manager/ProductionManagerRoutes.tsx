@@ -17,6 +17,7 @@ import RoomManagement from './pages/RoomManagement';
 
 import FarmerRegistrationModal from './components/FarmerRegistrationModal';
 import CreateCropCycleModal from './components/CreateCropCycleModal';
+import CreateExportBatchModal from './components/CreateExportBatchModal';
 import { PMProvider, usePMContext } from '@/context/PMContext';
 // import { useToastContext } from '@/context/ToastContext';
 
@@ -34,9 +35,8 @@ const ProductionManagerApp = () => {
     const [isPackingListOpen, setIsPackingListOpen] = useState(false);
     const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
     const [isCreateCycleOpen, setIsCreateCycleOpen] = useState(false);
-    // const { showToast } = useToastContext();
-
-    const { intakeLogs } = usePMContext();
+    const [isCreateBatchOpen, setIsCreateBatchOpen] = useState(false);
+    const { intakeLogs, inventoryItems, refreshAll } = usePMContext();
 
     const todayStr = new Date().toISOString().split('T')[0];
 
@@ -85,6 +85,10 @@ const ProductionManagerApp = () => {
         setIsCreateCycleOpen(true);
     };
 
+    const handleCreateBatch = () => {
+        setIsCreateBatchOpen(true);
+    };
+
     const handlePackingListSubmit = (data: any) => {
         // Modal manages its own close — success state shows first,
         // then user clicks Close or View Packing List Status.
@@ -109,6 +113,7 @@ const ProductionManagerApp = () => {
                                 onLogIntake={handleLogIntake}
                                 onRegisterFarmer={handleRegisterFarmer}
                                 onCreateCycle={handleCreateCycle}
+                                onCreateBatch={handleCreateBatch}
                                 onFindBatch={handleFindBatch}
                                 onCloseIntake={() => setIsIntakeOpen(false)}
                                 onIntakeSubmit={handleIntakeSubmit}
@@ -162,6 +167,13 @@ const ProductionManagerApp = () => {
                 isOpen={isCreateCycleOpen}
                 onClose={() => setIsCreateCycleOpen(false)}
                 onSubmit={() => setIsCreateCycleOpen(false)}
+            />
+
+            <CreateExportBatchModal 
+                isOpen={isCreateBatchOpen}
+                onClose={() => setIsCreateBatchOpen(false)}
+                inventoryItems={inventoryItems}
+                onSuccess={refreshAll}
             />
         </>
     );

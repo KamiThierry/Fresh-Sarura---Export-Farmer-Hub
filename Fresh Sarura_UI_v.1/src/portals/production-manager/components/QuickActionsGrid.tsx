@@ -1,20 +1,20 @@
-import { PlusCircle, Search, UserPlus, Sprout } from 'lucide-react';
+import { Search, UserPlus, Sprout, Package } from 'lucide-react';
 
 interface QuickActionsGridProps {
-  onLogIntake?: () => void;
   onRegisterFarmer?: () => void;
   onCreateCycle?: () => void;
+  onCreateBatch?: () => void;
   onFindBatch?: () => void;
 }
 
 const QuickActionsGrid = ({ 
-  onLogIntake, 
   onRegisterFarmer, 
   onCreateCycle, 
+  onCreateBatch,
   onFindBatch 
 }: QuickActionsGridProps) => {
   const actions = [
-    {
+    /* {
       icon: PlusCircle,
       title: 'Log Intake',
       sub: 'From Field/Truck',
@@ -23,6 +23,16 @@ const QuickActionsGrid = ({
       borderColor: 'border-[#2E7D32]/20',
       hoverColor: 'hover:border-[#2E7D32]',
       action: onLogIntake,
+    }, */
+    {
+      icon: Package,
+      title: 'Create Batch',
+      sub: 'Package Inventory',
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-50',
+      borderColor: 'border-purple-600/20',
+      hoverColor: 'hover:border-purple-600',
+      action: onCreateBatch,
     },
     {
       icon: UserPlus,

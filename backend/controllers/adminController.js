@@ -86,11 +86,11 @@ export const getActivityStats = async (req, res) => {
 export const getCycleStats = async (req, res) => {
     try {
         const active = await CropCycle.countDocuments({ status: 'active' });
-        const harvesting = await CropCycle.countDocuments({ status: 'in_progress' });
+        const in_progress = await CropCycle.countDocuments({ status: 'in_progress' });
         const planned = await CropCycle.countDocuments({ status: 'planned' });
         const completed = await CropCycle.countDocuments({ status: 'completed' });
 
-        res.status(200).json({ active, harvesting, planned, completed });
+        res.status(200).json({ active, in_progress, planned, completed });
     } catch (error) {
         console.error('getCycleStats Error:', error);
         res.status(500).json({ message: 'Failed to get cycle stats' });

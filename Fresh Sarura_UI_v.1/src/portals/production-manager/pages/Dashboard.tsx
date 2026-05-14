@@ -20,6 +20,7 @@ interface DashboardProps {
     onLogIntake: () => void;
     onRegisterFarmer: () => void;
     onCreateCycle: () => void;
+    onCreateBatch: () => void;
     onFindBatch: () => void;
     onCloseIntake: () => void;
     onIntakeSubmit: (weight: number) => void;
@@ -33,12 +34,13 @@ const Dashboard = ({
     onLogIntake,
     onRegisterFarmer,
     onCreateCycle,
+    onCreateBatch,
     onFindBatch,
     onCloseIntake,
     onIntakeSubmit,
     onCloseTraceability
 }: DashboardProps) => {
-    const { cycles, pendingRoomRequests, shipments, stock, inventoryItems } = usePMContext();
+    const { cycles, pendingRoomRequests, shipments, inventoryItems } = usePMContext();
     const activeCyclesCount = cycles.filter(c => c.status !== 'completed').length;
     const pendingRoomRequestsCount = (pendingRoomRequests || []).length;
     const [userName, setUserName] = useState<string>('Production Manager');
@@ -92,9 +94,9 @@ const Dashboard = ({
 
             {/* Quick Actions Grid */}
             <QuickActionsGrid
-                onLogIntake={onLogIntake}
                 onRegisterFarmer={onRegisterFarmer}
                 onCreateCycle={onCreateCycle}
+                onCreateBatch={onCreateBatch}
                 onFindBatch={onFindBatch}
             />
 

@@ -92,3 +92,24 @@ export const replyToMessage = async (req, res) => {
         res.status(500).json({ message: 'Failed to send reply. Check email config.' });
     }
 };
+
+// @route DELETE /api/v1/contact/:id — admin only
+export const deleteMessage = async (req, res) => {
+    try {
+        const msg = await ContactMessage.findByIdAndDelete(req.params.id);
+        if (!msg) return res.status(404).json({ message: 'Message not found.' });
+
+        await createEventLog({
+            module:      'System',
+            action:      'Contact Message Deleted',
+            severity:    'WARNING',
+            description: `Admin deleted contact inquiry from ${msg.email}`,
+            actor:       req.user?.name || 'Admin',
+            metadata:    { messageId: msg._id, senderEmail: msg.email }
+        });
+
+        res.status(200).json({ status: 'success', message: 'Message deleted successfully.' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};

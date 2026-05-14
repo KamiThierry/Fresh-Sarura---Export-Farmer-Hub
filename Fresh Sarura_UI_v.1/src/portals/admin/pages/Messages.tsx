@@ -118,6 +118,21 @@ const Messages = () => {
         }
     };
 
+    const handleMarkRead = async (id: string) => {
+        try {
+            await api.patch(`/contact/${id}/read`, {});
+            setMessages(prev =>
+                prev.map(m => m._id === id ? { ...m, status: 'Read' } : m)
+            );
+            if (selected?._id === id) {
+                setSelected(prev => prev ? { ...prev, status: 'Read' } : null);
+            }
+            showToast('Status Updated', 'Message marked as read.');
+        } catch {
+            showToast('Error', 'Failed to mark as read.');
+        }
+    };
+
     const unreadCount = messages.filter(m => m.status === 'Unread').length;
 
     const filtered = messages.filter(m => {
@@ -282,9 +297,10 @@ const Messages = () => {
                                     {selected.status !== 'Replied' && (
                                         <button
                                             title="Mark as read"
+                                            onClick={() => handleMarkRead(selected._id)}
                                             className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
                                         >
-                                            <Check size={16} />
+                                            <Check size={16} className={selected.status === 'Read' ? 'text-green-600' : ''} />
                                         </button>
                                     )}
                                     {/* Delete */}

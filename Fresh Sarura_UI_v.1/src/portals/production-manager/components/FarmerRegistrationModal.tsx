@@ -292,7 +292,7 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                         </div>
 
                         {/* ID Upload */}
-                        <div className="pt-2">
+                        {/* <div className="pt-2">
                             <button
                                 type="button"
                                 className="w-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 flex flex-col items-center justify-center text-gray-500 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/10 transition-colors"
@@ -301,7 +301,7 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                                 <span className="text-sm font-medium">Click to upload ID Card</span>
                                 <span className="text-xs text-gray-400 mt-1">JPG, PNG or PDF (Max 5MB)</span>
                             </button>
-                        </div>
+                        </div> */}
 
                     </form>
                 </div>

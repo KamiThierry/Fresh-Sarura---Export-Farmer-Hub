@@ -176,6 +176,7 @@ export const updateFarmer = async (req, res) => {
 // @route DELETE /api/v1/farmers/:id
 export const deleteFarmer = async (req, res) => {
     try {
+        logger.info(`Received request to delete farmer with ID: ${req.params.id}`);
         const farmer = await Farmer.findByIdAndDelete(req.params.id);
         if (!farmer) return res.status(404).json({ message: 'Farmer not found' });
 

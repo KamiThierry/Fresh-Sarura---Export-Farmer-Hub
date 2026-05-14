@@ -1,5 +1,8 @@
-import { Leaf, Search, Bell, ChevronDown } from 'lucide-react';
-import ThemeToggle from '../components/ThemeToggle'; // Adjusted import path
+import { Leaf, Search, Bell, ChevronDown, Mail } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { api } from '@/lib/api';
+import ThemeToggle from '../component/ThemeToggle';
 
 const Header = () => {
     const userStr = localStorage.getItem('user');
@@ -9,6 +12,30 @@ const Header = () => {
     const formatRole = (role: string) => {
         return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     };
+
+    const navigate = useNavigate();
+    const [unreadMessages, setUnreadMessages] = useState(0);
+
+    const isAdmin = user.role === 'admin';
+
+    useEffect(() => {
+        if (!isAdmin) return;
+
+        const fetchUnreadCount = async () => {
+            try {
+                const res = await api.get('/contact');
+                const messages = res.data?.data || res.data || [];
+                const count = messages.filter((m: any) => m.status === 'Unread').length;
+                setUnreadMessages(count);
+            } catch (err) {
+                console.error('Failed to fetch unread messages:', err);
+            }
+        };
+
+        fetchUnreadCount();
+        const interval = setInterval(fetchUnreadCount, 30000); // Poll every 30s
+        return () => clearInterval(interval);
+    }, [isAdmin]);
 
     return (
         <header className="fixed top-[10px] left-[10px] right-[10px] h-16 bg-white/80 dark:bg-gray-800/90 backdrop-blur-md border-theme z-40 px-6 flex items-center justify-between transition-colors duration-300 rounded-2xl shadow-floating">
@@ -37,11 +64,31 @@ const Header = () => {
             {/* Right Side Controls */}
             <div className="flex items-center gap-3">
                 <ThemeToggle />
+                
+                {/* Message Notification (Admin only) */}
+                {isAdmin && (
+                    <button 
+                        onClick={() => navigate('/admin/messages')}
+                        className={`relative p-2.5 rounded-xl transition-all shadow-sm ${
+                            unreadMessages > 0 
+                                ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400' 
+                                : 'bg-white/80 dark:bg-gray-700/50 text-gray-500 dark:text-gray-200 hover:bg-red-500 hover:text-white'
+                        }`}
+                        title="View Messages"
+                    >
+                        <Mail size={18} />
+                        {unreadMessages > 0 && (
+                            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center bg-red-600 rounded-full text-[10px] font-bold text-white ring-2 ring-white dark:ring-gray-800">
+                                {unreadMessages}
+                            </span>
+                        )}
+                    </button>
+                )}
 
                 {/* Notification Icon */}
-                <button className="relative p-2.5 rounded-xl bg-white/80 hover:bg-[#4CAF50] hover:text-white transition-all shadow-sm dark:bg-gray-700/50 dark:text-gray-200 dark:hover:bg-green-600">
+                <button className="relative p-2.5 rounded-xl transition-all shadow-sm bg-white/80 dark:bg-gray-700/50 text-gray-500 dark:text-gray-200 hover:bg-green-500 hover:text-white">
                     <Bell size={18} />
-                    <span className="absolute top-1 right-1 w-2 h-2 bg-[#4CAF50] rounded-full ring-2 ring-white dark:ring-gray-800"></span>
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full ring-2 ring-white dark:ring-gray-800"></span>
                 </button>
 
                 {/* User Avatar & Profile */}

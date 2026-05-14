@@ -31,7 +31,7 @@ const FarmManagerHeader = () => {
     const fetchNotifications = async () => {
         try {
             const res = await api.get('/notifications');
-            setNotifications(res.data);
+            setNotifications(res.data?.data || res.data || []);
         } catch (err) {
             console.error('Failed to fetch notifications:', err);
         }
@@ -157,17 +157,21 @@ const FarmManagerHeader = () => {
             </div>
 
             {/* Right Side Controls */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
                 <ThemeToggle />
 
                 {/* Notification Icon */}
                 <button
                     onClick={() => setIsNotificationsOpen(true)}
-                    className="relative p-2.5 rounded-xl bg-white/80 hover:bg-[#4CAF50] hover:text-white transition-all shadow-sm dark:bg-gray-700/50 dark:text-gray-200 dark:hover:bg-green-600"
+                    className={`relative p-2.5 rounded-xl transition-all shadow-sm ${
+                        unreadCount > 0 
+                            ? 'bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400' 
+                            : 'bg-white/80 dark:bg-gray-700/50 text-gray-500 dark:text-gray-200 hover:bg-green-500 hover:text-white'
+                    }`}
                 >
                     <Bell size={18} />
                     {unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center bg-green-600 rounded-full text-[10px] font-bold text-white ring-2 ring-white dark:ring-gray-800 animate-pulse">
+                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center bg-green-600 rounded-full text-[10px] font-bold text-white ring-2 ring-white dark:ring-gray-800">
                             {unreadCount}
                         </span>
                     )}

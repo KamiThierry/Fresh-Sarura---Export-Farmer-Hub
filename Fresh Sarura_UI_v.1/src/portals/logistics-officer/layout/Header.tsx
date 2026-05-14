@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Bell, LogOut, Loader2 } from 'lucide-react';
+import { Search, Bell, LogOut, Loader2, ChevronDown } from 'lucide-react';
 import logo from '../../../assets/sarura_logo_nav.png';
 import ThemeToggle from '../../shared/component/ThemeToggle';
 import NotificationsModal from '../../shared/component/NotificationsModal';
@@ -32,7 +32,7 @@ const Header = () => {
     const fetchNotifications = async () => {
         try {
             const res = await api.get('/notifications');
-            setNotifications(res.data || []);
+            setNotifications(res.data?.data || res.data || []);
         } catch (err) {
             console.error('Failed to fetch notifications:', err);
         }
@@ -160,40 +160,40 @@ const Header = () => {
                         onClick={() => setIsNotificationsOpen(true)}
                         className={`relative p-2.5 rounded-xl transition-all shadow-sm ${
                             unreadCount > 0 
-                                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' 
-                                : 'bg-white/80 dark:bg-gray-700/50 text-gray-500 dark:text-gray-200 hover:bg-blue-500 hover:text-white'
+                                ? 'bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400' 
+                                : 'bg-white/80 dark:bg-gray-700/50 text-gray-500 dark:text-gray-200 hover:bg-green-500 hover:text-white'
                         }`}
                     >
                         <Bell size={18} />
                         {unreadCount > 0 && (
-                            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center bg-blue-600 rounded-full text-[10px] font-bold text-white ring-2 ring-white dark:ring-gray-800">
+                            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center bg-green-600 rounded-full text-[10px] font-bold text-white ring-2 ring-white dark:ring-gray-800">
                                 {unreadCount}
                             </span>
                         )}
                     </button>
 
                     {/* User Avatar & Profile */}
-                    <div className="flex items-center gap-3 pl-2 border-l border-gray-200 dark:border-gray-700">
-                        <div className="text-right hidden md:block">
-                            <p className="text-sm font-semibold text-[#222222] dark:text-white">{user.name}</p>
-                            <p className="text-xs text-[#6B7280] dark:text-gray-400">{formatRole(user.role)}</p>
+                    <div 
+                        onClick={() => navigate('/logistics/settings')}
+                        className="flex items-center gap-3 pl-2 border-l border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors"
+                    >
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-bold shadow-md hover:saturate-150 transition-all active:scale-95">
+                            {user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
                         </div>
-                        <button
-                            onClick={() => navigate('/logistics/settings')}
-                            className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center text-white text-sm font-semibold shadow-md active:scale-95 transition-all"
-                            title="My Profile & Settings"
-                        >
-                            {user.name.charAt(0).toUpperCase()}
-                        </button>
-                        {/* Separate logout button */}
-                        <button
-                            onClick={handleLogout}
-                            title="Sign out"
-                            className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
-                        >
-                            <LogOut size={16} />
-                        </button>
+                        <div className="text-left hidden md:block">
+                            <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{user.name}</p>
+                            <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-0.5">{formatRole(user.role)}</p>
+                        </div>
+                        <ChevronDown size={14} className="text-gray-400 ml-1" />
                     </div>
+                    {/* Separate logout button */}
+                    <button
+                        onClick={handleLogout}
+                        title="Sign out"
+                        className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                    >
+                        <LogOut size={16} />
+                    </button>
                 </div>
             </header>
 

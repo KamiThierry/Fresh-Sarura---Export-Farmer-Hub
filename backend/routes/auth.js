@@ -2,7 +2,8 @@ import express from 'express';
 import {
     login, createUser, getMe, updateMe,
     updatePassword, forgotPassword, resetPassword,
-    getAllUsers, updateUser, deleteUser, permanentlyDeleteUser
+    getAllUsers, updateUser, deleteUser, permanentlyDeleteUser,
+    updateProfile
 } from '../controllers/authController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -16,6 +17,7 @@ router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 
 router.patch('/me', protect, updateMe);
+router.patch('/profile', protect, updateProfile);
 router.patch('/update-password', protect, updatePassword);
 
 // User management (Admin only)

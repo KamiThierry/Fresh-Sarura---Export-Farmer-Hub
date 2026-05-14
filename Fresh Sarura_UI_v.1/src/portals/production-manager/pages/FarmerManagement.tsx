@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import {
   Search, Filter, Plus, Download,
   Users, UserCheck, Map, MapPin, ChevronDown, FileSpreadsheet, FileText,
-  Pencil, Trash2, Trophy
+  Pencil, Trash2, Trophy, AlertTriangle
 } from 'lucide-react';
 import FarmerRegistrationModal from '../components/FarmerRegistrationModal';
 import FarmNetworkMap from '../components/FarmNetworkMap';
@@ -38,6 +39,27 @@ const FarmerManagement = () => {
     loading, 
     refreshFarmers 
   } = usePMContext();
+
+  const [deletingFarmer, setDeletingFarmer] = useState<Farmer | null>(null);
+
+  const handleDelete = async () => {
+    if (!deletingFarmer) return;
+    try {
+      const farmerId = deletingFarmer._id || (deletingFarmer as any).id;
+      if (!farmerId) {
+        showToast('Delete Failed', 'Could not identify the farmer record ID.');
+        return;
+      }
+      
+      await api.delete(`/farmers/${String(farmerId)}`);
+      showToast('Farmer Deleted', `The record for ${deletingFarmer.full_name} has been permanently removed.`);
+      setDeletingFarmer(null);
+      refreshFarmers();
+    } catch (err) {
+      console.error('Failed to delete farmer', err);
+      showToast('Delete Failed', 'There was an error removing the farmer record.');
+    }
+  };
 
   // Extract unique crops for filter
   const uniqueCrops = useMemo(() => {
@@ -577,6 +599,7 @@ const FarmerManagement = () => {
                           </button>
                           {/* Delete */}
                           <button
+                            onClick={(e) => { e.stopPropagation(); setDeletingFarmer(farmer); }}
                             title="Delete farmer"
                             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                           >
@@ -602,6 +625,35 @@ const FarmerManagement = () => {
               showToast("Farmer Registered Successfully", `${name} has been added to the network`);
             }}
           />
+
+          {/* Delete Confirmation Modal */}
+          {deletingFarmer && createPortal(
+            <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDeletingFarmer(null)} />
+              <div className="relative w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700">
+                <div className="p-6 text-center">
+                  <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <AlertTriangle className="text-red-600" size={32} />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Confirm Delete</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                    Are you sure you want to delete farmer <span className="font-bold text-gray-900 dark:text-white">"{deletingFarmer.full_name}"</span>? This will also remove their linked user account.
+                  </p>
+                  <div className="flex gap-3">
+                    <button onClick={() => setDeletingFarmer(null)}
+                      className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                      Cancel
+                    </button>
+                    <button onClick={handleDelete}
+                      className="flex-1 px-4 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20">
+                      Delete Farmer
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
 
 
         </>

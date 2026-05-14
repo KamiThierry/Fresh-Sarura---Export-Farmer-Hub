@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import {
-    Home, Users, ShieldAlert, Settings, LogOut,
+    Home, Users, ShieldAlert, Settings,
     BarChart3, ChevronDown, MessageSquare,
-    Sprout, Truck, FlaskConical, UserCog
+    Sprout, Truck, FlaskConical, UserCog, LogOut
 } from 'lucide-react';
 
 // ─── Sidebar Config ───────────────────────────────────────────────
@@ -78,16 +78,15 @@ const mainGroups = [
 
 // ─── Component ────────────────────────────────────────────────────
 const Sidebar = () => {
-    const navigate = useNavigate();
     const [openSection, setOpenSection] = useState<string | null>(null);
 
     const toggle = (role: string) =>
         setOpenSection(prev => prev === role ? null : role);
 
-    const handleSignOut = () => {
+    const handleLogout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        navigate('/login');
+        window.location.href = '/login';
     };
 
     const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -192,11 +191,11 @@ const Sidebar = () => {
                         <Settings size={18} strokeWidth={2} />
                         <span className="font-medium text-sm">Settings</span>
                     </NavLink>
-                    <button
-                        onClick={handleSignOut}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/10 rounded-xl transition-all mt-1"
+                    <button 
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:text-gray-400 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                     >
-                        <LogOut size={18} />
+                        <LogOut size={18} strokeWidth={2} />
                         <span className="font-medium text-sm">Sign Out</span>
                     </button>
                 </div>
