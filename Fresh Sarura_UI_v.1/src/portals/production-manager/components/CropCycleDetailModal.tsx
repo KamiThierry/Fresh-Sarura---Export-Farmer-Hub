@@ -16,6 +16,24 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import logo from '@/assets/sarura_logo_nav.png';
+import { formatDate, formatDateTime } from '@/lib/dateUtils';
+
+// Helper for embedding images in PDFs
+const getBase64FromUrl = async (url: string): Promise<string | null> => {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.warn("Failed to fetch image for PDF:", url, err);
+    return null;
+  }
+};
 
 interface CropCycleDetailModalProps {
   isOpen: boolean;
@@ -272,9 +290,9 @@ const CropCycleDetailModal = ({
     const reqWs = makeSheet(
       ['Date', 'Submitted By', 'Period', 'Activities', 'Amount (Rwf)', 'Status', 'PM Note'],
       budgetRequests.map((r: any) => [
-        new Date(r.createdAt).toLocaleDateString('en-GB'),
+        formatDate(r.createdAt),
         r.submittedByName || 'Farm Manager',
-        `${fmtDate(r.startDate)} - ${fmtDate(r.endDate)}`,
+        `${formatDate(r.startDate)} - ${formatDate(r.endDate)}`,
         (r.lineItems?.map((li: any) => li.activityName) || []).join('; '),
         r.totalRequestedRwf || 0,
         toTitleCase(r.approvalStatus),
@@ -304,8 +322,8 @@ const CropCycleDetailModal = ({
       const forecastWs = makeSheet(
         ['Submission Date', 'Harvest Date', 'Predicted (kg)', 'Confidence', 'Status', 'Notes'],
         forecasts.map((f: any) => [
-          new Date(f.createdAt).toLocaleDateString('en-GB'),
-          fmtDate(f.harvestDate),
+          formatDate(f.createdAt),
+          formatDate(f.harvestDate),
           f.predictionKg || 0,
           f.confidence || '',
           toTitleCase(f.status),
@@ -322,7 +340,7 @@ const CropCycleDetailModal = ({
   const handleExportPDF = async () => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
-    const timestamp = new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const timestamp = formatDateTime(new Date());
     const toTitleCase = (str: string) => str?.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || 'N/A';
 
     // 1. Standard Branded Header
@@ -454,7 +472,7 @@ const CropCycleDetailModal = ({
         startY: yPos + 5,
         head: [['DATE', 'ACTIVITIES', 'REQUESTED AMOUNT', 'APPROVAL STATUS']],
         body: budgetRequests.slice(0, 15).map((r: any) => [
-          new Date(r.createdAt).toLocaleDateString('en-GB'),
+          formatDate(r.createdAt),
           (r.lineItems?.map((li: any) => li.activityName) || []).join(', ').slice(0, 50),
           `${(r.totalRequestedRwf || 0).toLocaleString()} Rwf`,
           toTitleCase(r.approvalStatus)
@@ -463,6 +481,49 @@ const CropCycleDetailModal = ({
         bodyStyles: commonBodyStyles, alternateRowStyles,
         margin: { left: 15, right: 15, bottom: 30 },
       });
+
+      yPos = (doc as any).lastAutoTable.finalY + 15;
+    }
+
+    // 6. Field Activity Log (with images)
+    if (fieldReports.length > 0) {
+      if (yPos > 240) { doc.addPage(); yPos = 20; }
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+      doc.text('FIELD ACTIVITY & EVIDENCE LOG', 15, yPos);
+
+      for (const report of fieldReports.slice(0, 10)) { // Limit to 10 for reasonable size
+        yPos += 10;
+        if (yPos > 240) { doc.addPage(); yPos = 20; }
+
+        doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+        doc.text(`${formatDate(report.createdAt)} — ${report.description}`, 15, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Category: ${report.category || 'General'} | Cost: ${(report.actualCostRwf || 0).toLocaleString()} Rwf`, 15, yPos + 5);
+        
+        if (report.notes) {
+          doc.setFontSize(8); doc.setTextColor(107, 114, 128);
+          doc.text(`Notes: ${report.notes}`, 15, yPos + 9, { maxWidth: 100 });
+          yPos += 4;
+        }
+
+        if (report.proofUrl) {
+          const base64 = await getBase64FromUrl(report.proofUrl);
+          if (base64) {
+            try {
+              // Add a thumbnail to the right
+              doc.addImage(base64, 'JPEG', pageWidth - 65, yPos - 5, 50, 30, undefined, 'FAST');
+              yPos += 20; // Extra space for image height
+            } catch (e) {
+              console.warn("Failed to add image to PDF", e);
+            }
+          }
+        }
+        
+        doc.setDrawColor(243, 244, 246);
+        doc.line(15, yPos + 10, pageWidth - 15, yPos + 10);
+        yPos += 10;
+        doc.setTextColor(17, 24, 39);
+      }
     }
 
     // 6. Standard Platform Footer
@@ -470,11 +531,12 @@ const CropCycleDetailModal = ({
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
       doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
-      doc.setFontSize(7.5); doc.setTextColor(107, 114, 128); doc.setFont('helvetica', 'medium');
-      doc.text('This is a computer generated production report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
-      const footerY = 286;
+      doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'bold');
+      doc.text('This is a report generated by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+      const footerY = 288;
       doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
-      doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
     }
 
@@ -495,7 +557,7 @@ const CropCycleDetailModal = ({
   };
 
   const fmt = (n: number) => (n || 0).toLocaleString();
-  const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  const fmtDate = (d: string) => formatDate(d);
 
   // Display values — normalise shape from DB vs passed-in cycle prop
   const displayCrop       = fullData?.cycle?.crop_name || cycle.crop || '—';
@@ -551,14 +613,14 @@ const CropCycleDetailModal = ({
           </div>
           <div className="flex items-center gap-2">
             {isClosed ? (
-              <button disabled className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-400 text-sm font-bold flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 cursor-not-allowed">
-                <Lock size={16} /> Cycle Closed
+              <button disabled className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-400 text-xs font-bold flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 cursor-not-allowed">
+                <Lock size={14} /> Cycle Closed
               </button>
             ) : (
               <button
                 onClick={handleCloseAttempt}
                 title="Mark this cycle as completed. All pending requests must be resolved first."
-                className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 text-sm font-bold transition-colors flex items-center gap-1.5 border border-red-100 dark:border-red-800/50"
+                className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 text-xs font-bold transition-colors flex items-center gap-1.5 border border-red-100 dark:border-red-800/50"
               >
                 Close Crop Cycle
               </button>
@@ -569,11 +631,11 @@ const CropCycleDetailModal = ({
             <div className="relative">
               <button
                 onClick={() => setShowExportMenu(prev => !prev)}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm font-medium"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm text-xs font-bold"
               >
-                <Download size={17} />
+                <Download size={14} />
                 Export Data
-                <ChevronDown size={15} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
+                <ChevronDown size={13} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
               </button>
 
               {showExportMenu && (
@@ -942,9 +1004,9 @@ const CropCycleDetailModal = ({
                   {!isClosed && (
                     <button
                       onClick={() => setIsAdjustBudgetOpen(true)}
-                      className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-1.5 border border-white/10"
+                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 border border-white/10"
                     >
-                      <Plus size={16} /> Adjust Budget
+                      <Plus size={14} /> Adjust Budget
                     </button>
                   )}
                 </div>
@@ -1047,7 +1109,7 @@ const CropCycleDetailModal = ({
                           <div>
                             <p className="text-sm font-medium text-gray-900 dark:text-white">{report.description}</p>
                             <p className="text-xs text-gray-500">
-                              {new Date(report.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} • {report.category || 'General'}
+                              {formatDate(report.createdAt)} • {report.category || 'General'}
                             </p>
                           </div>
                         </div>
@@ -1167,13 +1229,13 @@ const CropCycleDetailModal = ({
                             <div className="flex gap-2">
                               <button
                                 onClick={() => handleRejectRequest(req._id)}
-                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 text-xs font-bold hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-all font-sans"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 text-xs font-bold hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-all font-sans"
                               >
                                 <ThumbsDown size={13} /> Reject
                               </button>
                               <button
                                 onClick={() => handleApproveRequest(req._id)}
-                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-bold shadow-md transition-all font-sans"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-bold shadow-md transition-all font-sans"
                               >
                                 <ThumbsUp size={13} /> Approve
                               </button>
@@ -1230,7 +1292,7 @@ const CropCycleDetailModal = ({
                               : 'bg-yellow-50 text-yellow-600 border border-yellow-100 dark:bg-yellow-900/20 dark:text-yellow-400'
                           }`}>{f.status}</span>
                           <p className="text-xs text-gray-500 mt-2">
-                            Submitted by {f.submittedByName || 'Farm Manager'} · {new Date(f.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                            Submitted by {f.submittedByName || 'Farm Manager'} · {formatDate(f.createdAt)}
                           </p>
                         </div>
                       </div>
@@ -1270,7 +1332,7 @@ const CropCycleDetailModal = ({
                           <div className="flex justify-end">
                             <button
                               onClick={() => handleVerifyForecast(f._id, replyText[f._id] || '')}
-                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
                             >
                               <CheckCircle2 size={14} /> Mark as Verified
                             </button>
@@ -1312,6 +1374,14 @@ const CropCycleDetailModal = ({
         cycleName={displayCrop}
         farmName={cycle.farm_name || '—'}
         season={cycle.season || '—'}
+      />
+      <FieldReportDetailsModal
+        isOpen={!!selectedFieldReport}
+        onClose={() => setSelectedFieldReport(null)}
+        report={selectedFieldReport}
+        isReadOnly={isClosed}
+        onFlag={(reason: string) => selectedFieldReport?._id && handleFlagReport(selectedFieldReport._id, reason)}
+        cycleId={displayCycleId}
       />
       <EvidenceViewModal
         isOpen={!!selectedEvidenceTask}
@@ -1503,16 +1573,105 @@ const ConfirmCloseModal = ({
 };
 
 const FieldReportDetailsModal = ({
-  isOpen, onClose, report, isReadOnly, onFlag,
+  isOpen, onClose, report, isReadOnly, onFlag, cycleId
 }: {
   isOpen: boolean;
   onClose: () => void;
   report: any;
   isReadOnly: boolean;
   onFlag: (reason: string) => void;
+  cycleId?: string;
 }) => {
   const [flagReason, setFlagReason] = useState('');
   const [showFlagInput, setShowFlagInput] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  if (!isOpen || !report) return null;
+
+  const handleDownloadReportPDF = async () => {
+    setIsExporting(true);
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const timestamp = formatDateTime(new Date());
+
+    // 1. Header
+    try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch {}
+    doc.setTextColor(21, 128, 61); doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('Fresh Sarura', 28, 19);
+    doc.setTextColor(107, 114, 128); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+    doc.text('Export & Farmer Hub', 28, 23);
+    doc.setFontSize(10); doc.setTextColor(17, 24, 39);
+    doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
+    doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+    doc.setDrawColor(229, 231, 235); doc.line(15, 30, pageWidth - 15, 30);
+
+    // 2. Title
+    doc.setTextColor(17, 24, 39); doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('FIELD ACTIVITY REPORT', 15, 42);
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.text(`Cycle ID: ${cycleId || 'N/A'} | Report ID: ${report._id?.slice(-8).toUpperCase()}`, 15, 47);
+
+    // 3. Details
+    const summaryFields = [
+      { label: 'Date Submitted', value: formatDate(report.createdAt) },
+      { label: 'Activity Description', value: report.description },
+      { label: 'Category', value: report.category || 'General' },
+      { label: 'Block / Location', value: report.block || 'Main Plot' },
+      { label: 'Actual Cost (Rwf)', value: `${(report.actualCostRwf || 0).toLocaleString()} Rwf` },
+      { label: 'Approved Amount (Rwf)', value: report.approvedAmountRwf ? `${(report.approvedAmountRwf).toLocaleString()} Rwf` : '—' },
+      { label: 'Status', value: report.status || 'Pending' }
+    ];
+
+    let yPos = 58;
+    doc.setFontSize(9);
+    summaryFields.forEach(field => {
+      doc.setTextColor(107, 114, 128); doc.setFont('helvetica', 'normal');
+      doc.text(field.label, 15, yPos);
+      doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
+      doc.text(String(field.value), pageWidth - 15, yPos, { align: 'right' });
+      doc.setDrawColor(243, 244, 246); doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+      yPos += 10;
+    });
+
+    if (report.notes) {
+      doc.setTextColor(107, 114, 128); doc.setFont('helvetica', 'normal');
+      doc.text('Manager Notes', 15, yPos);
+      doc.setTextColor(17, 24, 39); doc.setFontSize(8.5);
+      const splitNotes = doc.splitTextToSize(report.notes, pageWidth - 30);
+      doc.text(splitNotes, 15, yPos + 5);
+      yPos += (splitNotes.length * 5) + 10;
+    }
+
+    // 4. Evidence Image
+    if (report.proofUrl) {
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+      doc.text('ATTACHED EVIDENCE', 15, yPos);
+      const base64 = await getBase64FromUrl(report.proofUrl);
+      if (base64) {
+        try {
+          const imgHeight = 80;
+          const imgWidth = 120;
+          if (yPos + imgHeight > 270) doc.addPage();
+          doc.addImage(base64, 'JPEG', 15, yPos + 5, imgWidth, imgHeight);
+        } catch (e) { console.warn(e); }
+      }
+    }
+
+    // 5. Footer
+    doc.setPage(1);
+    doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
+    doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'bold');
+    doc.text('This is a report generated by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+    const footerY = 288;
+    doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Page 1 of 1`, pageWidth - 15, footerY, { align: 'right' });
+
+    doc.save(`Sarura_FieldReport_${report._id?.slice(-8).toUpperCase()}.pdf`);
+    setIsExporting(false);
+  };
 
   if (!isOpen || !report) return null;
 
@@ -1526,10 +1685,21 @@ const FieldReportDetailsModal = ({
           <div>
             <h3 className="text-base font-bold text-gray-900 dark:text-white">Field Report</h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              {new Date(report.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}
+              {formatDate(report.createdAt)}
             </p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 transition-colors"><X size={16} /></button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadReportPDF}
+              disabled={isExporting}
+              className="p-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-600 transition-all flex items-center gap-1.5"
+              title="Download Report as PDF"
+            >
+              {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              <span className="text-[10px] font-bold uppercase tracking-wider">Download PDF</span>
+            </button>
+            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 transition-colors"><X size={16} /></button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
           <div>

@@ -153,6 +153,56 @@ export const submitBudgetRequest = async (req, res) => {
             }
         }
  
+        // ── V6: Category-Specific Budget Block ────────────────────────────
+        // Check if each activity request fits within its category's remaining budget
+        const existingRequests = await BudgetRequest.find({
+            cycleId,
+            approvalStatus: { $in: ['Approved', 'Pending'] }
+        });
+
+        // Map existing category usage
+        const categoryUsage = {};
+        existingRequests.forEach(r => {
+            r.lineItems.forEach(item => {
+                const cat = item.category;
+                categoryUsage[cat] = (categoryUsage[cat] || 0) + (item.estimatedCostRwf || 0);
+            });
+        });
+
+        // Validate each new line item
+        const errors = [];
+        lineItems.forEach(newItem => {
+            const cat = newItem.category;
+            const requested = newItem.estimatedCostRwf || 0;
+            const alreadyUsed = categoryUsage[cat] || 0;
+            
+            const categoryConfig = cycle.budget_categories.find(c => c.name === cat);
+            const limit = categoryConfig ? categoryConfig.allocated : 0;
+
+            if (alreadyUsed + requested > limit) {
+                errors.push({
+                    category: cat,
+                    requested,
+                    limit,
+                    available: Math.max(0, limit - alreadyUsed)
+                });
+            }
+        });
+
+        if (errors.length > 0) {
+            const errorMsg = errors.map(e => 
+                `${e.category}: requested ${e.requested.toLocaleString()} Rwf, but only ${e.available.toLocaleString()} Rwf remaining (Limit: ${e.limit.toLocaleString()} Rwf)`
+            ).join('; ');
+
+            return res.status(400).json({
+                status: 'error',
+                code: 'CATEGORY_BUDGET_EXCEEDED',
+                message: `Category Budget Limit Exceeded: ${errorMsg}`,
+                errors
+            });
+        }
+        // ─────────────────────────────────────────────────────────────────
+  
         const totalRequestedRwf = lineItems.reduce((sum, item) => sum + (item.estimatedCostRwf || 0), 0);
  
         const request = await BudgetRequest.create({

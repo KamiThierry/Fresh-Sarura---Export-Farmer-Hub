@@ -3,6 +3,7 @@ import { FlaskConical, PackageCheck, Loader2, RefreshCw, ClipboardCheck, ArrowRi
 import { api } from '../../../lib/api';
 import RecordQCModal from '../components/RecordQCModal';
 import { useToastContext } from '@/context/ToastContext';
+import { formatDateTime } from '@/lib/dateUtils';
 
 type IntakeLog = {
   _id: string;
@@ -185,7 +186,7 @@ const Processing = () => {
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="text-xs text-gray-400">
-                      Arrived: {new Date(log.arrivedAt).toLocaleString('en-RW', { dateStyle: 'short', timeStyle: 'short' })}
+                      Arrived: {formatDateTime(log.arrivedAt)}
                     </span>
                     <button
                       onClick={() => handleRequestRoom(log)}

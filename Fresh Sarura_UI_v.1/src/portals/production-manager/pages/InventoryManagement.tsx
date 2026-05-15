@@ -17,6 +17,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import logo from '../../../assets/sarura_logo_nav.png';
+import { formatDate, formatDateTime } from '@/lib/dateUtils';
 
 const InventoryManagement = () => {
     const { 
@@ -312,6 +313,14 @@ const InventoryManagement = () => {
     }, []);
 
     // --- DERIVED / FILTERED DATA ---
+    const now = new Date();
+    const weekAgo = new Date(now);
+    weekAgo.setDate(now.getDate() - 7);
+    weekAgo.setHours(0, 0, 0, 0);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1, 0, 0, 0, 0);
+
     const mappedInventoryItems = inventoryItems.map((item: any) => ({
         ...item,
         farmerSource:   item.cycleId?.farmer_id?.full_name
@@ -322,80 +331,61 @@ const InventoryManagement = () => {
 
     // Filtered Lists
 
-
-
     const filteredActivity = activityFeed.filter(a => {
+        // 1. Search Filter
         const searchLower = searchTerm.toLowerCase().trim();
-        const matchesSearch = !searchLower || 
-                             a.description.toLowerCase().includes(searchLower) ||
-                             a.type.toLowerCase().includes(searchLower) ||
-                             a.actor.toLowerCase().includes(searchLower);
+        if (searchLower) {
+            const matchesSearch = (a.description?.toLowerCase().includes(searchLower)) ||
+                                 (a.type?.toLowerCase().includes(searchLower)) ||
+                                 (a.actor?.toLowerCase().includes(searchLower));
+            if (!matchesSearch) return false;
+        }
         
-        const matchesEvent = eventTypeFilter === 'all' || 
-                            a.type.toLowerCase().trim() === eventTypeFilter.toLowerCase().trim();
+        // 2. Event Type Filter
+        if (eventTypeFilter !== 'all') {
+            const matchesEvent = a.type?.toLowerCase().trim() === eventTypeFilter.toLowerCase().trim();
+            if (!matchesEvent) return false;
+        }
         
-        let matchesTime = true;
+        // 3. Time Filter
         if (timeRangeFilter !== 'all') {
-            const now = new Date();
-            now.setHours(23, 59, 59, 999);
             const activityDate = new Date(a.timestamp);
-            
-            if (!isNaN(activityDate.getTime())) {
-                if (timeRangeFilter === 'week') {
-                    const weekAgo = new Date();
-                    weekAgo.setDate(now.getDate() - 7);
-                    weekAgo.setHours(0, 0, 0, 0);
-                    matchesTime = activityDate.getTime() >= weekAgo.getTime();
-                } else if (timeRangeFilter === 'month') {
-                    const monthAgo = new Date();
-                    monthAgo.setMonth(now.getMonth() - 1);
-                    monthAgo.setHours(0, 0, 0, 0);
-                    matchesTime = activityDate.getTime() >= monthAgo.getTime();
-                } else if (timeRangeFilter === '3months') {
-                    const threeMonthsAgo = new Date();
-                    threeMonthsAgo.setMonth(now.getMonth() - 3);
-                    threeMonthsAgo.setHours(0, 0, 0, 0);
-                    matchesTime = activityDate.getTime() >= threeMonthsAgo.getTime();
-                }
-            } else {
-                matchesTime = false; // Exclude invalid dates if filter is active
+            const activityTime = activityDate.getTime();
+
+            if (isNaN(activityTime)) return false;
+
+            if (timeRangeFilter === 'week') {
+                if (activityTime < weekAgo.getTime()) return false;
+            } else if (timeRangeFilter === 'month') {
+                if (activityTime < startOfMonth.getTime()) return false;
+            } else if (timeRangeFilter === '3months') {
+                if (activityTime < threeMonthsAgo.getTime()) return false;
             }
         }
         
-        return matchesSearch && matchesEvent && matchesTime;
+        return true;
     });
 
     const filteredInventory = mappedInventoryItems.filter((i: any) => {
         const matchesSearch =
-            i.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            i.produce.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            i.farmerSource.toLowerCase().includes(searchTerm.toLowerCase());
+            (i.id?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (i.produce?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (i.farmerSource?.toLowerCase().includes(searchTerm.toLowerCase()));
         
         const matchesProduce = produceFilter === 'all' || i.produce === produceFilter;
         const matchesRoom = roomFilter === 'all' || i.storageLocation === roomFilter;
         
         let matchesTime = true;
         if (timeRangeFilter !== 'all') {
-            const now = new Date();
-            now.setHours(23, 59, 59, 999);
             const stockDate = new Date(i.dateInStock);
-            
             if (!isNaN(stockDate.getTime())) {
+                const stockTime = stockDate.getTime();
                 if (timeRangeFilter === 'week') {
-                    const weekAgo = new Date();
-                    weekAgo.setDate(now.getDate() - 7);
-                    weekAgo.setHours(0, 0, 0, 0);
-                    matchesTime = stockDate.getTime() >= weekAgo.getTime();
+                    matchesTime = stockTime >= weekAgo.getTime();
                 } else if (timeRangeFilter === 'month') {
-                    const monthAgo = new Date();
-                    monthAgo.setMonth(now.getMonth() - 1);
-                    monthAgo.setHours(0, 0, 0, 0);
-                    matchesTime = stockDate.getTime() >= monthAgo.getTime();
+                    matchesTime = stockTime >= startOfMonth.getTime();
                 } else if (timeRangeFilter === '3months') {
-                    const threeMonthsAgo = new Date();
-                    threeMonthsAgo.setMonth(now.getMonth() - 3);
-                    threeMonthsAgo.setHours(0, 0, 0, 0);
-                    matchesTime = stockDate.getTime() >= threeMonthsAgo.getTime();
+                    matchesTime = stockTime >= threeMonthsAgo.getTime();
                 }
             } else {
                 matchesTime = false;
@@ -407,35 +397,24 @@ const InventoryManagement = () => {
 
     const filteredExportBatches = exportBatches.filter(b => {
         const matchesSearch =
-            b.batchId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            b.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            b.cropName?.toLowerCase().includes(searchTerm.toLowerCase());
+            (b.batchId?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (b.clientName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (b.cropName?.toLowerCase().includes(searchTerm.toLowerCase()));
 
         const matchesClient = exportClientFilter === 'all' || b.clientName === exportClientFilter;
         const matchesStatus = exportStatusFilter === 'all' || b.status === exportStatusFilter;
 
         let matchesTime = true;
         if (timeRangeFilter !== 'all') {
-            const now = new Date();
-            now.setHours(23, 59, 59, 999);
             const batchDate = new Date(b.createdAt);
-
             if (!isNaN(batchDate.getTime())) {
+                const batchTime = batchDate.getTime();
                 if (timeRangeFilter === 'week') {
-                    const weekAgo = new Date();
-                    weekAgo.setDate(now.getDate() - 7);
-                    weekAgo.setHours(0, 0, 0, 0);
-                    matchesTime = batchDate.getTime() >= weekAgo.getTime();
+                    matchesTime = batchTime >= weekAgo.getTime();
                 } else if (timeRangeFilter === 'month') {
-                    const monthAgo = new Date();
-                    monthAgo.setMonth(now.getMonth() - 1);
-                    monthAgo.setHours(0, 0, 0, 0);
-                    matchesTime = batchDate.getTime() >= monthAgo.getTime();
+                    matchesTime = batchTime >= startOfMonth.getTime();
                 } else if (timeRangeFilter === '3months') {
-                    const threeMonthsAgo = new Date();
-                    threeMonthsAgo.setMonth(now.getMonth() - 3);
-                    threeMonthsAgo.setHours(0, 0, 0, 0);
-                    matchesTime = batchDate.getTime() >= threeMonthsAgo.getTime();
+                    matchesTime = batchTime >= threeMonthsAgo.getTime();
                 }
             } else {
                 matchesTime = false;
@@ -484,14 +463,7 @@ const InventoryManagement = () => {
     };
 
     const formatOrdinalDate = (date: Date) => {
-        const d = new Date(date);
-        const day = d.getDate();
-        const month = d.toLocaleDateString('en-GB', { month: 'long' });
-        const year = d.getFullYear();
-        const s = ["th", "st", "nd", "rd"];
-        const v = day % 100;
-        const suffix = (v >= 11 && v <= 13) ? "th" : (s[v % 10] || s[0]);
-        return `${day}${suffix} ${month} ${year}`;
+        return formatDate(date);
     };
 
     // --- EXPORT LOGIC ---
@@ -510,7 +482,7 @@ const InventoryManagement = () => {
             XLSX.utils.book_append_sheet(wb, makeSheet(
                 ['Time', 'Event', 'Description', 'Impact', 'Performed By'],
                 activityFeed.map(a => [
-                    `${a.timestamp.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}, ${a.timestamp.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`,
+                    formatDateTime(a.timestamp),
                     a.type, a.description, a.impact, a.actor
                 ])
             ), 'Recent_Activity');
@@ -528,14 +500,14 @@ const InventoryManagement = () => {
                     i.totalAllocated || 0,
                     i.availableKg || 0,
                     i.storageLocation || '—', 
-                    i.dateInStock.toLocaleDateString(),
+                    formatDate(i.dateInStock),
                     i.status
                 ])
             ), 'Inventory_Stock');
         } else if (activeTab === 'export_batches') {
             XLSX.utils.book_append_sheet(wb, makeSheet(
                 ['Batch ID', 'Produce', 'Client', 'Destination', 'Weight (kg)', 'Status', 'Departure'],
-                exportBatches.map(b => [b.batchId, b.cropName, b.clientName, b.destination, b.allocatedWeightKg, b.status, b.departureDate ? new Date(b.departureDate).toLocaleDateString() : '—'])
+                exportBatches.map(b => [b.batchId, b.cropName, b.clientName, b.destination, b.allocatedWeightKg, b.status, formatDate(b.departureDate)])
             ), 'Export_Batches');
         }
 
@@ -547,10 +519,7 @@ const InventoryManagement = () => {
     const handleExportPDF = () => {
         const doc = new jsPDF('p', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.getWidth();
-        const timestamp = new Date().toLocaleString('en-GB', {
-            day: '2-digit', month: 'short', year: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-        });
+        const timestamp = formatDateTime(new Date());
         // ── 1. Header ──
         try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch (e) { console.warn('Logo failed'); }
         doc.setTextColor(21, 128, 61); doc.setFontSize(14); doc.setFont('helvetica', 'bold');
@@ -597,7 +566,7 @@ const InventoryManagement = () => {
                 startY: yPos + 10,
                 head: [['TIME', 'EVENT', 'DESCRIPTION', 'IMPACT', 'USER']],
                 body: activityFeed.map(a => [
-                    `${a.timestamp.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}\n${a.timestamp.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`,
+                    formatDateTime(a.timestamp),
                     a.type, a.description, a.impact, a.actor
                 ]),
                 theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
@@ -617,7 +586,7 @@ const InventoryManagement = () => {
                     `${i.totalAllocated || 0} kg`,
                     `${i.availableKg || 0} kg`,
                     i.storageLocation || '—', 
-                    i.dateInStock.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }),
+                    formatDate(i.dateInStock),
                     i.status
                 ]),
                 theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
@@ -651,10 +620,12 @@ const InventoryManagement = () => {
         for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);
             doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
-            doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
-            doc.text('This is a computer generated report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+            doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'bold');
+            doc.text('This is a report generated by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
             const footerY = 288;
             doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
+            doc.setFont('helvetica', 'bold');
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
         }
 
@@ -1246,7 +1217,7 @@ const InventoryManagement = () => {
                                                     {/* Date In Stock */}
                                                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                                                         <div className="flex flex-col">
-                                                            <span>{item.dateInStock.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                                            <span>{formatDate(item.dateInStock)}</span>
                                                             <span className="text-xs text-gray-400 mt-0.5">
                                                                 {Math.floor((Date.now() - item.dateInStock.getTime()) / (1000 * 60 * 60 * 24))} days ago
                                                             </span>
@@ -1372,7 +1343,7 @@ const InventoryManagement = () => {
                                                     return (
                                                         <div className="flex flex-col">
                                                             <span className="font-medium text-gray-900 dark:text-white">
-                                                                {new Date(confirmedDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                {formatDate(confirmedDate)}
                                                             </span>
                                                             <span className="text-[10px] text-green-600 dark:text-green-400 font-medium mt-0.5">
                                                                 Confirmed flight
@@ -1385,7 +1356,7 @@ const InventoryManagement = () => {
                                                     return (
                                                         <div className="flex flex-col">
                                                             <span className="text-gray-600 dark:text-gray-300">
-                                                                {new Date(plannedDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                {formatDate(plannedDate)}
                                                             </span>
                                                             <span className="text-[10px] text-amber-500 font-medium mt-0.5">
                                                                 Target — not yet booked

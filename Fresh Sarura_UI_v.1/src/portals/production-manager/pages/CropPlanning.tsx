@@ -7,6 +7,7 @@ import CropCycleDetailModal from '../components/CropCycleDetailModal';
 import BudgetRejectionModal from '../components/BudgetRejectionModal';
 import { useToastContext } from '@/context/ToastContext';
 import { usePMContext } from '@/context/PMContext';
+import { formatDate } from '@/lib/dateUtils';
 
 const CropPlanning = () => {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -126,8 +127,8 @@ const CropPlanning = () => {
             cycleId: cycle.cycleId ?? cycle._id,
             crop: cycle.crop_name,
             landSize: `${cycle.block_size_hectares ?? '—'} Ha`,
-            startDate: cycle.start_date ? new Date(cycle.start_date).toLocaleDateString() : '—',
-            endDate: cycle.expected_harvest_date ? new Date(cycle.expected_harvest_date).toLocaleDateString() : '—',
+            startDate: formatDate(cycle.start_date),
+            endDate: formatDate(cycle.expected_harvest_date),
             budget: cycle.total_budget,
             spent: cycle.spent ?? 0,
             yieldGoal: cycle.yield_goal_kg != null ? `${cycle.yield_goal_kg.toLocaleString()} kg` : '—',
@@ -248,7 +249,7 @@ const CropPlanning = () => {
                                                     New Yield Prediction: {forecast.predictionKg?.toLocaleString()} kg
                                                 </h2>
                                                 <p className="text-gray-600 dark:text-gray-300 mt-1 text-sm">
-                                                    Expected Harvest: {new Date(forecast.harvestDate).toLocaleDateString()} • {forecast.confidence} Confidence
+                                                    Expected Harvest: {formatDate(forecast.harvestDate)} • {forecast.confidence} Confidence
                                                 </p>
                                             </div>
                                             <button className="p-2 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
@@ -447,9 +448,10 @@ const CropPlanning = () => {
                         setIsCreateModalOpen(false);
                         refreshCycles();
                         showToast('Crop Cycle Created!', `${formData.crop_name} cycle is now active.`);
-                    } catch (err) {
+                    } catch (err: any) {
                         console.error('Failed to create cycle:', err);
-                        showToast('Error', 'Failed to create the crop cycle. Please try again.');
+                        const msg = err.response?.data?.message || 'Failed to create the crop cycle. Please try again.';
+                        showToast('Error', msg);
                     }
                 }}
             />

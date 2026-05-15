@@ -3,6 +3,7 @@ export interface Farmer {
     _id: string;
     full_name: string;
     farm_name?: string | null;
+    province?: string;
     district: string;
     sector: string;
     cell: string;
@@ -18,7 +19,9 @@ export interface Farmer {
     photo_url?: string | null;
     id_certificate_url?: string | null;
     created_at?: string;
+    createdAt?: string;
     updated_at?: string;
+    updatedAt?: string;
     latitude?: number;
     longitude?: number;
 }

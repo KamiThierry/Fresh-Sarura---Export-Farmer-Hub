@@ -7,6 +7,7 @@ import RoomRequestsPanel from '../components/RoomRequestsPanel';
 import AssignRoomModal from '../components/AssignRoomModal';
 import { useToastContext } from '@/context/ToastContext';
 import { usePMContext } from '@/context/PMContext';
+import { formatDate } from '@/lib/dateUtils';
 
 type Room = {
     _id: string;
@@ -570,7 +571,7 @@ const RoomManagement = () => {
                                             </div>
                                             <div className="mt-3 flex items-center justify-between text-[10px]">
                                                 <div className="flex gap-4 text-gray-400">
-                                                    <span>Entry: {new Date(batch.createdAt).toLocaleDateString()}</span>
+                                                    <span>Entry: {formatDate(batch.createdAt)}</span>
                                                     <span>Last Move: {new Date(batch.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                                 </div>
                                                 <span className={`px-2 py-0.5 rounded-full font-bold uppercase ${batch.status === 'Done' ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-blue-600'

@@ -81,3 +81,8 @@
     transform: translateY(0);
   }
 }
+
+/* React Datepicker Global Styles */
+.react-datepicker-wrapper {
+    width: 100%;
+}

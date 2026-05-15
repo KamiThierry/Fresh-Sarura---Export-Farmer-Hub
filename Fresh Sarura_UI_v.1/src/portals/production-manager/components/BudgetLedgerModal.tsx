@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom';
 import { X, TrendingDown, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react';
+import { formatDate } from '@/lib/dateUtils';
 
 interface BudgetLedgerModalProps {
     isOpen: boolean;
@@ -131,7 +132,7 @@ const BudgetLedgerModal = ({ isOpen, onClose, budgetCategories, fieldReports, cy
                                         </div>
                                         <div>
                                             <p className="text-sm font-bold text-gray-900 dark:text-white">{tx.description}</p>
-                                            <p className="text-xs text-gray-500">{tx.category || 'General'} • {tx.submittedByName || 'Farm Manager'} • {new Date(tx.createdAt).toLocaleDateString()}</p>
+                                            <p className="text-xs text-gray-500">{tx.category || 'General'} • {tx.submittedByName || 'Farm Manager'} • {formatDate(tx.createdAt)}</p>
                                         </div>
                                     </div>
                                     <div className="text-right">

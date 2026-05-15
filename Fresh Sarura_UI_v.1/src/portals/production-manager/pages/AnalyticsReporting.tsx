@@ -14,6 +14,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import logo from '@/assets/sarura_logo_nav.png';
 import html2canvas from 'html2canvas';
+import { formatDate, formatDateTime } from '@/lib/dateUtils';
 
 // ─── Types ────────────────────────────────────────────────────────
 type Tab = 'overview' | 'farmers' | 'production' | 'export';
@@ -263,24 +264,24 @@ const AnalyticsReporting = () => {
         } else if (activeTab === 'farmers') {
             XLSX.utils.book_append_sheet(wb, makeSheet(
                 ['Full Name', 'Farm Name', 'Province', 'District', 'Produce', 'Farm Size (ha)', 'Status', 'Registered'],
-                farmers.map(f => [f.full_name, f.farm_name || 'N/A', f.province || 'N/A', f.district, (f.produce_types || []).join(', '), f.farm_size_hectares, f.status, new Date(f.createdAt).toLocaleDateString('en-GB')])
+                farmers.map(f => [f.full_name, f.farm_name || 'N/A', f.province || 'N/A', f.district, (f.produce_types || []).join(', '), f.farm_size_hectares, f.status, formatDate(f.createdAt)])
             ), 'Farmers');
             XLSX.utils.book_append_sheet(wb, makeSheet(
                 ['Cycle ID', 'Crop', 'Season', 'Status', 'Started'],
-                cycles.map(c => [c.cycleId || String(c._id).slice(-8).toUpperCase(), c.crop_name || c.cropName || 'N/A', c.season || 'N/A', c.status, new Date(c.createdAt).toLocaleDateString('en-GB')])
+                cycles.map(c => [c.cycleId || String(c._id).slice(-8).toUpperCase(), c.crop_name || c.cropName || 'N/A', c.season || 'N/A', c.status, formatDate(c.createdAt)])
             ), 'Crop Cycles');
         } else if (activeTab === 'production') {
             XLSX.utils.book_append_sheet(wb, makeSheet(
                 ['Stock ID', 'Crop', 'Received (kg)', 'Processed (kg)', 'Rejected (kg)', 'Loss %', 'Status', 'Date'],
                 stock.map(b => {
                     const loss = b.receivedWeightKg > 0 ? ((b.rejectedWeightKg / b.receivedWeightKg) * 100).toFixed(1) : '0';
-                    return [b.stockId || 'N/A', b.cropName || 'N/A', b.receivedWeightKg || 0, b.processedWeightKg || 0, b.rejectedWeightKg || 0, `${loss}%`, b.status, new Date(b.updatedAt).toLocaleDateString('en-GB')];
+                    return [b.stockId || 'N/A', b.cropName || 'N/A', b.receivedWeightKg || 0, b.processedWeightKg || 0, b.rejectedWeightKg || 0, `${loss}%`, b.status, formatDate(b.updatedAt)];
                 })
             ), 'Production');
         } else if (activeTab === 'export') {
             XLSX.utils.book_append_sheet(wb, makeSheet(
                 ['PL Number', 'Flight', 'Destination', 'Client', 'Weight (kg)', 'Boxes', 'Status', 'Departure'],
-                shipments.map(s => [s.plNumber || 'N/A', s.flightNumber || 'N/A', s.destination || 'N/A', s.clientName || 'N/A', s.totalWeightKg || 0, s.totalBoxes || 0, s.status, s.departureDate ? new Date(s.departureDate).toLocaleDateString('en-GB') : 'N/A'])
+                shipments.map(s => [s.plNumber || 'N/A', s.flightNumber || 'N/A', s.destination || 'N/A', s.clientName || 'N/A', s.totalWeightKg || 0, s.totalBoxes || 0, s.status, formatDate(s.departureDate)])
             ), 'Shipments');
         }
 
@@ -293,7 +294,7 @@ const AnalyticsReporting = () => {
     const handleExportPDF = async () => {
         const doc       = new jsPDF('p', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.getWidth();
-        const timestamp = new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const timestamp = formatDateTime(new Date());
         const toTC      = (s: string) => s.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
         // ── Helper: capture a chart by element id ──
@@ -408,7 +409,7 @@ const AnalyticsReporting = () => {
             autoTable(doc, {
                 startY: yPos + 15,
                 head: [['FULL NAME', 'DISTRICT', 'PRODUCE', 'FARM SIZE', 'STATUS', 'JOINED']],
-                body: farmers.map(f => [toTC(f.full_name), toTC(f.district || 'N/A'), (f.produce_types || []).join(', '), `${f.farm_size_hectares} ha`, toTC(f.status || 'Active'), new Date(f.createdAt).toLocaleDateString('en-GB')]),
+                body: farmers.map(f => [toTC(f.full_name), toTC(f.district || 'N/A'), (f.produce_types || []).join(', '), `${f.farm_size_hectares} ha`, toTC(f.status || 'Active'), formatDate(f.createdAt)]),
                 theme: 'striped', headStyles, bodyStyles, alternateRowStyles, margin: { left: 15, right: 15, bottom: 30 },
             });
         } else if (activeTab === 'production') {
@@ -417,7 +418,7 @@ const AnalyticsReporting = () => {
                 head: [['STOCK ID', 'CROP', 'RECEIVED (KG)', 'PROCESSED (KG)', 'LOSS %', 'STATUS', 'DATE']],
                 body: stock.map(b => {
                     const loss = b.receivedWeightKg > 0 ? ((b.rejectedWeightKg / b.receivedWeightKg) * 100).toFixed(1) : '0';
-                    return [b.stockId || '—', toTC(b.cropName || '—'), (b.receivedWeightKg || 0).toLocaleString(), (b.processedWeightKg || 0).toLocaleString(), `${loss}%`, toTC(b.status || '—'), new Date(b.updatedAt).toLocaleDateString('en-GB')];
+                    return [b.stockId || '—', toTC(b.cropName || '—'), (b.receivedWeightKg || 0).toLocaleString(), (b.processedWeightKg || 0).toLocaleString(), `${loss}%`, toTC(b.status || '—'), formatDate(b.updatedAt)];
                 }),
                 theme: 'striped', headStyles, bodyStyles, alternateRowStyles, margin: { left: 15, right: 15, bottom: 30 },
             });
@@ -425,7 +426,7 @@ const AnalyticsReporting = () => {
             autoTable(doc, {
                 startY: yPos + 15,
                 head: [['PL NUMBER', 'FLIGHT', 'DESTINATION', 'CLIENT', 'WEIGHT (KG)', 'STATUS', 'DEPARTURE']],
-                body: shipments.map(s => [s.plNumber || '—', s.flightNumber || '—', toTC(s.destination || '—'), toTC(s.clientName || '—'), (s.totalWeightKg || 0).toLocaleString(), toTC(s.status || '—'), s.departureDate ? new Date(s.departureDate).toLocaleDateString('en-GB') : '—']),
+                body: shipments.map(s => [s.plNumber || '—', s.flightNumber || '—', toTC(s.destination || '—'), toTC(s.clientName || '—'), (s.totalWeightKg || 0).toLocaleString(), toTC(s.status || '—'), formatDate(s.departureDate)]),
                 theme: 'striped', headStyles, bodyStyles, alternateRowStyles, margin: { left: 15, right: 15, bottom: 30 },
             });
         }
@@ -434,11 +435,13 @@ const AnalyticsReporting = () => {
         const pageCount = (doc as any).internal.getNumberOfPages();
         for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);
-            doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
-            doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
-            doc.text('This is a computer generated report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
-            doc.text('Kigali - Rwanda | reports@freshsarura.rw', pageWidth / 2, 287, { align: 'center' });
-            doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, 287, { align: 'right' });
+            doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'bold');
+            doc.text('This is a report generated by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+            const footerY = 288;
+            doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
+            doc.setFont('helvetica', 'bold');
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
         }
 
         const tabLabel = tabs.find(t => t.id === activeTab)?.label.replace(/\s/g, '_') || 'Report';
@@ -663,7 +666,7 @@ const AnalyticsReporting = () => {
                                     <td className="px-4 py-3 text-gray-600 dark:text-gray-300 max-w-[140px] truncate">{(f.produce_types || []).join(', ')}</td>
                                     <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{f.farm_size_hectares}</td>
                                     <td className="px-4 py-3"><Badge status={f.status} /></td>
-                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{new Date(f.createdAt).toLocaleDateString('en-GB')}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{formatDate(f.createdAt)}</td>
                                 </tr>
                             ))}
                     </TableShell>
@@ -677,7 +680,7 @@ const AnalyticsReporting = () => {
                                     <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white">{c.crop_name || c.cropName || '—'}</td>
                                     <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{c.season || '—'}</td>
                                     <td className="px-4 py-3"><Badge status={c.status || 'active'} /></td>
-                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{new Date(c.createdAt).toLocaleDateString('en-GB')}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{formatDate(c.createdAt)}</td>
                                 </tr>
                             ))}
                     </TableShell>
@@ -731,7 +734,7 @@ const AnalyticsReporting = () => {
                                         <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{(b.rejectedWeightKg || 0).toLocaleString()}</td>
                                         <td className="px-4 py-3"><span className={`text-xs font-bold ${parseFloat(loss) > 15 ? 'text-red-600' : 'text-green-600'}`}>{loss}%</span></td>
                                         <td className="px-4 py-3"><Badge status={b.status} /></td>
-                                        <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{new Date(b.updatedAt).toLocaleDateString('en-GB')}</td>
+                                        <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{formatDate(b.updatedAt)}</td>
                                     </tr>
                                 );
                             })}
@@ -783,7 +786,7 @@ const AnalyticsReporting = () => {
                                     <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{(s.totalWeightKg || 0).toLocaleString()}</td>
                                     <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{s.totalBoxes || 0}</td>
                                     <td className="px-4 py-3"><Badge status={s.status} /></td>
-                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{s.departureDate ? new Date(s.departureDate).toLocaleDateString('en-GB') : '—'}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{formatDate(s.departureDate)}</td>
                                 </tr>
                             ))}
                     </TableShell>

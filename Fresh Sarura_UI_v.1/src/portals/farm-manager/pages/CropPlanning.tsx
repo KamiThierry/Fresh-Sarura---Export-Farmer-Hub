@@ -10,6 +10,7 @@ import BudgetActivityRequestModal from '../components/BudgetActivityRequestModal
 import FMActivityLogModal from '../components/FMActivityLogModal';
 import { useFarmManager } from '../../../lib/useFarmManager';
 import type { Task, BudgetRequest, ActivityLineItem } from '../../shared/types/activity';
+import { formatDate } from '@/lib/dateUtils';
 
 // ─── Main Page ─────────────────────────────────────────────────────────────
 
@@ -130,9 +131,7 @@ const CropPlanning = () => {
                         id: `${r._id}-${i}`,
                         title: activityName,
                         category: item.category,
-                        date: r.endDate
-                            ? new Date(r.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
-                            : '—',
+                        date: r.endDate ? formatDate(r.endDate) : '—',
                         completed: !!existingReport,
                         proofRequired: true,
                         block: existingReport?.block || cycle.block_name || '',
@@ -151,9 +150,7 @@ const CropPlanning = () => {
                 id: report._id,
                 title: report.description || 'Field Activity',
                 category: report.category,
-                date: report.createdAt
-                    ? new Date(report.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
-                    : '—',
+                date: report.createdAt ? formatDate(report.createdAt) : '—',
                 completed: false, // Flagged means it needs correction
                 proofRequired: report.hasProof,
                 block: report.block || cycle.block_name || '',
@@ -196,7 +193,7 @@ const CropPlanning = () => {
                     : 0,
             targetYield: cycle.yield_goal || 'TBD',
             nextMilestone: cycle.expected_harvest_date
-                ? `Harvest by ${new Date(cycle.expected_harvest_date).toLocaleDateString()}`
+                ? `Harvest by ${formatDate(cycle.expected_harvest_date)}`
                 : 'No milestone set',
             tasks: combinedLogs,
             _pendingRequests: pendingForThisCycle,
@@ -254,8 +251,11 @@ const CropPlanning = () => {
                     onClose={() => { setIsRequestModalOpen(false); setSelectedCycle(null); }}
                     cycleId={selectedCycle._id}
                     cycleName={`${selectedCycle.crop_name} — ${selectedCycle.season}`}
-                    cycleStartDate={selectedCycle.start_date ? new Date(selectedCycle.start_date).toISOString().split('T')[0] : undefined}
-                    cycleEndDate={selectedCycle.expected_harvest_date ? new Date(selectedCycle.expected_harvest_date).toISOString().split('T')[0] : undefined}
+                    cycleStartDate={selectedCycle.start_date}
+                    cycleEndDate={selectedCycle.expected_harvest_date}
+                    cycleCreatedAt={selectedCycle.createdAt}
+                    budget_categories={selectedCycle.budget_categories || []}
+                    existingRequests={selectedCycle.myRequests || []}
                     onSubmit={handleBudgetRequestSubmit}
                 />
             )}

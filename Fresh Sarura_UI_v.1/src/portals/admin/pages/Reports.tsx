@@ -15,6 +15,7 @@ import autoTable from 'jspdf-autotable';
 import logo from '@/assets/sarura_logo_nav.png';
 import html2canvas from 'html2canvas';
 import * as XLSX from 'xlsx';
+import { formatDate, formatDateTime } from '@/lib/dateUtils';
 
 // ─── Types ────────────────────────────────────────────────────────
 type Tab = 'overview' | 'farmers' | 'production' | 'export' | 'users';
@@ -208,7 +209,8 @@ const Reports = () => {
     const monthlyStockData = useMemo(() => {
         const map: Record<string, any> = {};
         filteredStock.forEach(b => {
-            const month = new Date(b.updatedAt).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+            const date = new Date(b.updatedAt);
+            const month = date.toLocaleString('en-US', { month: 'short', year: '2-digit' });
             if (!map[month]) map[month] = { month, received: 0, processed: 0, rejected: 0 };
             map[month].received  += b.receivedWeightKg  || 0;
             map[month].processed += b.processedWeightKg || 0;
@@ -302,7 +304,7 @@ const Reports = () => {
                     f.farm_size_hectares       || 0,
                     f.production_capacity_tons || 0,
                     f.status                   || 'Active',
-                    new Date(f.created_at || '').toLocaleDateString('en-GB'),
+                    formatDate(f.created_at || ''),
                 ])
             );
             XLSX.utils.book_append_sheet(wb, farmerWs, 'Farmers');
@@ -315,7 +317,7 @@ const Reports = () => {
                     c.crop_name || 'N/A',
                     c.season                   || 'N/A',
                     c.status                   || 'N/A',
-                    new Date(c.start_date || '').toLocaleDateString('en-GB'),
+                    formatDate(c.start_date || ''),
                 ])
             );
             XLSX.utils.book_append_sheet(wb, cycleWs, 'Crop Cycles');
@@ -336,7 +338,7 @@ const Reports = () => {
                         `${loss}%`,
                         b.assignedRoom      || 'N/A',
                         b.status            || 'N/A',
-                        new Date(b.updatedAt).toLocaleDateString('en-GB'),
+                        formatDate(b.updatedAt),
                     ];
                 })
             );
@@ -357,7 +359,7 @@ const Reports = () => {
                     s.awbNumber      || 'N/A',
                     s.invoiceNumber  || 'N/A',
                     s.status         || 'N/A',
-                    s.departureDate  ? new Date(s.departureDate).toLocaleDateString('en-GB') : 'N/A',
+                    s.departureDate  ? formatDate(s.departureDate) : 'N/A',
                 ])
             );
             XLSX.utils.book_append_sheet(wb, ws, 'Shipments');
@@ -372,7 +374,7 @@ const Reports = () => {
                     (u.role || '').replace(/_/g, ' '),
                     String(u.phone || 'N/A'), // string → no scientific notation
                     u.isActive ? 'Active' : 'Inactive',
-                    new Date(u.createdAt).toLocaleDateString('en-GB'),
+                    formatDate(u.createdAt),
                 ])
             );
             XLSX.utils.book_append_sheet(wb, ws, 'Users');
@@ -385,10 +387,7 @@ const Reports = () => {
     const handleExportPDF = async () => {
         const doc = new jsPDF('p', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.getWidth();
-        const timestamp = new Date().toLocaleString('en-GB', {
-            day: '2-digit', month: 'short', year: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-        });
+        const timestamp = formatDateTime(new Date());
 
         const toTitleCase = (str: string) =>
             str.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -597,7 +596,7 @@ const Reports = () => {
                     toTitleCase(c.crop_name || 'N/A'),
                     (c.season || 'N/A').toUpperCase(),
                     toTitleCase(c.status || 'Active'),
-                    new Date(c.start_date || '').toLocaleDateString('en-GB')
+                    formatDate(c.start_date || '')
                 ]),
                 theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
                 margin: { left: 15, right: 15, bottom: 30 },
@@ -627,7 +626,7 @@ const Reports = () => {
                     const loss = b.receivedWeightKg > 0 ? ((b.rejectedWeightKg / b.receivedWeightKg) * 100).toFixed(1) : '0';
                     return [b.stockId || '—', toTitleCase(b.cropName || '—'),
                         (b.receivedWeightKg || 0).toLocaleString(), (b.processedWeightKg || 0).toLocaleString(),
-                        `${loss}%`, toTitleCase(b.status || '—'), new Date(b.updatedAt).toLocaleDateString('en-GB')];
+                        `${loss}%`, toTitleCase(b.status || '—'), formatDate(b.updatedAt)];
                 }),
                 theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
                 margin: { left: 15, right: 15, bottom: 30 },
@@ -657,7 +656,7 @@ const Reports = () => {
                     s.plNumber || '—', s.flightNumber || '—',
                     toTitleCase(s.destination || '—'), toTitleCase(s.clientName || '—'),
                     (s.totalWeightKg || 0).toLocaleString(), toTitleCase(s.status || '—'),
-                    s.departureDate ? new Date(s.departureDate).toLocaleDateString('en-GB') : '—'
+                    s.departureDate ? formatDate(s.departureDate) : '—'
                 ]),
                 theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
                 margin: { left: 15, right: 15, bottom: 30 },
@@ -685,7 +684,7 @@ const Reports = () => {
                     toTitleCase(u.name), u.email,
                     toTitleCase(u.role?.replace(/_/g, ' ') || '—'),
                     u.phone || '—', u.isActive ? 'Active' : 'Inactive',
-                    new Date(u.createdAt).toLocaleDateString('en-GB')
+                    formatDate(u.createdAt)
                 ]),
                 theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
                 margin: { left: 15, right: 15, bottom: 30 },
@@ -721,10 +720,12 @@ const Reports = () => {
         for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);
             doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
-            doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
-            doc.text('This is a computer generated report by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+            doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'bold');
+            doc.text('This is a report generated by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
             const footerY = 288;
             doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
+            doc.setFont('helvetica', 'bold');
             doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
         }
 
@@ -925,7 +926,7 @@ const Reports = () => {
                                     <td className="px-4 py-3 text-gray-600 dark:text-gray-300 max-w-[140px] truncate">{(f.produce_types || []).join(', ')}</td>
                                     <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{f.farm_size_hectares}</td>
                                     <td className="px-4 py-3"><Badge status={f.status} /></td>
-                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{new Date(f.createdAt).toLocaleDateString('en-GB')}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{formatDate(f.createdAt)}</td>
                                 </tr>
                             ))}
                     </TableShell>
@@ -939,7 +940,7 @@ const Reports = () => {
                                     <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white">{c.crop_name || '—'}</td>
                                     <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{c.season || '—'}</td>
                                     <td className="px-4 py-3"><Badge status={c.status || 'Active'} /></td>
-                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{new Date(c.createdAt).toLocaleDateString('en-GB')}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{formatDate(c.createdAt)}</td>
                                 </tr>
                             ))}
                     </TableShell>
@@ -991,7 +992,7 @@ const Reports = () => {
                                         <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{(b.rejectedWeightKg || 0).toLocaleString()}</td>
                                         <td className="px-4 py-3"><span className={`text-xs font-bold ${parseFloat(loss) > 15 ? 'text-red-600' : 'text-green-600'}`}>{loss}%</span></td>
                                         <td className="px-4 py-3"><Badge status={b.status} /></td>
-                                        <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{new Date(b.updatedAt).toLocaleDateString('en-GB')}</td>
+                                        <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{formatDate(b.updatedAt)}</td>
                                     </tr>
                                 );
                             })}
@@ -1041,7 +1042,7 @@ const Reports = () => {
                                     <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{(s.totalWeightKg || 0).toLocaleString()}</td>
                                     <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{s.totalBoxes || 0}</td>
                                     <td className="px-4 py-3"><Badge status={s.status} /></td>
-                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{s.departureDate ? new Date(s.departureDate).toLocaleDateString('en-GB') : '—'}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{s.departureDate ? formatDate(s.departureDate) : '—'}</td>
                                 </tr>
                             ))}
                     </TableShell>
@@ -1086,7 +1087,7 @@ const Reports = () => {
                                     <td className="px-4 py-3 text-gray-600 dark:text-gray-300 capitalize">{(u.role || '').replace(/_/g, ' ')}</td>
                                     <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{u.phone || '—'}</td>
                                     <td className="px-4 py-3"><Badge status={u.isActive ? 'Active' : 'Inactive'} /></td>
-                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{new Date(u.createdAt).toLocaleDateString('en-GB')}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{formatDate(u.createdAt)}</td>
                                 </tr>
                             ))}
                     </TableShell>

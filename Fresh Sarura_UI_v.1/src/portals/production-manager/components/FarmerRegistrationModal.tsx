@@ -60,10 +60,8 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
 
         setIsSubmitting(true);
         try {
-            // Strip province — backend doesn't have this field
-            const { province: _province, ...rest } = formData;
             const dataToSubmit = {
-                ...rest,
+                ...formData,
                 farm_size_hectares: parseFloat(formData.farm_size_hectares),
                 production_capacity_tons: parseFloat(formData.production_capacity_tons),
             };

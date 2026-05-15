@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { X, FileWarning, Clock, Truck, Eye, Upload, ArrowRight, Bell, CheckCircle2, AlertCircle, TrendingUp, Leaf, Package, Plane, UserPlus } from 'lucide-react';
+import { formatDate } from '@/lib/dateUtils';
 
 interface Notification {
     _id: string;
@@ -192,7 +193,7 @@ const NotificationsModal = ({ isOpen, onClose, notifications, onMarkAsRead, onMa
         if (diffMins < 1) return 'Just now';
         if (diffMins < 60) return `${diffMins}m ago`;
         if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
-        return date.toLocaleDateString();
+        return formatDate(date);
     };
 
     return createPortal(

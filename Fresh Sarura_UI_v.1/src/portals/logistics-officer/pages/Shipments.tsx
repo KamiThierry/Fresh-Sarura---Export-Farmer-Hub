@@ -6,6 +6,7 @@ import ShipmentBuilderModal from '../components/ShipmentBuilderModal';
 import ShipmentDetailsModal from '../components/ShipmentDetailsModal';
 import Pagination from '../../shared/component/Pagination';
 import { api } from '../../../lib/api';
+import { formatDate } from '@/lib/dateUtils';
 
 // ── Single source of truth for status display ─────────────────────
 const STATUS_CONFIG: Record<string, {
@@ -304,9 +305,7 @@ const Shipments = () => {
                                                     {/* Date / Flight */}
                                                     <td className="px-6 py-4">
                                                         <div className="font-bold text-gray-900 dark:text-white">
-                                                            {new Date(shipment.departureDate).toLocaleDateString('en-GB', {
-                                                                day: '2-digit', month: 'short', year: 'numeric'
-                                                            })}
+                                                            {formatDate(shipment.departureDate)}
                                                         </div>
                                                         <div className="text-gray-500 flex items-center gap-1 mt-0.5 text-xs">
                                                             <Plane size={11} />

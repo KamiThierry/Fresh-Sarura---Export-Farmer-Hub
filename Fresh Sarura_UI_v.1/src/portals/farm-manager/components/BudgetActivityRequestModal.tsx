@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, ClipboardList, CheckCircle2, AlertCircle } from 'lucide-react';
 import type { ActivityLineItem, BudgetRequest } from '../../shared/types/activity';
+import DateInput from '../../shared/component/DateInput';
 
 interface BudgetActivityRequestModalProps {
     isOpen: boolean;
@@ -10,6 +11,9 @@ interface BudgetActivityRequestModalProps {
     cycleName: string;
     cycleStartDate?: string;
     cycleEndDate?: string;
+    budget_categories?: Array<{ name: string, allocated: number }>;
+    existingRequests?: BudgetRequest[];
+    cycleCreatedAt?: string;
     submittedBy?: string;
     /** Called with the finalised BudgetRequest on submission */
     onSubmit: (request: BudgetRequest) => void;
@@ -29,6 +33,9 @@ const BudgetActivityRequestModal = ({
     cycleName,
     cycleStartDate,
     cycleEndDate,
+    budget_categories = [],
+    existingRequests = [],
+    cycleCreatedAt,
     submittedBy = 'Farm Manager',
     onSubmit,
 }: BudgetActivityRequestModalProps) => {
@@ -37,6 +44,21 @@ const BudgetActivityRequestModal = ({
     const [globalEndDate, setGlobalEndDate] = useState('');
     const [submitted, setSubmitted] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
+
+    // Normalize to YYYY-MM-DD for reliable string comparison (respects UTC to avoid timezone shifts)
+    const normDate = (d?: string) => {
+        if (!d) return undefined;
+        const parsed = new Date(d);
+        if (isNaN(parsed.getTime())) return undefined;
+        const year = parsed.getUTCFullYear();
+        const month = String(parsed.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(parsed.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const cycleStart = normDate(cycleStartDate);
+    const cycleEnd   = normDate(cycleEndDate);
+    const cycleCreated = normDate(cycleCreatedAt);
 
     if (!isOpen) return null;
 
@@ -87,16 +109,97 @@ const BudgetActivityRequestModal = ({
 
     const isWithinBounds = (dateStr: string) => {
         if (!dateStr) return true;
-        if (cycleStartDate && new Date(dateStr) < new Date(cycleStartDate)) return false;
-        if (cycleEndDate && new Date(dateStr) > new Date(cycleEndDate)) return false;
+        // Absolute floor is the creation date
+        if (cycleCreated && dateStr < cycleCreated) return false;
+        // Operational window: planting to harvest
+        if (cycleStart && dateStr < cycleStart) return false;
+        if (cycleEnd   && dateStr > cycleEnd)   return false;
         return true;
     };
 
-    const isDateViolation = (globalStartDate && !isWithinBounds(globalStartDate)) || (globalEndDate && !isWithinBounds(globalEndDate));
+    const isRangeViolation = globalStartDate && globalEndDate && globalEndDate < globalStartDate;
+    const isDateViolation = (globalStartDate && !isWithinBounds(globalStartDate)) || (globalEndDate && !isWithinBounds(globalEndDate)) || isRangeViolation;
 
-    const isValid = globalStartDate && globalEndDate && !isDateViolation && lineItems.every(
-        l => l.activityName.trim() && l.category && l.category.trim() && l.estimatedCostRwf > 0
-    );
+    const getCategoryUsage = (category: string) => {
+        // Sum from existing approved/pending requests
+        const existingSum = existingRequests
+            .filter(r => r.approvalStatus === 'Approved' || r.approvalStatus === 'Pending')
+            .flatMap(r => r.lineItems)
+            .filter(item => item.category === category)
+            .reduce((sum, item) => sum + (item.estimatedCostRwf || 0), 0);
+            
+        // Sum from current modal's line items
+        const currentModalSum = lineItems
+            .filter(item => item.category === category)
+            .reduce((sum, item) => sum + (item.estimatedCostRwf || 0), 0);
+            
+        return existingSum + currentModalSum;
+    };
+
+    const getCategoryRemaining = (category: string) => {
+        if (!category) return 0;
+        const config = budget_categories.find(c => c.name === category);
+        const limit = config ? config.allocated : 0;
+        
+        // available BEFORE this modal's input
+        const existingSum = existingRequests
+            .filter(r => r.approvalStatus === 'Approved' || r.approvalStatus === 'Pending')
+            .flatMap(r => r.lineItems)
+            .filter(item => item.category === category)
+            .reduce((sum, item) => sum + (item.estimatedCostRwf || 0), 0);
+
+        return Math.max(0, limit - existingSum);
+    };
+
+    const budgetViolations = lineItems.map(item => {
+        if (!item.category) return false;
+        const usage = getCategoryUsage(item.category);
+        const config = budget_categories.find(c => c.name === item.category);
+        const limit = config ? config.allocated : 0;
+        return usage > limit;
+    });
+
+    const isOverBudget = budgetViolations.some(v => v);
+
+    // Total requested exceeds entire cycle allocation
+    const totalCycleAllocation = budget_categories.reduce((s, c) => s + c.allocated, 0);
+    const exceedsCycleTotal = totalRwf > totalCycleAllocation;
+
+    // Any activity has cost of 0
+    const hasZeroCostActivity = lineItems.some(l => l.estimatedCostRwf <= 0);
+
+    // Duplicate activity names within this request
+    const activityNames = lineItems.map(l => l.activityName.trim().toLowerCase()).filter(Boolean);
+    const hasDuplicateActivities = activityNames.length !== new Set(activityNames).size;
+
+    // Single activity exceeds its own category's full budget (not just remaining)
+    const hasSingleItemOverCategory = lineItems.some(item => {
+        if (!item.category) return false;
+        const config = budget_categories.find(c => c.name === item.category);
+        return config ? item.estimatedCostRwf > config.allocated : false;
+    });
+
+    // Request period longer than cycle duration
+    const periodTooLong = (() => {
+        if (!globalStartDate || !globalEndDate || !cycleStart || !cycleEnd) return false;
+        const reqDays   = (new Date(globalEndDate).getTime()  - new Date(globalStartDate).getTime()) / 86400000;
+        const cycleDays = (new Date(cycleEnd).getTime() - new Date(cycleStart).getTime()) / 86400000;
+        return reqDays > cycleDays;
+    })();
+
+    const isValid =
+        globalStartDate &&
+        globalEndDate &&
+        !isDateViolation &&
+        !isOverBudget &&
+        !hasZeroCostActivity &&
+        !hasDuplicateActivities &&
+        !hasSingleItemOverCategory &&
+        !periodTooLong &&
+        totalRwf > 0 &&
+        lineItems.every(
+            l => l.activityName.trim() && l.category && l.estimatedCostRwf > 0
+        );
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -146,15 +249,12 @@ const BudgetActivityRequestModal = ({
                                     <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                                         Start Date
                                     </label>
-                                    <input
-                                        type="date"
+                                    <DateInput
+                                        name="start_date"
                                         value={globalStartDate}
-                                        onChange={e => setGlobalStartDate(e.target.value)}
-                                        min={cycleStartDate}
-                                        max={cycleEndDate}
-                                        required
+                                        onChange={(_, value) => setGlobalStartDate(value)}
                                         className={`w-full px-3 py-2.5 rounded-lg border bg-gray-50 dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all ${
-                                            globalStartDate && !isWithinBounds(globalStartDate) ? 'border-red-500' : 'border-gray-200 dark:border-gray-600'
+                                            (globalStartDate && !isWithinBounds(globalStartDate)) || isRangeViolation ? 'border-red-500 ring-2 ring-red-500/10' : 'border-gray-200 dark:border-gray-600'
                                         }`}
                                     />
                                 </div>
@@ -162,15 +262,12 @@ const BudgetActivityRequestModal = ({
                                     <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                                         End Date
                                     </label>
-                                    <input
-                                        type="date"
+                                    <DateInput
+                                        name="end_date"
                                         value={globalEndDate}
-                                        onChange={e => setGlobalEndDate(e.target.value)}
-                                        min={cycleStartDate}
-                                        max={cycleEndDate}
-                                        required
+                                        onChange={(_, value) => setGlobalEndDate(value)}
                                         className={`w-full px-3 py-2.5 rounded-lg border bg-gray-50 dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all ${
-                                            globalEndDate && !isWithinBounds(globalEndDate) ? 'border-red-500' : 'border-gray-200 dark:border-gray-600'
+                                            (globalEndDate && !isWithinBounds(globalEndDate)) || isRangeViolation ? 'border-red-500 ring-2 ring-red-500/10' : 'border-gray-200 dark:border-gray-600'
                                         }`}
                                     />
                                 </div>
@@ -178,7 +275,14 @@ const BudgetActivityRequestModal = ({
                             {isDateViolation && (
                                 <p className="mt-2 text-[10px] text-red-500 font-bold flex items-center gap-1">
                                     <AlertCircle size={10} />
-                                    Error: Dates must be between {cycleStartDate ? new Date(cycleStartDate).toLocaleDateString() : 'start'} and {cycleEndDate ? new Date(cycleEndDate).toLocaleDateString() : 'harvest'}.
+                                    {isRangeViolation
+                                        ? 'End date cannot be before start date.'
+                                        : globalStartDate && cycleCreated && globalStartDate < cycleCreated
+                                        ? `Start date cannot be before cycle was created (${cycleCreated}).`
+                                        : globalStartDate && cycleStart && globalStartDate < cycleStart
+                                        ? `Start date must be on or after planting (${cycleStart}).`
+                                        : `End date must be on or before harvest date (${cycleEnd}).`
+                                    }
                                 </p>
                             )}
                         </div>
@@ -239,18 +343,51 @@ const BudgetActivityRequestModal = ({
                                                     className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all"
                                                 >
                                                     <option value="">Select Category...</option>
-                                                    <option value="Seeds & Seedlings">Seeds & Seedlings</option>
-                                                    <option value="Fertilizers">Fertilizers</option>
-                                                    <option value="Chemicals">Chemicals</option>
-                                                    <option value="Labor">Labor</option>
+                                                    {budget_categories.length > 0
+                                                        ? budget_categories.map(c => (
+                                                            <option key={c.name} value={c.name}>{c.name}</option>
+                                                          ))
+                                                        : (
+                                                            <>
+                                                                <option value="Seeds">Seeds</option>
+                                                                <option value="Fertilizers">Fertilizers</option>
+                                                                <option value="Chemicals">Chemicals</option>
+                                                                <option value="Labor">Labor</option>
+                                                            </>
+                                                          )
+                                                    }
                                                 </select>
                                             </div>
 
                                             {/* Estimated Cost */}
                                             <div>
-                                                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                                    Estimated Cost (Rwf)
-                                                </label>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                                        Estimated Cost (Rwf)
+                                                    </label>
+                                                    {line.category && (() => {
+                                                        const config = budget_categories.find(c => c.name === line.category);
+                                                        const limit = config?.allocated || 0;
+                                                        const usedByOthers = existingRequests
+                                                            .filter(r => r.approvalStatus === 'Approved' || r.approvalStatus === 'Pending')
+                                                            .flatMap(r => r.lineItems)
+                                                            .filter(i => i.category === line.category)
+                                                            .reduce((s, i) => s + i.estimatedCostRwf, 0);
+                                                        const usedByOtherLines = lineItems
+                                                            .filter(l => l.id !== line.id && l.category === line.category)
+                                                            .reduce((s, l) => s + l.estimatedCostRwf, 0);
+                                                        const remaining = limit - usedByOthers - usedByOtherLines - line.estimatedCostRwf;
+                                                        const isOver = remaining < 0;
+                                                        return (
+                                                            <span className={`text-[10px] font-bold ${isOver ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                                                {isOver
+                                                                    ? `Over by ${Math.abs(remaining).toLocaleString()} Rwf`
+                                                                    : `${remaining.toLocaleString()} Rwf left`
+                                                                }
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </div>
                                                 <input
                                                     type="number"
                                                     min="0"
@@ -259,7 +396,11 @@ const BudgetActivityRequestModal = ({
                                                     onChange={e => updateLine(line.id, 'estimatedCostRwf', parseInt(e.target.value) || 0)}
                                                     placeholder="0"
                                                     required
-                                                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all"
+                                                    className={`w-full px-3 py-2.5 rounded-lg border bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white transition-all placeholder-gray-400 ${
+                                                        line.category && (getCategoryUsage(line.category) > (budget_categories.find(c => c.name === line.category)?.allocated || 0))
+                                                            ? 'border-red-500 ring-2 ring-red-500/10 focus:ring-red-500/20 focus:border-red-500'
+                                                            : 'border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500'
+                                                    }`}
                                                 />
                                             </div>
                                         </div>
@@ -281,13 +422,24 @@ const BudgetActivityRequestModal = ({
                         {/* Footer: total + submit */}
                         <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 space-y-3">
                             {/* Running total */}
-                            <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
-                                <span className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
-                                    Total Requested Amount
-                                </span>
-                                <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300 text-lg">
-                                    {totalRwf.toLocaleString()} Rwf
-                                </span>
+                            <div className="flex flex-col gap-2 px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                                        Total Requested Amount
+                                    </span>
+                                    <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300 text-lg">
+                                        {totalRwf.toLocaleString()} Rwf
+                                    </span>
+                                </div>
+                                
+                                <div className="flex items-center justify-between pt-2 border-t border-emerald-200/50 dark:border-emerald-800/50">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-400/50">
+                                        Total Allocation (Cycle)
+                                    </span>
+                                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                        {(budget_categories.reduce((s, c) => s + c.allocated, 0)).toLocaleString()} Rwf
+                                    </span>
+                                </div>
                             </div>
 
                             {/* Error messages / Validation hint */}
@@ -298,7 +450,49 @@ const BudgetActivityRequestModal = ({
                                 </div>
                             )}
 
-                            {!isValid && lineItems.some(l => l.activityName) && !submitError && (
+                            {isOverBudget && (
+                                <p className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 font-bold">
+                                    <AlertCircle size={13} />
+                                    Category Budget Exceeded: You cannot request more than the remaining allocation for this specific category.
+                                </p>
+                            )}
+
+                            {hasZeroCostActivity && (
+                                <p className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 font-bold">
+                                    <AlertCircle size={13} />
+                                    Every activity must have a cost greater than 0 Rwf.
+                                </p>
+                            )}
+
+                            {hasDuplicateActivities && (
+                                <p className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 font-bold">
+                                    <AlertCircle size={13} />
+                                    Duplicate activity names found — each activity must be uniquely named.
+                                </p>
+                            )}
+
+                            {hasSingleItemOverCategory && (
+                                <p className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 font-bold">
+                                    <AlertCircle size={13} />
+                                    A single activity cannot exceed the full budget for its category.
+                                </p>
+                            )}
+
+                            {exceedsCycleTotal && !isOverBudget && (
+                                <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-bold">
+                                    <AlertCircle size={13} />
+                                    Total requested ({totalRwf.toLocaleString()} Rwf) exceeds total cycle allocation ({totalCycleAllocation.toLocaleString()} Rwf).
+                                </p>
+                            )}
+
+                            {periodTooLong && (
+                                <p className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 font-bold">
+                                    <AlertCircle size={13} />
+                                    Request period cannot be longer than the crop cycle duration.
+                                </p>
+                            )}
+
+                            {!isValid && !isOverBudget && !hasZeroCostActivity && !hasDuplicateActivities && !hasSingleItemOverCategory && !periodTooLong && lineItems.some(l => l.activityName) && !submitError && (
                                 <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-medium">
                                     <AlertCircle size={13} />
                                     Please complete all fields for every activity before submitting.

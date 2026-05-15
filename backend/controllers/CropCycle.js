@@ -52,6 +52,21 @@ export const createCropCycle = async (req, res) => {
             expected_price_per_kg,
         } = req.body;
 
+        // Duplicate check: Same farmer, crop, and season must not have an active cycle
+        const existing = await CropCycle.findOne({
+            farmer_id,
+            crop_name,
+            season,
+            status: { $nin: ['completed', 'cancelled'] },
+        });
+
+        if (existing) {
+            return res.status(409).json({
+                status: 'error',
+                message: `An active cycle for ${crop_name} already exists for this farmer in ${season}. Close or complete it before creating a new one.`
+            });
+        }
+
         // Validate required fields
         if (!farmer_id || !crop_name || !season || !planting_date || !expected_harvest_date || !block_name || 
             block_size_hectares === undefined || field_size_hectares === undefined || 
