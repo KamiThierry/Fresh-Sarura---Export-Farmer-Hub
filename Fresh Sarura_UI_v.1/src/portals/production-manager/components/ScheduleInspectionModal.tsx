@@ -23,6 +23,16 @@ const ScheduleInspectionModal = ({ isOpen, onClose, onSubmit }: ScheduleInspecti
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const selectedDate = new Date(formData.date);
+
+        if (selectedDate < today) {
+            alert('Inspection date cannot be in the past.');
+            return;
+        }
+
         setIsSubmitting(true);
         setTimeout(() => {
             onSubmit(formData);
@@ -119,6 +129,7 @@ const ScheduleInspectionModal = ({ isOpen, onClose, onSubmit }: ScheduleInspecti
                                 <input
                                     type="date"
                                     required
+                                    min={new Date().toISOString().split('T')[0]}
                                     value={formData.date}
                                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"

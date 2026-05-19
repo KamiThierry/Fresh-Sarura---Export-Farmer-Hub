@@ -103,36 +103,54 @@ export const getHarvestDeclarations = async (req, res) => {
 export const logPickup = async (req, res) => {
     try {
         const { pickedUpWeightKg, truckId } = req.body;
+        
+        // 1. Basic input validation
         if (!pickedUpWeightKg) return res.status(400).json({ status: 'error', message: 'pickedUpWeightKg required.' });
+        if (pickedUpWeightKg <= 0) return res.status(400).json({ status: 'error', message: 'Actual weight must be greater than 0 kg.' });
+        if (!truckId) return res.status(400).json({ status: 'error', message: 'A vehicle must be selected to log a pickup.' });
 
+        // 2. Declaration validation
         const declaration = await HarvestDeclaration.findById(req.params.id);
         if (!declaration) return res.status(404).json({ status: 'error', message: 'Declaration not found.' });
-        if (declaration.status === 'PickedUp') return res.status(400).json({ status: 'error', message: 'Already picked up.' });
+        if (declaration.status === 'PickedUp') return res.status(400).json({ status: 'error', message: 'This harvest has already been logged as picked up.' });
 
-        // Resolve vehicle plate and driver
-        let resolvedTruckId = truckId;
-        if (truckId && mongoose.Types.ObjectId.isValid(truckId)) {
-            const vehicle = await Vehicle.findById(truckId);
-            if (vehicle) {
-                resolvedTruckId = vehicle.plateNumber;
-            }
+        // 3. Weight discrepancy validation (Max 20% over estimate)
+        const maxAllowedWeight = declaration.estimatedWeightKg * 1.2;
+        if (pickedUpWeightKg > maxAllowedWeight) {
+            return res.status(400).json({ 
+                status: 'error', 
+                message: `Weight discrepancy too high. Collected weight (${pickedUpWeightKg} kg) exceeds the estimated weight (${declaration.estimatedWeightKg} kg) by more than 20%. Please verify with the driver.` 
+            });
         }
 
-        // Create IntakeLog
+        // 4. Vehicle & Maintenance validation
+        let resolvedTruckId = truckId;
+        const vehicle = await Vehicle.findById(truckId);
+        if (!vehicle) {
+            return res.status(404).json({ status: 'error', message: 'The selected vehicle does not exist in the database.' });
+        }
+        
+        if (vehicle.status === 'Maintenance') {
+            return res.status(400).json({ status: 'error', message: 'This vehicle is currently under maintenance and cannot be assigned to a pickup trip.' });
+        }
+
+        resolvedTruckId = vehicle.plateNumber;
+
+        // 5. Create IntakeLog
         const intakeLog = await IntakeLog.create({
             harvestDeclarationId: declaration._id,
             cycleId: declaration.cycleId,
             pickedUpWeightKg,
-            truckId: resolvedTruckId || null,
+            truckId: resolvedTruckId,
             loggedBy: req.user._id,
         });
 
-        // Mark declaration as picked up
+        // 6. Mark declaration as picked up
         declaration.status = 'PickedUp';
         declaration.intakeLogId = intakeLog._id;
         await declaration.save();
 
-        // Notify all quality_officer users
+        // 7. Notifications
         await notifyByRole('quality_officer', {
             type: 'HARVEST_PICKED_UP',
             title: 'Produce Arriving',
@@ -141,7 +159,6 @@ export const logPickup = async (req, res) => {
             refModel: 'IntakeLog',
         });
 
-        // Notify all logistic_officer users
         await notifyByRole('logistic_officer', {
             type: 'HARVEST_PICKED_UP',
             title: 'Produce Arriving',
@@ -150,15 +167,15 @@ export const logPickup = async (req, res) => {
             refModel: 'IntakeLog',
         });
 
-        res.json({ status: 'success', message: 'Pickup logged.', data: intakeLog });
+        res.json({ status: 'success', message: 'Pickup logged successfully.', data: intakeLog });
 
         await createEventLog({
             module: 'Production & QC',
             action: 'Produce Picked Up',
             severity: 'INFO',
-            description: `Produce picked up: ${declaration.cropName} — ${pickedUpWeightKg} kg (Truck: ${truckId || 'N/A'})`,
+            description: `Produce picked up: ${declaration.cropName} — ${pickedUpWeightKg} kg (Truck: ${resolvedTruckId})`,
             actor: req.user.name,
-            metadata: { intakeLogId: intakeLog._id, cropName: declaration.cropName, pickedUpWeightKg, truckId }
+            metadata: { intakeLogId: intakeLog._id, cropName: declaration.cropName, pickedUpWeightKg, truckId: resolvedTruckId }
         });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });

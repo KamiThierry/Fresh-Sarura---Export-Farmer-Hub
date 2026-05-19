@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
     Search, Filter, Download, Plus, MoreHorizontal,
-    Package, Layers,
+    Package, Layers, Calendar,
     Leaf, Clock, ClipboardCheck,
     ChevronDown, FileSpreadsheet, FileText, User
 } from 'lucide-react';
@@ -64,6 +64,13 @@ const InventoryManagement = () => {
     const [timeRangeFilter, setTimeRangeFilter] = useState<string>('all');
     const [exportClientFilter, setExportClientFilter] = useState<string>('all');
     const [exportStatusFilter, setExportStatusFilter] = useState<string>('all');
+    const [stockStatusFilter, setStockStatusFilter] = useState<string>('all');
+
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date(); d.setMonth(d.getMonth() - 3);
+        return d.toISOString().split('T')[0];
+    });
+    const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
     
     // Pagination
     const [inventoryPage, setInventoryPage] = useState(1);
@@ -363,6 +370,19 @@ const InventoryManagement = () => {
             }
         }
         
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            const d = new Date(a.timestamp);
+            if (!isNaN(d.getTime())) {
+                if (d < start || d > end) return false;
+            } else {
+                return false;
+            }
+        }
+
         return true;
     });
 
@@ -374,6 +394,7 @@ const InventoryManagement = () => {
         
         const matchesProduce = produceFilter === 'all' || i.produce === produceFilter;
         const matchesRoom = roomFilter === 'all' || i.storageLocation === roomFilter;
+        const matchesStatus = stockStatusFilter === 'all' || i.status === stockStatusFilter;
         
         let matchesTime = true;
         if (timeRangeFilter !== 'all') {
@@ -392,7 +413,21 @@ const InventoryManagement = () => {
             }
         }
 
-        return matchesSearch && matchesProduce && matchesRoom && matchesTime;
+        let matchesDateRange = true;
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            const d = new Date(i.dateInStock);
+            if (!isNaN(d.getTime())) {
+                matchesDateRange = d >= start && d <= end;
+            } else {
+                matchesDateRange = false;
+            }
+        }
+
+        return matchesSearch && matchesProduce && matchesRoom && matchesStatus && matchesTime && matchesDateRange;
     });
 
     const filteredExportBatches = exportBatches.filter(b => {
@@ -421,37 +456,67 @@ const InventoryManagement = () => {
             }
         }
 
-        return matchesSearch && matchesClient && matchesStatus && matchesTime;
+        let matchesDateRange = true;
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            const d = new Date(b.createdAt);
+            if (!isNaN(d.getTime())) {
+                matchesDateRange = d >= start && d <= end;
+            } else {
+                matchesDateRange = false;
+            }
+        }
+
+        return matchesSearch && matchesClient && matchesStatus && matchesTime && matchesDateRange;
     });
 
 
 
-    // Stats
-    const totalStockKg = inventoryItems.reduce((sum: number, i: any) => sum + i.availableKg, 0);
-    const totalStockTons = (totalStockKg / 1000).toFixed(1);
-    const intakeTodayKg = stock
-        .filter(i => new Date(i.createdAt).toDateString() === new Date().toDateString())
-        .reduce((sum, i) => sum + (i.receivedWeightKg || 0), 0);
+    // Date Range Helper
+    const isWithinDateRange = (dateString: string) => {
+        if (!startDate || !endDate || !dateString) return true;
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        const d = new Date(dateString);
+        if (isNaN(d.getTime())) return false;
+        return d >= start && d <= end;
+    };
 
-    const nearlyEmptyCount = inventoryItems.filter((i: any) => 
+    // Stats
+    const dateFilteredInventoryItems = inventoryItems.filter((i: any) => isWithinDateRange(i.dateInStock || i.createdAt));
+    const totalStockKg = dateFilteredInventoryItems.reduce((sum: number, i: any) => sum + i.availableKg, 0);
+    const totalStockTons = (totalStockKg / 1000).toFixed(1);
+    
+    const dateFilteredStock = stock.filter((i: any) => isWithinDateRange(i.createdAt));
+    const intakePeriodKg = dateFilteredStock.reduce((sum, i) => sum + (i.receivedWeightKg || 0), 0);
+
+    const nearlyEmptyCount = dateFilteredInventoryItems.filter((i: any) => 
         i.availableKg > 0 && i.availableKg < i.processedKg * 0.2
     ).length;
 
-    const fullyDepletedCount = inventoryItems.filter((i: any) => 
+    const fullyDepletedCount = dateFilteredInventoryItems.filter((i: any) => 
         i.availableKg === 0 && i.status !== 'Spoiled'
     ).length;
+    
+    const dateFilteredQcDoneBatches = qcDoneBatches.filter((b: any) => isWithinDateRange(b.createdAt || b.updatedAt));
+    const dateFilteredExportBatches = exportBatches.filter((b: any) => isWithinDateRange(b.createdAt));
 
     const summaryStats = [
         { label: 'Total Stock', value: `${totalStockTons} Tons`, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-        { label: 'Raw Intake (Today)', value: `${intakeTodayKg.toLocaleString()} kg`, icon: Leaf, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
+        { label: 'Intake (Period)', value: `${intakePeriodKg.toLocaleString()} kg`, icon: Leaf, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
         { 
             label: 'Pending Confirmation', 
-            value: `${qcDoneBatches.length} Stock`, 
+            value: `${dateFilteredQcDoneBatches.length} Stock`, 
             icon: ClipboardCheck, 
-            color: qcDoneBatches.length > 0 ? 'text-amber-600' : 'text-gray-400', 
-            bg: qcDoneBatches.length > 0 ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-gray-50 dark:bg-gray-800' 
+            color: dateFilteredQcDoneBatches.length > 0 ? 'text-amber-600' : 'text-gray-400', 
+            bg: dateFilteredQcDoneBatches.length > 0 ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-gray-50 dark:bg-gray-800' 
         },
-        { label: 'Active Exports', value: `${exportBatches.filter(b => b.status !== 'Shipped').length} Batches`, icon: Layers, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
+        { label: 'Active Exports', value: `${dateFilteredExportBatches.filter((b: any) => b.status !== 'Shipped').length} Batches`, icon: Layers, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
     ];
 
     const getShipmentForBatch = (batchId: string) => {
@@ -540,8 +605,8 @@ const InventoryManagement = () => {
         // ── 3. Summary Section ──
         const summaryFields = [
             { label: 'Current Inventory', value: `${totalStockTons} Tons` },
-            { label: 'Recent Intake',    value: `${intakeTodayKg.toLocaleString()} kg` },
-            { label: 'Active Exports',   value: `${exportBatches.filter(b => b.status !== 'Shipped').length} Batches` },
+            { label: 'Recent Intake',    value: `${intakePeriodKg.toLocaleString()} kg` },
+            { label: 'Active Exports',   value: `${dateFilteredExportBatches.filter((b: any) => b.status !== 'Shipped').length} Batches` },
             { label: 'System Alert Count', value: String(fullyDepletedCount + nearlyEmptyCount) },
         ];
         
@@ -642,7 +707,29 @@ const InventoryManagement = () => {
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Inventory & Batch Management</h1>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track intake, stock, and export allocation.</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 items-center flex-wrap">
+                    {/* Date Range */}
+                    <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 shadow-sm">
+                        <Calendar size={15} className="text-green-500 flex-shrink-0" />
+                        <span className="text-xs text-gray-400 font-medium">From:</span>
+                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                            className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer" />
+                        <span className="text-xs text-gray-400 font-medium ml-2">To:</span>
+                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+                            className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer" />
+                        
+                        <button
+                            onClick={() => {
+                                const d = new Date(); d.setMonth(d.getMonth() - 3);
+                                setStartDate(d.toISOString().split('T')[0]);
+                                setEndDate(new Date().toISOString().split('T')[0]);
+                            }}
+                            className="ml-2 text-xs text-green-600 hover:text-green-700 font-bold transition-colors whitespace-nowrap"
+                        >
+                            Clear
+                        </button>
+                    </div>
+
                     {/* Export Dropdown */}
                     <div className="relative">
                         <button
@@ -898,6 +985,22 @@ const InventoryManagement = () => {
                             </div>
 
                             <div className="relative">
+                                <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                <select
+                                    value={stockStatusFilter}
+                                    onChange={(e) => { setStockStatusFilter(e.target.value); setInventoryPage(1); }}
+                                    className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm"
+                                >
+                                    <option value="all">All Statuses</option>
+                                    <option value="Available">Available</option>
+                                    <option value="Partially Allocated">Partially Allocated</option>
+                                    <option value="Fully Allocated">Fully Allocated</option>
+                                    <option value="Spoiled">Spoiled</option>
+                                </select>
+                                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                            </div>
+
+                            <div className="relative">
                                 <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                                 <select
                                     value={timeRangeFilter}
@@ -962,7 +1065,7 @@ const InventoryManagement = () => {
                         </>
                     )}
 
-                    {(searchTerm || eventTypeFilter !== 'all' || timeRangeFilter !== 'all' || produceFilter !== 'all' || roomFilter !== 'all' || exportClientFilter !== 'all' || exportStatusFilter !== 'all') && (
+                    {(searchTerm || eventTypeFilter !== 'all' || timeRangeFilter !== 'all' || produceFilter !== 'all' || roomFilter !== 'all' || stockStatusFilter !== 'all' || exportClientFilter !== 'all' || exportStatusFilter !== 'all') && (
                         <button
                             onClick={() => {
                                 setSearchTerm('');
@@ -970,8 +1073,12 @@ const InventoryManagement = () => {
                                 setTimeRangeFilter('all');
                                 setProduceFilter('all');
                                 setRoomFilter('all');
+                                setStockStatusFilter('all');
                                 setExportClientFilter('all');
                                 setExportStatusFilter('all');
+                                const d = new Date(); d.setMonth(d.getMonth() - 3);
+                                setStartDate(d.toISOString().split('T')[0]);
+                                setEndDate(new Date().toISOString().split('T')[0]);
                                 setActivityPage(1);
                                 setInventoryPage(1);
                                 setExportPage(1);
@@ -989,18 +1096,18 @@ const InventoryManagement = () => {
                     <div className="flex flex-col">
 
                         {/* QCDone Queue — PM must confirm before stock appears */}
-                        {qcDoneBatches.length > 0 && (
+                        {dateFilteredQcDoneBatches.length > 0 && (
                             <div className="p-4 bg-amber-50/60 dark:bg-amber-900/10 border-b border-amber-100 dark:border-amber-800/20">
                                 <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                                     <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse inline-block" />
                                     Awaiting Your Confirmation
                                     <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 py-0.5 px-2 rounded-full text-xs font-bold">
-                                        {qcDoneBatches.length}
+                                        {dateFilteredQcDoneBatches.length}
                                     </span>
                                 </h3>
 
                                 <div className="flex flex-col gap-3">
-                                    {qcDoneBatches.map(batch => (
+                                    {dateFilteredQcDoneBatches.map((batch: any) => (
                                         <div key={batch._id} className="bg-white dark:bg-gray-800 rounded-xl border border-amber-100 dark:border-amber-800/30 shadow-sm overflow-hidden">
                                             
                                             {/* Batch summary row */}

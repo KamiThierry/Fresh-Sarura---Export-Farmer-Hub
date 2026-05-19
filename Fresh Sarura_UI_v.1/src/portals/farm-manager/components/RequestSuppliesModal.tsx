@@ -63,6 +63,23 @@ const RequestSuppliesModal = ({
         e.preventDefault();
         if (!selectedCycle) return;
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const start = new Date(globalStartDate);
+        const end = new Date(globalEndDate);
+
+        if (start < today) {
+            setError('Start date cannot be in the past.');
+            setIsSubmitting(false);
+            return;
+        }
+
+        if (end < start) {
+            setError('End date cannot be before start date.');
+            setIsSubmitting(false);
+            return;
+        }
+
         setIsSubmitting(true);
         setError(null);
         try {
@@ -176,6 +193,7 @@ const RequestSuppliesModal = ({
                                     <input
                                         type="date"
                                         value={globalStartDate}
+                                        min={new Date().toISOString().split('T')[0]}
                                         onChange={e => setGlobalStartDate(e.target.value)}
                                         required
                                         className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all"
@@ -188,6 +206,7 @@ const RequestSuppliesModal = ({
                                     <input
                                         type="date"
                                         value={globalEndDate}
+                                        min={globalStartDate || new Date().toISOString().split('T')[0]}
                                         onChange={e => setGlobalEndDate(e.target.value)}
                                         required
                                         className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 transition-all"

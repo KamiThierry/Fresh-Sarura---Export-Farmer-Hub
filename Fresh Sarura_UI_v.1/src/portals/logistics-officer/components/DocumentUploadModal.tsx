@@ -58,7 +58,12 @@ const DocumentUploadModal = ({ isOpen, onClose, preselectedShipmentId, onSuccess
     if (!isOpen) return null;
 
     const handleFileSelected = (selectedFile: File) => {
+        if (selectedFile.type !== 'application/pdf') {
+            setError('Only PDF documents are accepted for export documentation.');
+            return;
+        }
         setFile(selectedFile);
+        setError(null);
         const reader = new FileReader();
         reader.onloadend = () => setFileBase64(reader.result as string);
         reader.readAsDataURL(selectedFile);
@@ -83,8 +88,8 @@ const DocumentUploadModal = ({ isOpen, onClose, preselectedShipmentId, onSuccess
     const selectedShipment = shipments.find(s => s._id === selectedShipmentId);
 
     const handleSubmit = async () => {
-        if (!file || !fileBase64 || !docType) {
-            setError('Please select a file and document type.'); return;
+        if (!file || !fileBase64 || !docType || !selectedShipmentId) {
+            setError('Please select a file, document type, and link a shipment.'); return;
         }
         setIsSubmitting(true);
         setError(null);
@@ -129,7 +134,7 @@ const DocumentUploadModal = ({ isOpen, onClose, preselectedShipmentId, onSuccess
                                 : 'border-gray-300 dark:border-gray-700 hover:border-indigo-400 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                         }`}
                     >
-                        <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileChange} accept=".pdf,.jpg,.jpeg,.png" />
+                        <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileChange} accept=".pdf" />
                         <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 transition-colors ${file ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-400'}`}>
                             {file ? <CheckCircle size={24} /> : <Upload size={24} />}
                         </div>
@@ -141,7 +146,7 @@ const DocumentUploadModal = ({ isOpen, onClose, preselectedShipmentId, onSuccess
                         ) : (
                             <div>
                                 <p className="font-medium text-gray-900 dark:text-white text-sm">Click to upload or drag and drop</p>
-                                <p className="text-xs text-gray-500 mt-1">PDF, PNG, JPG (max 10MB)</p>
+                                <p className="text-xs text-gray-500 mt-1">PDF only (max 10MB)</p>
                             </div>
                         )}
                     </div>
@@ -166,7 +171,7 @@ const DocumentUploadModal = ({ isOpen, onClose, preselectedShipmentId, onSuccess
                     {/* Link to Shipment — real shipment selector */}
                     <div ref={shipmentRef} className="relative">
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                            Link to Shipment <span className="text-gray-400">(Optional)</span>
+                            Link to Shipment <span className="text-red-500">*</span>
                         </label>
                         <div className="relative">
                             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -228,9 +233,9 @@ const DocumentUploadModal = ({ isOpen, onClose, preselectedShipmentId, onSuccess
                     </button>
                     <button
                         onClick={handleSubmit}
-                        disabled={!file || !docType || isSubmitting}
+                        disabled={!file || !docType || !selectedShipmentId || isSubmitting}
                         className={`px-6 py-2 rounded-lg text-sm font-bold shadow-md transition-colors flex items-center gap-2 ${
-                            !file || !docType || isSubmitting
+                            !file || !docType || !selectedShipmentId || isSubmitting
                                 ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
                                 : 'bg-indigo-600 hover:bg-indigo-500 text-white'
                         }`}

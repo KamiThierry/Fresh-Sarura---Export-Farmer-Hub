@@ -1,5 +1,5 @@
 import { X, FileText, Upload, Eye, CheckCircle, AlertTriangle, Clock, 
-         Plane, Package, Calendar, Loader2, XCircle } from 'lucide-react';
+         Plane, Package, Calendar, Loader2, XCircle, Trash2 } from 'lucide-react';
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
@@ -35,7 +35,9 @@ const ShipmentDetailsModal = ({ isOpen, onClose, shipment, onStatusChange }: Shi
     const [eventLogs, setEventLogs] = useState<any[]>([]);
     const [uploadingDocKey, setUploadingDocKey] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [pendingDocKey, setPendingDocKey] = useState<string | null>(null);
+    const pendingDocKeyRef = useRef<string | null>(null);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+    const [deleteDocTarget, setDeleteDocTarget] = useState<{ id: string; name: string } | null>(null);
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
     const [cancelReason, setCancelReason] = useState('');
 
@@ -89,11 +91,44 @@ const ShipmentDetailsModal = ({ isOpen, onClose, shipment, onStatusChange }: Shi
         return arrivalTime < new Date();
     }, [shipment]);
 
+    // Dispatch Validation Logic
+    const dispatchValidation = useMemo(() => {
+        if (!shipment) return { isValid: false, errors: [] };
+        const errors: string[] = [];
+        
+        // 1. Documents check — must have at least one (Packing List or AWB)
+        if (realDocs.length === 0) {
+            errors.push("Missing required documents (Packing List or AWB)");
+        }
+        
+        // 2. Date check — must be today or in the past
+        if (shipment.departureDate) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const depDate = new Date(shipment.departureDate);
+            depDate.setHours(0, 0, 0, 0);
+            if (depDate > today) {
+                errors.push("Cannot dispatch future flight");
+            }
+        }
+        
+        // 3. Status check — must be Scheduled (PackingListGenerated)
+        if (shipment.status !== 'PackingListGenerated') {
+            errors.push("Invalid status for dispatch");
+        }
+
+        return {
+            isValid: errors.length === 0,
+            errors
+        };
+    }, [shipment, realDocs]);
+
     const cfg = (shipment && statusConfig[shipment.status]) || statusConfig.Draft;
 
     if (!isOpen || !shipment) return null;
 
     const handleDepart = async () => {
+        if (!dispatchValidation.isValid) return;
         setIsActioning(true);
         try {
             await api.patch(`/shipments/${shipment._id}/depart`, {});
@@ -125,30 +160,53 @@ const ShipmentDetailsModal = ({ isOpen, onClose, shipment, onStatusChange }: Shi
     };
 
     const handleRealUpload = (docKey: string) => {
-        setPendingDocKey(docKey);
+        setUploadError(null);
+        pendingDocKeyRef.current = docKey;
         fileInputRef.current?.click();
     };
 
     const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !pendingDocKey) return;
-        setUploadingDocKey(pendingDocKey);
+        const docKey = pendingDocKeyRef.current;
+        if (!file || !docKey) return;
+        
+        setUploadingDocKey(docKey);
+        setUploadError(null);
+
         const reader = new FileReader();
         reader.onloadend = async () => {
             try {
                 await api.post('/export-documents', {
                     shipmentId: shipment._id,
-                    docType: pendingDocKey,
+                    docType: docKey,
                     fileName: file.name,
                     fileUrl: reader.result as string,
                 });
                 const res = await api.get(`/export-documents?shipmentId=${shipment._id}`);
                 setRealDocs(res.data?.data || res.data || []);
-            } catch (err) { console.error('Upload failed:', err); }
-            finally { setUploadingDocKey(null); setPendingDocKey(null); }
+            } catch (err: any) { 
+                console.error('Upload failed:', err); 
+                setUploadError(err.response?.data?.message || err.message || 'Upload failed');
+            }
+            finally { 
+                setUploadingDocKey(null); 
+                pendingDocKeyRef.current = null;
+            }
         };
         reader.readAsDataURL(file);
         e.target.value = '';
+    };
+
+    const handleDeleteDocument = async () => {
+        if (!deleteDocTarget) return;
+        setIsActioning(true);
+        try {
+            await api.delete(`/export-documents/${deleteDocTarget.id}`);
+            const res = await api.get(`/export-documents?shipmentId=${shipment._id}`);
+            setRealDocs(res.data?.data || res.data || []);
+            setDeleteDocTarget(null);
+        } catch (err) { console.error('Delete failed:', err); }
+        finally { setIsActioning(false); }
     };
 
     const logIconMap: Record<string, any> = {
@@ -320,6 +378,12 @@ const ShipmentDetailsModal = ({ isOpen, onClose, shipment, onStatusChange }: Shi
                             </h3>
                             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
                                 <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileSelected} />
+                                {uploadError && (
+                                    <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-medium border-b border-red-100 dark:border-red-900/30 flex items-center gap-2">
+                                        <AlertTriangle size={14} />
+                                        {uploadError}
+                                    </div>
+                                )}
                                 <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
                                     {REQUIRED_DOC_TYPES.map(({ label, key }) => {
                                         const uploaded = realDocs.find(d => d.docType === key);
@@ -348,12 +412,23 @@ const ShipmentDetailsModal = ({ isOpen, onClose, shipment, onStatusChange }: Shi
                                                     </div>
                                                 </div>
                                                 {uploaded ? (
-                                                    <button
-                                                        onClick={() => window.open(uploaded.fileUrl)}
-                                                        className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                                                    >
-                                                        <Eye size={16} />
-                                                    </button>
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            onClick={() => window.open(uploaded.fileUrl)}
+                                                            className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                                            title="View Document"
+                                                        >
+                                                            <Eye size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setDeleteDocTarget({ id: uploaded._id, name: uploaded.fileName })}
+                                                            disabled={isActioning || shipment.status === 'Cancelled'}
+                                                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-30"
+                                                            title="Delete Document"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
                                                 ) : (
                                                     <button
                                                         onClick={() => handleRealUpload(key)}
@@ -467,18 +542,27 @@ const ShipmentDetailsModal = ({ isOpen, onClose, shipment, onStatusChange }: Shi
 
                         {/* Scheduled → confirm departed */}
                         {(shipment.status === 'PackingListGenerated') && (
-                            <button
-                                onClick={handleDepart}
-                                disabled={isActioning}
-                                className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-md ${
-                                    isDepartureOverdue
-                                        ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-900/20'
-                                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-900/20'
-                                } disabled:opacity-50`}
-                            >
-                                {isActioning ? <Loader2 size={14} className="animate-spin" /> : <Plane size={14} />}
-                                {isActioning ? 'Updating...' : 'Confirm Flight Departed'}
-                            </button>
+                            <div className="flex flex-col items-end gap-2">
+                                {dispatchValidation.errors.map((err, i) => (
+                                    <span key={i} className="text-[10px] font-bold text-red-500 bg-red-50 dark:bg-red-900/10 px-2 py-0.5 rounded border border-red-200 dark:border-red-800/30">
+                                        {err}
+                                    </span>
+                                ))}
+                                <button
+                                    onClick={handleDepart}
+                                    disabled={isActioning || !dispatchValidation.isValid}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-md ${
+                                        !dispatchValidation.isValid
+                                            ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed shadow-none border border-gray-200 dark:border-gray-700'
+                                            : isDepartureOverdue
+                                                ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-900/20'
+                                                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-900/20'
+                                    } disabled:opacity-50`}
+                                >
+                                    {isActioning ? <Loader2 size={14} className="animate-spin" /> : <Plane size={14} />}
+                                    {isActioning ? 'Updating...' : 'Confirm Flight Departed'}
+                                </button>
+                            </div>
                         )}
 
                         {/* Departed → confirm cargo shipped */}
@@ -504,6 +588,50 @@ const ShipmentDetailsModal = ({ isOpen, onClose, shipment, onStatusChange }: Shi
                                 <CheckCircle size={14} /> Shipped
                             </span>
                         )}
+                    </div>
+                </div>
+
+                <DeleteDocModal 
+                    isOpen={!!deleteDocTarget}
+                    onClose={() => setDeleteDocTarget(null)}
+                    onConfirm={handleDeleteDocument}
+                    fileName={deleteDocTarget?.name || ''}
+                    isDeleting={isActioning}
+                />
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+const DeleteDocModal = ({ isOpen, onClose, onConfirm, fileName, isDeleting }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, fileName: string, isDeleting: boolean }) => {
+    if (!isOpen) return null;
+    return createPortal(
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-md transition-opacity" onClick={onClose} />
+            <div className="relative w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="px-6 py-4 bg-red-50 dark:bg-red-900/10 border-b border-red-100 dark:border-red-900/30">
+                    <h3 className="text-base font-bold text-red-800 dark:text-red-300">Delete Export Document</h3>
+                </div>
+                <div className="p-6 space-y-4">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                        Are you sure you want to delete <strong className="text-gray-900 dark:text-white">{fileName}</strong>? This action cannot be undone.
+                    </p>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={onClose}
+                            className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={onConfirm}
+                            disabled={isDeleting}
+                            className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                            {isDeleting ? <Loader2 size={16} className="animate-spin" /> : null}
+                            {isDeleting ? 'Deleting...' : 'Delete File'}
+                        </button>
                     </div>
                 </div>
             </div>

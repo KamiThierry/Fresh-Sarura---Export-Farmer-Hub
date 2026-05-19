@@ -4,7 +4,7 @@ import {
     createExportBatch, getExportBatches, markReadyForExport,
     createShipment, getShipments, getShipmentById, shipShipment,
     departShipment, cancelShipment,
-    uploadDocument, getDocuments,
+    uploadDocument, getDocuments, deleteDocument,
     getLogisticsActivity,
 } from '../controllers/exportController.js';
 
@@ -27,6 +27,7 @@ router.patch('/shipments/:id/cancel',  restrictTo('logistic_officer', 'admin'), 
 // Export Documents
 router.post('/export-documents', restrictTo('logistic_officer', 'admin'), uploadDocument);
 router.get('/export-documents', restrictTo('logistic_officer', 'production_manager', 'admin'), getDocuments);
+router.delete('/export-documents/:id', restrictTo('logistic_officer', 'admin'), deleteDocument);
 
 // Logistics Activity
 router.get('/logistics-activity', restrictTo('logistic_officer', 'admin'), getLogisticsActivity);

@@ -21,6 +21,7 @@ const AddDriverModal = ({ isOpen, onClose, onSuccess }: AddDriverModalProps) => 
     });
     const [isExpired, setIsExpired] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [phoneError, setPhoneError] = useState('');
     const { showToast } = useToastContext();
 
     useEffect(() => {
@@ -35,8 +36,29 @@ const AddDriverModal = ({ isOpen, onClose, onSuccess }: AddDriverModalProps) => 
 
     if (!isOpen) return null;
 
+    const minExpiryDate = new Date();
+    minExpiryDate.setFullYear(minExpiryDate.getFullYear() + 10);
+    const minExpiryStr = minExpiryDate.toISOString().split('T')[0];
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        const selectedDate = new Date(formData.licenseExpiry);
+
+        // Phone validation (numeric only, exactly 10 digits)
+        const numericPhone = formData.phoneNumber.replace(/\D/g, '');
+        if (numericPhone.length !== 10) {
+            setPhoneError('Phone number must be exactly 10 digits (e.g. 0788000000).');
+            return;
+        } else {
+            setPhoneError('');
+        }
+
+        if (selectedDate < minExpiryDate) {
+            alert('License expiry date must be at least 10 years in the future.');
+            return;
+        }
+
         if (isExpired) return;
         setIsSubmitting(true);
         try {
@@ -47,7 +69,7 @@ const AddDriverModal = ({ isOpen, onClose, onSuccess }: AddDriverModalProps) => 
             setFormData({
                 firstName: '',
                 lastName: '',
-                phoneNumber: '+250 ',
+                phoneNumber: '',
                 licenseType: 'Cat B',
                 licenseExpiry: '',
                 status: 'Idle'
@@ -125,12 +147,23 @@ const AddDriverModal = ({ isOpen, onClose, onSuccess }: AddDriverModalProps) => 
                                 <input
                                     type="tel"
                                     required
+                                    placeholder="e.g. 0788000000"
                                     value={formData.phoneNumber}
-                                    onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                                    className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-mono font-bold"
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, phoneNumber: e.target.value });
+                                        if (phoneError) setPhoneError('');
+                                    }}
+                                    className={`w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border rounded-xl focus:ring-2 outline-none transition-all font-mono font-bold ${phoneError ? 'border-red-500 focus:ring-red-500' : 'border-gray-200 dark:border-gray-700 focus:ring-indigo-500'}`}
                                 />
                             </div>
-                            <p className="text-xs text-gray-500 font-medium">Used for dispatch notifications via SMS/WhatsApp.</p>
+                            {phoneError ? (
+                                <p className="text-xs text-red-600 font-bold flex items-center gap-1">
+                                    <AlertCircle size={12} />
+                                    {phoneError}
+                                </p>
+                            ) : (
+                                <p className="text-xs text-gray-500 font-medium">Strictly 10 digits starting with 078, 079, or 072/073.</p>
+                            )}
                         </div>
 
                         {/* License Category */}
@@ -157,6 +190,7 @@ const AddDriverModal = ({ isOpen, onClose, onSuccess }: AddDriverModalProps) => 
                                 <input
                                     type="date"
                                     required
+                                    min={minExpiryStr}
                                     value={formData.licenseExpiry}
                                     onChange={(e) => setFormData({ ...formData, licenseExpiry: e.target.value })}
                                     className={`w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border rounded-xl focus:ring-2 outline-none transition-all font-medium ${isExpired ? 'border-red-500 focus:ring-red-500' : 'border-gray-200 dark:border-gray-700 focus:ring-indigo-500'}`}

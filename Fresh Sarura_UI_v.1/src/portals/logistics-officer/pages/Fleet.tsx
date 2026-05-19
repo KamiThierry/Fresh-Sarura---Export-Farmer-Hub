@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Users, Truck, Wrench, Search, Filter, Plus, Calendar, Phone, MoreVertical, Eye, Loader2, Download, FileSpreadsheet, FileText, ChevronDown } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Users, Truck, Wrench, Search, Filter, Plus, Calendar, Phone, Eye, Loader2, Download, FileSpreadsheet, FileText, ChevronDown, CheckCircle2, ClipboardList, Trash2, AlertTriangle } from 'lucide-react';
 import AddVehicleModal from '../components/AddVehicleModal';
 import LogMaintenanceModal from '../components/LogMaintenanceModal';
+import ServiceHistoryModal from '../components/ServiceHistoryModal';
 import AddDriverModal from '../components/AddDriverModal';
 import AssignTruckModal from '../components/AssignTruckModal';
 import Pagination from '../../shared/component/Pagination';
@@ -43,6 +45,42 @@ const Fleet = () => {
     const handleOpenAssignTruck = (driver: any) => {
         setSelectedDriverForAssignment(driver);
         setIsAssignTruckOpen(true);
+    };
+
+    const [serviceLogVehicle, setServiceLogVehicle] = useState<any | null>(null);
+    const [serviceLogs, setServiceLogs] = useState<any[]>([]);
+    const [loadingLogs, setLoadingLogs] = useState(false);
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<{ id: string, name: string, type: 'vehicle' | 'driver' } | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setIsDeleting(true);
+        try {
+            const endpoint = deleteTarget.type === 'vehicle' ? `/fleet/vehicles/${deleteTarget.id}` : `/fleet/drivers/${deleteTarget.id}`;
+            await api.delete(endpoint);
+            await fetchData(); // Ensure data is refreshed
+            setDeleteTarget(null);
+        } catch (error) {
+            console.error('Delete failed:', error);
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    const fetchServiceLogs = async (vehicle: any) => {
+        setServiceLogVehicle(vehicle);
+        setIsHistoryOpen(true);
+        setLoadingLogs(true);
+        try {
+            const res = await api.get(`/fleet/vehicles/${vehicle._id}/service-logs`);
+            setServiceLogs(res.data || []);
+        } catch (err) {
+            console.error('Failed to fetch service logs:', err);
+        } finally {
+            setLoadingLogs(false);
+        }
     };
 
     const fetchData = async () => {
@@ -560,16 +598,48 @@ const Fleet = () => {
                                                             </span>
                                                         </td>
                                                         <td className="px-6 py-4 text-right">
-                                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <div className="flex items-center justify-end gap-2">
+                                                                {vehicle.status === 'Maintenance' ? (
+                                                                    /* Vehicle is in maintenance — only action is to restore it */
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            try {
+                                                                                await api.patch(`/fleet/vehicles/${vehicle._id}`, { status: 'Available' });
+                                                                                fetchData();
+                                                                            } catch (err) {
+                                                                                console.error('Failed to update vehicle status:', err);
+                                                                            }
+                                                                        }}
+                                                                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-lg transition-colors border border-emerald-200 dark:border-emerald-800"
+                                                                    >
+                                                                        <CheckCircle2 size={13} />
+                                                                        Mark Available
+                                                                    </button>
+                                                                ) : (
+                                                                    /* Vehicle is Available or On Trip — can log maintenance */
+                                                                    <button
+                                                                        onClick={() => handleOpenMaintenance(vehicle)}
+                                                                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400 rounded-lg transition-colors border border-amber-200 dark:border-amber-800"
+                                                                    >
+                                                                        <Wrench size={13} />
+                                                                        Log Service
+                                                                    </button>
+                                                                )}
+
+                                                                {/* Service history — always visible */}
                                                                 <button
-                                                                    onClick={() => handleOpenMaintenance(vehicle)}
-                                                                    className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                                                                    title="Log Service"
+                                                                    onClick={() => fetchServiceLogs(vehicle)}
+                                                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 rounded-lg transition-colors border border-gray-200 dark:border-gray-600"
                                                                 >
-                                                                    <Wrench size={16} />
+                                                                    <ClipboardList size={13} />
+                                                                    History
                                                                 </button>
-                                                                <button className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Edit">
-                                                                    <MoreVertical size={16} />
+                                                                <button
+                                                                    onClick={() => setDeleteTarget({ id: vehicle._id, name: vehicle.plateNumber, type: 'vehicle' })}
+                                                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors ml-1"
+                                                                    title="Delete Vehicle"
+                                                                >
+                                                                    <Trash2 size={16} />
                                                                 </button>
                                                             </div>
                                                         </td>
@@ -628,6 +698,13 @@ const Fleet = () => {
                                                                 >
                                                                     <Truck size={16} />
                                                                 </button>
+                                                                <button
+                                                                    onClick={() => setDeleteTarget({ id: driver._id, name: `${driver.firstName} ${driver.lastName}`, type: 'driver' })}
+                                                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                                    title="Delete Driver"
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -677,8 +754,67 @@ const Fleet = () => {
                 />
             )}
 
+            <ServiceHistoryModal
+                isOpen={isHistoryOpen}
+                onClose={() => setIsHistoryOpen(false)}
+                vehicle={serviceLogVehicle}
+                logs={serviceLogs}
+                loading={loadingLogs}
+                onLogNew={() => {
+                    setIsHistoryOpen(false);
+                    handleOpenMaintenance(serviceLogVehicle);
+                }}
+            />
+
+            <DeleteConfirmationModal
+                isOpen={!!deleteTarget}
+                onClose={() => setDeleteTarget(null)}
+                onConfirm={handleDelete}
+                title={`Delete ${deleteTarget?.type === 'vehicle' ? 'Vehicle' : 'Driver'}`}
+                message={`Are you sure you want to delete ${deleteTarget?.name}? This action will remove all related data and cannot be undone.`}
+                isDeleting={isDeleting}
+            />
         </div>
     );
 };
 
 export default Fleet;
+
+const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, isDeleting }: any) => {
+    if (!isOpen) return null;
+    return createPortal(
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-md transition-opacity" onClick={onClose} />
+            <div className="relative w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="px-6 py-4 bg-red-50 dark:bg-red-900/10 border-b border-red-100 dark:border-red-900/30">
+                    <h3 className="text-base font-bold text-red-800 dark:text-red-300 flex items-center gap-2">
+                        <AlertTriangle size={18} />
+                        {title}
+                    </h3>
+                </div>
+                <div className="p-6 space-y-4">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                        {message}
+                    </p>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={onClose}
+                            className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={onConfirm}
+                            disabled={isDeleting}
+                            className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                            {isDeleting ? <Loader2 size={16} className="animate-spin" /> : null}
+                            {isDeleting ? 'Deleting...' : 'Confirm Delete'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};

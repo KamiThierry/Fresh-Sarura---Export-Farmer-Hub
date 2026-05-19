@@ -26,13 +26,19 @@ const AssignTruckModal = ({ isOpen, onClose, driver, availableVehicles, onSucces
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { showToast } = useToastContext();
 
-    const isLicenseExpiring = () => {
-        if (!driver.licenseExpiry) return false;
+    const getLicenseStatus = () => {
+        if (!driver.licenseExpiry) return { label: 'Unknown', color: 'text-gray-400', isExpired: false };
         const expiry = new Date(driver.licenseExpiry);
         const today = new Date();
+        const isExpired = expiry < today;
         const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        return diffDays < 30;
+        
+        if (isExpired) return { label: 'Expired', color: 'text-red-600', isExpired: true };
+        if (diffDays < 30) return { label: 'Expiring Soon', color: 'text-amber-600', isExpired: false };
+        return { label: 'Valid', color: 'text-emerald-600', isExpired: false };
     };
+
+    const licenseStatus = getLicenseStatus();
 
     if (!isOpen) return null;
 
@@ -48,11 +54,15 @@ const AssignTruckModal = ({ isOpen, onClose, driver, availableVehicles, onSucces
             onClose();
         } catch (err: any) {
             console.error('Error assigning vehicle:', err);
-            showToast('Assignment Error', err.message || 'Failed to assign vehicle');
+            const message = err.response?.data?.message || err.message || 'Failed to assign vehicle';
+            showToast('Assignment Error', message);
         } finally {
             setIsSubmitting(false);
         }
     };
+
+    const selectedVehicleData = availableVehicles.find(v => v._id === formData.vehicleId);
+    const isAlreadyAssigned = !!(selectedVehicleData as any)?.currentDriver;
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -87,8 +97,8 @@ const AssignTruckModal = ({ isOpen, onClose, driver, availableVehicles, onSucces
                         </div>
                         <div className="text-right">
                             <p className="text-[10px] text-indigo-500 uppercase font-bold tracking-wider">License Status</p>
-                            <p className={`font-bold text-sm ${isLicenseExpiring() ? 'text-amber-600' : 'text-emerald-600'}`}>
-                                {isLicenseExpiring() ? 'Expiring Soon' : 'Valid'}
+                            <p className={`font-bold text-sm ${licenseStatus.color}`}>
+                                {licenseStatus.label}
                             </p>
                         </div>
                     </div>
@@ -109,17 +119,27 @@ const AssignTruckModal = ({ isOpen, onClose, driver, availableVehicles, onSucces
                                     required
                                     value={formData.vehicleId}
                                     onChange={(e) => setFormData({ ...formData, vehicleId: e.target.value })}
-                                    className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer font-bold"
+                                    className={`w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border ${isAlreadyAssigned ? 'border-red-500 ring-2 ring-red-500/20' : 'border-gray-200 dark:border-gray-700'} rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer font-bold`}
                                 >
                                     <option value="" disabled>Select a vehicle...</option>
                                     {availableVehicles.map(vehicle => (
                                         <option key={vehicle._id} value={vehicle._id}>
-                                            {vehicle.plateNumber} ({vehicle.type})
+                                            {vehicle.plateNumber} ({vehicle.type}) {(vehicle as any).currentDriver ? '— Currently Assigned' : ''}
                                         </option>
                                     ))}
                                 </select>
                             </div>
-                            <p className="text-xs text-gray-500 font-medium">Only showing vehicles currently marked as 'Available'.</p>
+                            
+                            {isAlreadyAssigned ? (
+                                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl flex items-start gap-2 border border-red-100 dark:border-red-900/30">
+                                    <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
+                                    <p className="text-xs text-red-600 dark:text-red-400 font-bold">
+                                        This vehicle is already assigned to {(selectedVehicleData as any).currentDriver.firstName} {(selectedVehicleData as any).currentDriver.lastName}. A vehicle can only have one driver.
+                                    </p>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-gray-500 font-medium">Only showing vehicles currently marked as 'Available'.</p>
+                            )}
                         </div>
                     </div>
 
@@ -134,8 +154,8 @@ const AssignTruckModal = ({ isOpen, onClose, driver, availableVehicles, onSucces
                         </button>
                         <button
                             type="submit"
-                            disabled={isSubmitting || !formData.vehicleId}
-                            className={`flex items-center gap-2 px-8 py-2.5 rounded-xl font-bold shadow-lg transition-all ${isSubmitting || !formData.vehicleId ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20 hover:scale-105 active:scale-95'}`}
+                            disabled={isSubmitting || !formData.vehicleId || isAlreadyAssigned}
+                            className={`flex items-center gap-2 px-8 py-2.5 rounded-xl font-bold shadow-lg transition-all ${isSubmitting || !formData.vehicleId || isAlreadyAssigned ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20 hover:scale-105 active:scale-95'}`}
                         >
                             {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle size={18} />}
                             {isSubmitting ? 'Assigning...' : 'Confirm Assignment'}

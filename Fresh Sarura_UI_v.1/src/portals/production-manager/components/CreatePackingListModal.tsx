@@ -80,6 +80,16 @@ const CreatePackingListModal: React.FC<CreatePackingListModalProps> = ({ isOpen,
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const selectedDate = new Date(formData.departureDate);
+
+        if (selectedDate < today) {
+            alert('Departure date cannot be in the past.');
+            return;
+        }
+
         onSubmit({ ...formData, items: selectedStock });
         setSubmitted(true);
     };
@@ -165,7 +175,7 @@ const CreatePackingListModal: React.FC<CreatePackingListModalProps> = ({ isOpen,
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Departure Date</label>
-                                                    <input type="date" name="departureDate" value={formData.departureDate} onChange={handleChange} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-purple-500 outline-none" />
+                                                    <input type="date" name="departureDate" min={new Date().toISOString().split('T')[0]} value={formData.departureDate} onChange={handleChange} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-purple-500 outline-none" />
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-3 gap-4">

@@ -20,6 +20,15 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }: CreateTaskModalProps) =>
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const selectedDate = new Date(dueDate);
+
+        if (selectedDate < today) {
+            alert('Due date cannot be in the past.');
+            return;
+        }
+
         // Construct the new task object
         const newTask = {
             id: Date.now(), // Simple ID generation
@@ -81,6 +90,7 @@ const CreateTaskModal = ({ isOpen, onClose, onSubmit }: CreateTaskModalProps) =>
                                 <input
                                     type="date"
                                     required
+                                    min={new Date().toISOString().split('T')[0]}
                                     value={dueDate}
                                     onChange={(e) => setDueDate(e.target.value)}
                                     className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"

@@ -97,9 +97,49 @@ const ShipmentBuilderModal = ({ isOpen, onClose, onSuccess }: ShipmentBuilderMod
         return destinations.length === 1 ? destinations[0] : 'Multiple Destinations';
     }, [selectedBatches]);
 
+    const isFormInvalid = useMemo(() => {
+        if (selectedBatchIds.length === 0) return true;
+        if (!flightNo || !departureDate || !departureTime || !derivedDestination || !awbNumber || !invNumber) return true;
+        
+        // Past date check
+        const depDate = new Date(departureDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (depDate < today) return true;
+
+        // Flight hours range
+        if (flightHours < 1 || flightHours > 24) return true;
+
+        // Total weight
+        if (totalWeightKg <= 0) return true;
+
+        return false;
+    }, [selectedBatchIds, flightNo, departureDate, departureTime, derivedDestination, flightHours, totalWeightKg, awbNumber, invNumber]);
+
     const handleSubmit = async () => {
         if (selectedBatchIds.length === 0) { setError('Select at least one export batch.'); return; }
-        if (!flightNo || !departureDate || !derivedDestination) { setError('Flight number, destination, and departure date are required.'); return; }
+        if (!flightNo || !departureDate || !departureTime || !derivedDestination || !awbNumber || !invNumber) { 
+            setError('All fields (Flight No, Date, Time, AWB, and Invoice) are required.'); 
+            return; 
+        }
+
+        const depDate = new Date(departureDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (depDate < today) {
+            setError('Departure date cannot be in the past.');
+            return;
+        }
+
+        if (flightHours < 1 || flightHours > 24) {
+            setError('Estimated flight hours must be between 1 and 24.');
+            return;
+        }
+
+        if (totalWeightKg <= 0) {
+            setError('Total shipment weight must be greater than 0 kg.');
+            return;
+        }
 
         setIsSubmitting(true);
         setError(null);
@@ -122,7 +162,7 @@ const ShipmentBuilderModal = ({ isOpen, onClose, onSuccess }: ShipmentBuilderMod
             setSubmitted(true);
             onSuccess();
         } catch (err: any) {
-            setError(err.message || 'Failed to generate packing list.');
+            setError(err.response?.data?.message || err.message || 'Failed to generate packing list.');
         } finally {
             setIsSubmitting(false);
         }
@@ -349,11 +389,11 @@ const ShipmentBuilderModal = ({ isOpen, onClose, onSuccess }: ShipmentBuilderMod
 
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="space-y-1.5">
-                                            <label className="text-xs font-medium text-gray-500">AWB Number</label>
+                                            <label className="text-xs font-medium text-gray-500">AWB Number *</label>
                                             <input type="text" placeholder="123-4567-890" className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" value={awbNumber} onChange={e => setAwbNumber(e.target.value)} />
                                         </div>
                                         <div className="space-y-1.5">
-                                            <label className="text-xs font-medium text-gray-500">Invoice #</label>
+                                            <label className="text-xs font-medium text-gray-500">Invoice # *</label>
                                             <div className="relative">
                                                 <Hash size={16} className="absolute left-3 top-2.5 text-gray-400" />
                                                 <input type="text" className="w-full pl-10 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" value={invNumber} onChange={e => setInvNumber(e.target.value)} />
@@ -366,12 +406,31 @@ const ShipmentBuilderModal = ({ isOpen, onClose, onSuccess }: ShipmentBuilderMod
                                         <textarea className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 resize-none" rows={3} placeholder="Special instructions..." value={notes} onChange={e => setNotes(e.target.value)} />
                                     </div>
 
-                                    {error && (
-                                        <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl flex items-start gap-2 border border-red-100 dark:border-red-900/30">
-                                            <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
-                                            <p className="text-xs text-red-600 dark:text-red-400 font-medium">{error}</p>
-                                        </div>
-                                    )}
+                                    {(() => {
+                                        const depDate = departureDate ? new Date(departureDate) : null;
+                                        const today = new Date();
+                                        today.setHours(0, 0, 0, 0);
+                                        
+                                        const isPastDate = depDate && depDate < today;
+                                        const isInvalidDuration = flightHours < 1 || flightHours > 24;
+                                        const isMissingFields = !flightNo || !departureDate || !departureTime || !awbNumber || !invNumber;
+
+                                        const displayError = error || (
+                                            isPastDate ? 'Departure date cannot be in the past.' :
+                                            isInvalidDuration ? 'Flight duration must be between 1 and 24 hours.' :
+                                            (selectedBatchIds.length > 0 && isMissingFields) ? 'Please complete all details (Flight No, Date, Time, AWB, and Invoice).' :
+                                            null
+                                        );
+
+                                        if (!displayError) return null;
+
+                                        return (
+                                            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl flex items-start gap-2 border border-red-100 dark:border-red-900/30">
+                                                <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
+                                                <p className="text-xs text-red-600 dark:text-red-400 font-medium">{displayError}</p>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -383,10 +442,10 @@ const ShipmentBuilderModal = ({ isOpen, onClose, onSuccess }: ShipmentBuilderMod
                                     <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider">Total Boxes</span>
                                     <span className="text-lg font-bold text-gray-900 dark:text-white">{totalBoxes}</span>
                                 </div>
-                                <div className="text-right">
+                                {/* <div className="text-right">
                                     <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Skids / Pallets</span>
                                     <input type="number" min="0" className="w-16 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-center font-bold focus:ring-2 focus:ring-indigo-500" placeholder="0" value={pallets || ''} onChange={e => setPallets(parseInt(e.target.value) || 0)} />
-                                </div>
+                                </div> */}
                                 <div className="text-right pl-6 border-l border-gray-200 dark:border-gray-700">
                                     <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider">Est. Gross Weight</span>
                                     <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{totalWeightKg.toLocaleString()} kg</span>
@@ -399,11 +458,11 @@ const ShipmentBuilderModal = ({ isOpen, onClose, onSuccess }: ShipmentBuilderMod
                                 </button>
                                 <button
                                     onClick={handleSubmit}
-                                    disabled={isSubmitting || selectedBatchIds.length === 0}
+                                    disabled={isSubmitting || isFormInvalid}
                                     className={`px-6 py-2.5 rounded-lg font-bold text-sm shadow-lg transition-all flex items-center gap-2 ${
-                                        isSubmitting || selectedBatchIds.length === 0
+                                        isSubmitting || isFormInvalid
                                             ? 'bg-gray-300 dark:bg-gray-800 text-gray-500 cursor-not-allowed'
-                                            : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/10'
                                     }`}
                                 >
                                     {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : null}

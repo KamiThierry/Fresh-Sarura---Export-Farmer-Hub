@@ -18,13 +18,25 @@ const AddVehicleModal = ({ isOpen, onClose, onSuccess }: AddVehicleModalProps) =
         status: 'Available',
         nextMaintenanceDate: ''
     });
+    const [plateError, setPlateError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { showToast } = useToastContext();
 
     if (!isOpen) return null;
 
+    const minServiceDate = new Date();
+    minServiceDate.setFullYear(minServiceDate.getFullYear() + 1);
+    const minServiceStr = minServiceDate.toISOString().split('T')[0];
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setPlateError(null);
+
+        if (formData.nextMaintenanceDate && formData.nextMaintenanceDate < minServiceStr) {
+            showToast('Invalid Date', 'Next service date must be at least 1 year in the future.');
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             await api.post('/fleet/vehicles', {
@@ -43,7 +55,14 @@ const AddVehicleModal = ({ isOpen, onClose, onSuccess }: AddVehicleModalProps) =
             });
         } catch (err: any) {
             console.error('Error adding vehicle:', err);
-            showToast('Registration Error', err.message || 'Failed to add vehicle');
+            const message = err.response?.data?.message || err.message || 'Failed to add vehicle';
+            
+            // Check if it's a duplicate plate error
+            if (message.toLowerCase().includes('plate') || message.toLowerCase().includes('exists')) {
+                setPlateError(message);
+            } else {
+                showToast('Registration Error', message);
+            }
         } finally {
             setIsSubmitting(false);
         }
@@ -82,9 +101,22 @@ const AddVehicleModal = ({ isOpen, onClose, onSuccess }: AddVehicleModalProps) =
                                 required
                                 placeholder="e.g. RAB 123 C"
                                 value={formData.plateNumber}
-                                onChange={(e) => setFormData({ ...formData, plateNumber: e.target.value.toUpperCase() })}
-                                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-mono font-bold"
+                                onChange={(e) => {
+                                    setFormData({ ...formData, plateNumber: e.target.value.toUpperCase() });
+                                    setPlateError(null);
+                                }}
+                                className={`w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border rounded-xl focus:ring-2 outline-none transition-all font-mono font-bold ${
+                                    plateError 
+                                        ? 'border-red-500 focus:ring-red-500' 
+                                        : 'border-gray-200 dark:border-gray-700 focus:ring-indigo-500'
+                                }`}
                             />
+                            {plateError && (
+                                <p className="text-xs text-red-600 font-bold flex items-center gap-1.5 animate-pulse">
+                                    <AlertCircle size={14} />
+                                    {plateError}
+                                </p>
+                            )}
                         </div>
 
                         {/* Vehicle Type */}
@@ -139,6 +171,7 @@ const AddVehicleModal = ({ isOpen, onClose, onSuccess }: AddVehicleModalProps) =
                                 <input
                                     type="date"
                                     required
+                                    min={minServiceStr}
                                     value={formData.nextMaintenanceDate}
                                     onChange={(e) => setFormData({ ...formData, nextMaintenanceDate: e.target.value })}
                                     className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all accent-indigo-500 font-medium"

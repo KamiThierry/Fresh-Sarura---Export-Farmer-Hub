@@ -24,24 +24,28 @@ const LogMaintenanceModal = ({ isOpen, onClose, vehicleId, vehiclePlate, onSucce
 
     if (!isOpen) return null;
 
+    const today = new Date().toISOString().split('T')[0];
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (formData.returnDate && formData.returnDate < today) {
+            showToast('Invalid Date', 'Expected return date cannot be in the past.');
+            return;
+        }
+
         setIsSubmitting(true);
         try {
-            // Update vehicle status and set next maintenance date
-            await api.patch(`/fleet/vehicles/${vehicleId}`, {
-                status: formData.markAsMaintenance ? 'Maintenance' : 'Available',
-                nextMaintenanceDate: formData.returnDate
+            await api.post(`/fleet/vehicles/${vehicleId}/service-logs`, {
+                reason: formData.reason,
+                expectedReturnDate: formData.returnDate || null,
+                estimatedCostRwf: formData.cost ? Number(formData.cost) : 0,
+                markAsMaintenance: formData.markAsMaintenance,
             });
-            showToast('Maintenance Logged', `Service record updated for ${vehiclePlate}.`);
+            showToast('Maintenance Logged', `Service record saved for ${vehiclePlate}.`);
             onSuccess();
             onClose();
-            setFormData({
-                reason: '',
-                returnDate: '',
-                cost: '',
-                markAsMaintenance: true
-            });
+            setFormData({ reason: '', returnDate: '', cost: '', markAsMaintenance: true });
         } catch (err: any) {
             console.error('Error logging maintenance:', err);
             showToast('Sync Error', err.message || 'Failed to log maintenance');
@@ -106,6 +110,7 @@ const LogMaintenanceModal = ({ isOpen, onClose, vehicleId, vehiclePlate, onSucce
                             <input
                                 type="date"
                                 required
+                                min={today}
                                 value={formData.returnDate}
                                 onChange={(e) => setFormData({ ...formData, returnDate: e.target.value })}
                                 className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-medium"

@@ -104,11 +104,17 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
         plantingDate.getMonth() === now.getMonth() &&
         plantingDate.getDate() === now.getDate();
 
+    const cropMaturationInfo = getCropMaturation(formData.crop_name);
+    const minDays = cropMaturationInfo ? cropMaturationInfo.min : 30;
+
+    const diffTime = harvestDate && plantingDate ? harvestDate.getTime() - plantingDate.getTime() : 0;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
     const dateErrors = {
         harvestBeforeStart: !!(harvestDate && plantingDate && harvestDate <= plantingDate),
         harvestTooSoon: !!(harvestDate && plantingDate &&
             !(harvestDate <= plantingDate) &&
-            (harvestDate.getTime() - plantingDate.getTime()) < 30 * 24 * 60 * 60 * 1000),
+            diffDays < minDays),
         plantingInPast: !!(plantingDate && plantingDate.getTime() < new Date().setHours(0, 0, 0, 0)),
         plantingTooLate: !!(isToday && now.getHours() >= 20),
     };
@@ -215,13 +221,12 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
         }
         try {
             const maturation = getCropMaturation(formData.crop_name);
-            if (!maturation) {
-                setHarvestHint(null);
-                return;
-            }
-            // Use midpoint of min/max as the suggested harvest date
-            const suggestedDays = Math.round((maturation.min + maturation.max) / 2);
-            const suggestedDate = addDays(formData.planting_date, suggestedDays);
+            const minDaysFallback = maturation ? maturation.min : 30;
+            const suggestedDays = maturation ? Math.round((maturation.min + maturation.max) / 2) : minDaysFallback;
+            
+            const d = new Date(formData.planting_date);
+            d.setUTCDate(d.getUTCDate() + suggestedDays);
+            const suggestedDate = d.toISOString().split('T')[0];
 
             // Only auto-fill if harvest date is empty
             setFormData(prev => ({
@@ -230,7 +235,11 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
             }));
 
             // Safer formatting for hint (DD/MM/YYYY)
-            setHarvestHint(`${maturation.note} — suggested: ${formatDate(suggestedDate)}`);
+            if (maturation) {
+                setHarvestHint(`${maturation.note} — suggested: ${formatDate(suggestedDate)}`);
+            } else {
+                setHarvestHint(`Default minimum 30 days — suggested: ${formatDate(suggestedDate)}`);
+            }
         } catch (err) {
             console.error('Harvest auto-calc failed:', err);
             setHarvestHint(null);
@@ -243,8 +252,8 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
         setFormData(prev => ({
             ...prev,
             [name]: value,
-            // Reset harvest date when crop changes so auto-fill re-triggers
-            ...(name === 'crop_name' ? { expected_harvest_date: '' } : {}),
+            // Reset harvest date when crop or planting date changes so auto-fill re-triggers
+            ...(name === 'crop_name' || name === 'planting_date' ? { expected_harvest_date: '' } : {}),
         }));
     };
 
@@ -419,6 +428,7 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                                 <input
                                     type="date"
                                     name="planting_date"
+                                    min={new Date().toISOString().split('T')[0]}
                                     value={formData.planting_date}
                                     onChange={handleInputChange}
                                     className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-green-500"
@@ -441,6 +451,7 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                                 <input
                                     type="date"
                                     name="expected_harvest_date"
+                                    min={formData.planting_date || new Date().toISOString().split('T')[0]}
                                     value={formData.expected_harvest_date}
                                     onChange={e => {
                                         handleInputChange(e);
@@ -462,7 +473,7 @@ const CreateCropCycleModal = ({ isOpen, onClose, onSubmit }: CreateCropCycleModa
                                 )}
                                 {dateErrors.harvestTooSoon && (
                                     <p className="text-xs text-amber-500 font-medium mt-1 flex items-center gap-1">
-                                        <AlertTriangle size={11} /> Less than 30 days to harvest — is this realistic for {formData.crop_name}?
+                                        <AlertTriangle size={11} /> Less than {getCropMaturation(formData.crop_name)?.min || 30} days to harvest — is this realistic for {formData.crop_name}?
                                         {getCropMaturation(formData.crop_name) && (
                                             <span className="text-gray-400">
                                                 ({getCropMaturation(formData.crop_name)?.note})

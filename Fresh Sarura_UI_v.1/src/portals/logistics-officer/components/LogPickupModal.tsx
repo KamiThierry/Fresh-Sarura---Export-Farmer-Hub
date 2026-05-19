@@ -58,23 +58,39 @@ const LogPickupModal = ({ isOpen, onClose, declaration, onSuccess }: LogPickupMo
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!truckId) {
-            setError('Please select a vehicle');
+        
+        const actualWeight = Number(weight);
+        const estimatedWeight = declaration.weight;
+        const maxAllowed = estimatedWeight * 1.2;
+
+        if (!actualWeight || actualWeight <= 0) {
+            setError('Actual weight must be greater than 0 kg.');
             return;
         }
+
+        if (actualWeight > maxAllowed) {
+            setError(`Collected weight (${actualWeight} kg) exceeds the estimate (${estimatedWeight} kg) by more than 20%. Please verify the data.`);
+            return;
+        }
+
+        if (!truckId) {
+            setError('Please select a dispatching vehicle.');
+            return;
+        }
+
         setIsSubmitting(true);
         setError(null);
 
         try {
             await api.patch(`/harvest-declarations/${declaration.id}/pickup`, {
-                pickedUpWeightKg: Number(weight),
+                pickedUpWeightKg: actualWeight,
                 truckId,
             });
             onSuccess();
             onClose();
         } catch (err: any) {
             console.error('Pickup logging error:', err);
-            setError(err.message || 'Failed to log pickup. Please try again.');
+            setError(err.response?.data?.message || err.message || 'Failed to log pickup. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
@@ -169,15 +185,45 @@ const LogPickupModal = ({ isOpen, onClose, declaration, onSuccess }: LogPickupMo
                                         )}
                                     </select>
                                 </div>
+                                {(() => {
+                                    const selectedVehicle = vehicles.find(v => v._id === truckId);
+                                    if (selectedVehicle?.currentDriver?.licenseExpiry) {
+                                        const expiry = new Date(selectedVehicle.currentDriver.licenseExpiry);
+                                        const isExpired = expiry < new Date();
+                                        if (isExpired) {
+                                            return (
+                                                <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl flex items-start gap-2 border border-amber-100 dark:border-amber-900/30 animate-pulse">
+                                                    <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                                                    <p className="text-[11px] text-amber-700 dark:text-amber-400 font-bold leading-tight">
+                                                        WARNING: {selectedVehicle.currentDriver.firstName}'s driver's license has EXPIRED ({expiry.toLocaleDateString()}). 
+                                                        Proceed with caution or assign another driver.
+                                                    </p>
+                                                </div>
+                                            );
+                                        }
+                                    }
+                                    return null;
+                                })()}
                             </div>
                         </div>
 
-                        {error && (
-                            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl flex items-start gap-2 border border-red-100 dark:border-red-900/30">
-                                <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
-                                <p className="text-xs text-red-600 dark:text-red-400 font-medium">{error}</p>
-                            </div>
-                        )}
+                        {(() => {
+                            const actualWeightNum = Number(weight);
+                            const estimatedWeightNum = declaration.weight;
+                            const isTooHigh = weight && actualWeightNum > estimatedWeightNum * 1.2;
+                            const isTooLow = weight && actualWeightNum <= 0;
+                            
+                            const displayError = error || (isTooHigh ? `Collected weight exceeds the estimate (${estimatedWeightNum} kg) by more than 20%.` : isTooLow ? 'Weight must be greater than 0 kg.' : null);
+
+                            if (!displayError) return null;
+
+                            return (
+                                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl flex items-start gap-2 border border-red-100 dark:border-red-900/30">
+                                    <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
+                                    <p className="text-xs text-red-600 dark:text-red-400 font-medium">{displayError}</p>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     {/* Footer */}
@@ -189,22 +235,31 @@ const LogPickupModal = ({ isOpen, onClose, declaration, onSuccess }: LogPickupMo
                         >
                             Cancel
                         </button>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting || !weight || !truckId}
-                            className={`px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg flex items-center gap-2 transition-all ${
-                                isSubmitting || !weight || !truckId
-                                ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-                                : 'bg-blue-600 hover:bg-blue-500 text-white active:scale-95 shadow-blue-900/20'
-                            }`}
-                        >
-                            {isSubmitting ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <CheckCircle2 size={18} />
-                            )}
-                            {isSubmitting ? 'Logging...' : 'Confirm Pickup'}
-                        </button>
+                        {(() => {
+                            const actualWeightNum = Number(weight);
+                            const estimatedWeightNum = declaration.weight;
+                            const isWeightInvalid = !weight || actualWeightNum <= 0 || actualWeightNum > estimatedWeightNum * 1.2;
+                            const isDisabled = isSubmitting || isWeightInvalid || !truckId;
+
+                            return (
+                                <button
+                                    type="submit"
+                                    disabled={isDisabled}
+                                    className={`px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg flex items-center gap-2 transition-all ${
+                                        isDisabled
+                                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                                        : 'bg-blue-600 hover:bg-blue-500 text-white active:scale-95 shadow-blue-900/20'
+                                    }`}
+                                >
+                                    {isSubmitting ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <CheckCircle2 size={18} />
+                                    )}
+                                    {isSubmitting ? 'Logging...' : 'Confirm Pickup'}
+                                </button>
+                            );
+                        })()}
                     </div>
                 </form>
             </div>
