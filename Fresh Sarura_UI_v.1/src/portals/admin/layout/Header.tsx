@@ -260,7 +260,7 @@ const Header = () => {
                             {initials}
                         </div>
                         <div className="text-left hidden md:block">
-                            <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{user.name}</p>
+                            <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{user.name.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}</p>
                             <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-0.5">{formatRole(user.role)}</p>
                         </div>
                         <ChevronDown size={14} className="text-gray-400 ml-1" />

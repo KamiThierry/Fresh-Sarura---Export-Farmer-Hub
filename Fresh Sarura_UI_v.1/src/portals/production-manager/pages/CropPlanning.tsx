@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
-import { X, Sprout, Plus, AlertTriangle, ChevronRight, AlertCircle } from 'lucide-react';
+import { X, Sprout, Plus, AlertTriangle, ChevronRight, AlertCircle, Download, Wallet, CheckCircle2, Calculator } from 'lucide-react';
 import CreateCropCycleModal from '../components/CreateCropCycleModal';
 import CropCycleDetailModal from '../components/CropCycleDetailModal';
 import BudgetRejectionModal from '../components/BudgetRejectionModal';
 import { useToastContext } from '@/context/ToastContext';
 import { usePMContext } from '@/context/PMContext';
 import { formatDate } from '@/lib/dateUtils';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import logo from '@/assets/sarura_logo_nav.png';
+import { getReportFooterText } from '@/lib/utils';
 
 const CropPlanning = () => {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -127,13 +131,153 @@ const CropPlanning = () => {
             cycleId: cycle.cycleId ?? cycle._id,
             crop: cycle.crop_name,
             landSize: `${cycle.block_size_hectares ?? '—'} Ha`,
-            startDate: formatDate(cycle.start_date),
+            startDate: formatDate(cycle.planting_date || cycle.start_date),
             endDate: formatDate(cycle.expected_harvest_date),
             budget: cycle.total_budget,
             spent: cycle.spent ?? 0,
             yieldGoal: cycle.yield_goal_kg != null ? `${cycle.yield_goal_kg.toLocaleString()} kg` : '—',
         });
     };
+
+    const handleExportPDF = () => {
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const timestamp = new Date().toLocaleString('en-GB', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+
+        // ── 1. Header ──
+        try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch (e) { console.warn('Logo failed'); }
+        doc.setTextColor(21, 128, 61); doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+        doc.text('Fresh Sarura', 28, 19);
+        doc.setTextColor(107, 114, 128); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+        doc.text('Export & Farmer Hub', 28, 23);
+        doc.setFontSize(10); doc.setTextColor(17, 24, 39);
+        doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
+        doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+        doc.setDrawColor(229, 231, 235); doc.line(15, 30, pageWidth - 15, 30);
+
+        // ── 2. Title ──
+        doc.setTextColor(17, 24, 39); doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+        doc.text('CROP PLANNING & BUDGET OVERSIGHT REPORT', 15, 42);
+
+        // ── 3. Summary Section ──
+        const activeCycles = activeCyclesFiltered.length;
+
+        const summaryFields = [
+            { label: 'Total Crop Cycles', value: String(totalCyclesNum) },
+            { label: 'Active Cycles', value: String(activeCycles) },
+            { label: 'Total Budget', value: totalBudgetNum.toLocaleString() + ' Rwf' },
+            { label: 'Total Approved', value: totalApprovedNum.toLocaleString() + ' Rwf' },
+            { label: 'Total Actual Cost', value: totalSpentNum.toLocaleString() + ' Rwf' },
+        ];
+
+        let yPos = 52;
+        doc.setFontSize(9);
+        summaryFields.forEach(field => {
+            doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
+            doc.text(field.label, 15, yPos);
+            doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
+            doc.text(field.value, pageWidth - 15, yPos, { align: 'right' });
+            doc.setDrawColor(243, 244, 246); doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+            yPos += 10;
+        });
+
+        // ── 4. Data Tables ──
+        const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [92, 184, 92] };
+        const commonBodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } };
+        const alternateRowStyles: any = { fillColor: [249, 250, 251] };
+
+        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+        doc.text('CROP CYCLES', 15, yPos + 10);
+
+        autoTable(doc, {
+            startY: yPos + 15,
+            head: [['FARM/SEASON', 'CROP', 'PLANTING', 'HARVEST', 'BUDGET', 'APPROVED', 'SPENT', 'STATUS']],
+            body: filteredCycles.map((c: any) => [
+                `${c.farm_name || c.block_name || 'N/A'}\n${c.season || 'N/A'}`,
+                c.crop_name || c.crop || 'N/A',
+                (c.planting_date || c.start_date) ? formatDate(c.planting_date || c.start_date) : 'N/A',
+                c.expected_harvest_date ? formatDate(c.expected_harvest_date) : 'N/A',
+                (c.total_budget || 0).toLocaleString(),
+                (c.approved || 0).toLocaleString(),
+                (c.spent || 0).toLocaleString(),
+                c.status ? c.status.toUpperCase() : 'N/A'
+            ]),
+            theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+            margin: { left: 15, right: 15 },
+            didParseCell: (data) => {
+                if (data.section === 'body' && data.column.index === 7) {
+                    const s = String(data.cell.raw).toLowerCase();
+                    if (s === 'active') data.cell.styles.textColor = '#16a34a';
+                    else if (s === 'in_progress' || s === 'harvesting') data.cell.styles.textColor = '#d97706';
+                    else if (s === 'completed') data.cell.styles.textColor = '#6b7280';
+                }
+            }
+        });
+
+        // ── 5. System Insights ──
+        let lastY = (doc as any).lastAutoTable?.finalY || yPos;
+        if (lastY > 240) { doc.addPage(); lastY = 20; }
+        doc.setTextColor(17, 24, 39); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+        doc.text('SYSTEM INSIGHTS', 15, lastY + 15);
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(75, 85, 99);
+        doc.text('• This report provides an overview of active and completed crop cycles and budget utilization.', 15, lastY + 25);
+        
+        // ── 6. Footer ──
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
+            doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'bold');
+            doc.text(getReportFooterText(), pageWidth / 2, 280, { align: 'center' });
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+            const footerY = 288;
+            doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
+            doc.setFont('helvetica', 'bold');
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
+        }
+
+        doc.save(`FreshSarura_CropPlanning_${new Date().toISOString().split('T')[0]}.pdf`);
+    };
+
+    const totalCyclesNum = filteredCycles.length;
+    const totalBudgetNum = filteredCycles.reduce((sum: number, c: any) => sum + (c.total_budget || 0), 0);
+    const totalApprovedNum = filteredCycles.reduce((sum: number, c: any) => sum + (c.approved || 0), 0);
+    const totalSpentNum = filteredCycles.reduce((sum: number, c: any) => sum + (c.spent || 0), 0);
+
+    const kpiStats = [
+        {
+            label: 'Total Cycles',
+            value: totalCyclesNum,
+            icon: Sprout,
+            color: 'text-green-600 dark:text-green-400',
+            bg: 'bg-green-100 dark:bg-green-900/30'
+        },
+        {
+            label: 'Total Budget (Rwf)',
+            value: totalBudgetNum.toLocaleString(),
+            icon: Wallet,
+            color: 'text-blue-600 dark:text-blue-400',
+            bg: 'bg-blue-100 dark:bg-blue-900/30'
+        },
+        {
+            label: 'Total Approved (Rwf)',
+            value: totalApprovedNum.toLocaleString(),
+            icon: CheckCircle2,
+            color: 'text-emerald-600 dark:text-emerald-400',
+            bg: 'bg-emerald-100 dark:bg-emerald-900/30'
+        },
+        {
+            label: 'Total Actual Cost (Rwf)',
+            value: totalSpentNum.toLocaleString(),
+            icon: Calculator,
+            color: 'text-amber-600 dark:text-amber-400',
+            bg: 'bg-amber-100 dark:bg-amber-900/30'
+        }
+    ];
 
     return (
         <div className="space-y-8 pb-20">
@@ -144,13 +288,41 @@ const CropPlanning = () => {
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Crop Planning & Budget Oversight</h1>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Allocate farm budgets and monitor spending variances.</p>
                 </div>
-                <button
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="flex items-center justify-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors shadow-lg shadow-green-900/20 font-medium"
-                >
-                    <Plus size={20} />
-                    Start New Crop Cycle
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        onClick={handleExportPDF}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm font-medium"
+                    >
+                        <Download size={17} />
+                        Export Data
+                    </button>
+                    <button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm font-medium"
+                    >
+                        <Plus size={18} />
+                        Start New Crop Cycle
+                    </button>
+                </div>
+            </div>
+
+            {/* KPI Stats Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                {kpiStats.map((stat, index) => (
+                    <div key={index} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{stat.label}</p>
+                                <div className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">
+                                    {stat.value}
+                                </div>
+                            </div>
+                            <div className={`p-3 rounded-lg ${stat.bg}`}>
+                                <stat.icon className={stat.color} size={24} />
+                            </div>
+                        </div>
+                    </div>
+                ))}
             </div>
 
             {/* Derived data for flags */}

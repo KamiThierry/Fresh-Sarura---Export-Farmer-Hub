@@ -139,7 +139,7 @@ const Dashboard = () => {
                         <div className="flex items-center gap-3 mb-2">
                             <Truck className="h-8 w-8 text-green-100" />
                             <h1 className="text-2xl md:text-3xl font-bold">
-                                Welcome back, {user.name.split(' ')[0]}
+                                Welcome back, {user.name.trim().split(' ')[0].charAt(0).toUpperCase() + user.name.trim().split(' ')[0].slice(1).toLowerCase()}
                             </h1>
                         </div>
                         <p className="text-green-100 text-base md:text-lg opacity-90 max-w-2xl">

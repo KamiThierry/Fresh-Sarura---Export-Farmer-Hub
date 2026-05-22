@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { DoorOpen, Plus, RefreshCw, Loader2, Wrench, CheckCircle2, AlertCircle, FlaskConical, Snowflake, Thermometer } from 'lucide-react';
+import { DoorOpen, Plus, RefreshCw, Loader2, Wrench, CheckCircle2, AlertCircle, FlaskConical, Snowflake, Thermometer, Download } from 'lucide-react';
 import { api } from '../../../lib/api';
 import AddRoomModal from '../components/AddRoomModal';
 import RoomRequestsPanel from '../components/RoomRequestsPanel';
@@ -8,6 +8,10 @@ import AssignRoomModal from '../components/AssignRoomModal';
 import { useToastContext } from '@/context/ToastContext';
 import { usePMContext } from '@/context/PMContext';
 import { formatDate } from '@/lib/dateUtils';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import logo from '@/assets/sarura_logo_nav.png';
+import { getReportFooterText } from '@/lib/utils';
 
 type Room = {
     _id: string;
@@ -123,6 +127,111 @@ const RoomManagement = () => {
     const inUse = filteredRooms.filter(r => r.status === 'In Use').length;
     const maintenance = filteredRooms.filter(r => r.status === 'Maintenance').length;
 
+    const handleExportPDF = () => {
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const timestamp = new Date().toLocaleString('en-GB', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+
+        // ── 1. Header ──
+        try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch (e) { console.warn('Logo failed'); }
+        doc.setTextColor(21, 128, 61); doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+        doc.text('Fresh Sarura', 28, 19);
+        doc.setTextColor(107, 114, 128); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+        doc.text('Export & Farmer Hub', 28, 23);
+        doc.setFontSize(10); doc.setTextColor(17, 24, 39);
+        doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
+        doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+        doc.setDrawColor(229, 231, 235); doc.line(15, 30, pageWidth - 15, 30);
+
+        // ── 2. Title ──
+        doc.setTextColor(17, 24, 39); doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+        doc.text('ROOM MANAGEMENT & STORAGE REPORT', 15, 42);
+
+        // ── 3. Summary Section ──
+        const totalRooms = filteredRooms.length;
+        const totalCapacity = filteredRooms.reduce((acc, r) => acc + (r.capacityKg || 0), 0);
+        const currentLoad = filteredRooms.reduce((acc, r) => acc + (r.currentLoadKg || 0), 0);
+
+        const summaryFields = [
+            { label: 'Total Rooms', value: String(totalRooms) },
+            { label: 'Available Rooms', value: String(available) },
+            { label: 'In Use Rooms', value: String(inUse) },
+            { label: 'Maintenance', value: String(maintenance) },
+            { label: 'Total Capacity', value: totalCapacity.toLocaleString() + ' kg' },
+            { label: 'Current Load', value: currentLoad.toLocaleString() + ' kg' },
+        ];
+
+        let yPos = 52;
+        doc.setFontSize(9);
+        summaryFields.forEach(field => {
+            doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
+            doc.text(field.label, 15, yPos);
+            doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
+            doc.text(field.value, pageWidth - 15, yPos, { align: 'right' });
+            doc.setDrawColor(243, 244, 246); doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+            yPos += 10;
+        });
+
+        // ── 4. Data Tables ──
+        const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [92, 184, 92] };
+        const commonBodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } };
+        const alternateRowStyles: any = { fillColor: [249, 250, 251] };
+
+        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+        doc.text('PACKHOUSE ROOMS', 15, yPos + 10);
+
+        autoTable(doc, {
+            startY: yPos + 15,
+            head: [['ROOM NAME', 'TYPE', 'CAPACITY (kg)', 'CURRENT LOAD (kg)', 'REMAINING (kg)', 'STATUS']],
+            body: filteredRooms.map(r => [
+                r.name || 'N/A',
+                r.type || 'N/A',
+                (r.capacityKg || 0).toLocaleString(),
+                (r.currentLoadKg || 0).toLocaleString(),
+                (r.capacityKg - (r.currentLoadKg || 0)).toLocaleString(),
+                r.status ? r.status.toUpperCase() : 'N/A'
+            ]),
+            theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+            margin: { left: 15, right: 15 },
+            didParseCell: (data) => {
+                if (data.section === 'body' && data.column.index === 5) {
+                    const s = String(data.cell.raw).toLowerCase();
+                    if (s === 'available') data.cell.styles.textColor = '#16a34a';
+                    else if (s === 'in use') data.cell.styles.textColor = '#2563eb';
+                    else if (s === 'maintenance') data.cell.styles.textColor = '#d97706';
+                }
+            }
+        });
+
+        // ── 5. System Insights ──
+        let lastY = (doc as any).lastAutoTable?.finalY || yPos;
+        if (lastY > 240) { doc.addPage(); lastY = 20; }
+        doc.setTextColor(17, 24, 39); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+        doc.text('SYSTEM INSIGHTS', 15, lastY + 15);
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(75, 85, 99);
+        doc.text('• This report provides an overview of all packhouse rooms, their capacity, and current utilization.', 15, lastY + 25);
+        
+        // ── 6. Footer ──
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
+            doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'bold');
+            doc.text(getReportFooterText(), pageWidth / 2, 280, { align: 'center' });
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+            const footerY = 288;
+            doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
+            doc.setFont('helvetica', 'bold');
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
+        }
+
+        doc.save(`FreshSarura_RoomManagement_${new Date().toISOString().split('T')[0]}.pdf`);
+    };
+
     return (
         <>
             <div className="p-6 space-y-6">
@@ -138,14 +247,21 @@ const RoomManagement = () => {
                     <div className="flex items-center gap-2">
                         <button
                             onClick={fetchRooms}
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                         >
                             <RefreshCw size={15} /> Refresh
+                        </button>
+                        <button
+                            onClick={handleExportPDF}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm font-medium text-sm"
+                        >
+                            <Download size={17} />
+                            Export Data
                         </button>
                         {tab === 'rooms' && (
                             <button
                                 onClick={() => setIsAddModalOpen(true)}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm"
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm"
                             >
                                 <Plus size={15} /> Add Room
                             </button>

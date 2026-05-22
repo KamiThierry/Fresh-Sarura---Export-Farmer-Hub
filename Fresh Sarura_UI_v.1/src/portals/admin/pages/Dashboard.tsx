@@ -44,7 +44,10 @@ const Dashboard = () => {
         if (userStr) {
             try {
                 const user = JSON.parse(userStr);
-                if (user.name) setUserName(user.name);
+                if (user.name) {
+                    const fn = user.name.trim().split(' ')[0];
+                    setUserName(fn.charAt(0).toUpperCase() + fn.slice(1).toLowerCase());
+                }
             } catch { /* ignore */ }
         }
 

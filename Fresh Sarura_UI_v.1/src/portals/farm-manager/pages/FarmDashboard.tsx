@@ -23,7 +23,8 @@ const FarmDashboard = () => {
 
     // Get farmer name from localStorage user object (set at login)
     const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const farmerName = dashboard?.farmer?.full_name || user?.name || 'Farm Manager';
+    const rawName = dashboard?.farmer?.full_name || user?.name || 'Farm Manager';
+    const farmerName = rawName.trim().split(' ')[0].charAt(0).toUpperCase() + rawName.trim().split(' ')[0].slice(1).toLowerCase();
 
     const activeCycles = cycles.filter((c: any) => {
         const s = (c.status || '').toLowerCase();

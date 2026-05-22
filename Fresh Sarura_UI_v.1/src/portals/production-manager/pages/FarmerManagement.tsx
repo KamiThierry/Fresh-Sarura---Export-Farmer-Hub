@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Search, Filter, Plus, Download,
   Users, UserCheck, Map, MapPin, ChevronDown, FileSpreadsheet, FileText,
-  Pencil, Trash2, Trophy, AlertTriangle
+  Pencil, Trash2, Trophy, AlertTriangle, Ban, CheckCircle2
 } from 'lucide-react';
 import FarmerRegistrationModal from '../components/FarmerRegistrationModal';
 import FarmNetworkMap from '../components/FarmNetworkMap';
@@ -13,6 +13,7 @@ import Pagination from '../../shared/component/Pagination';
 import { useToastContext } from '@/context/ToastContext';
 import { Farmer } from '@/types';
 import { formatDate } from '@/lib/dateUtils';
+import { getReportFooterText } from '@/lib/utils';
 
 
 import { usePMContext } from '@/context/PMContext';
@@ -34,11 +35,11 @@ const FarmerManagement = () => {
   const itemsPerPage = 10;
   const { showToast } = useToastContext();
 
-  const { 
-    farmers, 
+  const {
+    farmers,
     cycles,
-    loading, 
-    refreshFarmers 
+    loading,
+    refreshFarmers
   } = usePMContext();
 
   const [deletingFarmer, setDeletingFarmer] = useState<Farmer | null>(null);
@@ -51,7 +52,7 @@ const FarmerManagement = () => {
         showToast('Delete Failed', 'Could not identify the farmer record ID.');
         return;
       }
-      
+
       await api.delete(`/farmers/${String(farmerId)}`);
       showToast('Farmer Deleted', `The record for ${deletingFarmer.full_name} has been permanently removed.`);
       setDeletingFarmer(null);
@@ -59,6 +60,20 @@ const FarmerManagement = () => {
     } catch (err) {
       console.error('Failed to delete farmer', err);
       showToast('Delete Failed', 'There was an error removing the farmer record.');
+    }
+  };
+
+  const handleToggleStatus = async (farmer: Farmer) => {
+    try {
+      const newStatus = farmer.status === 'Active' ? 'Inactive' : 'Active';
+      const farmerId = farmer._id || (farmer as any).id;
+      if (!farmerId) return;
+      await api.patch(`/farmers/${String(farmerId)}`, { status: newStatus });
+      showToast('Status Updated', `Farmer is now ${newStatus}`);
+      refreshFarmers();
+    } catch (err) {
+      console.error('Failed to update status', err);
+      showToast('Update Failed', 'Could not update farmer status');
     }
   };
 
@@ -119,13 +134,13 @@ const FarmerManagement = () => {
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-500">Loading farmers...</div>;
 
-  // Stats — derived from filteredFarmers so they react to the filter & search
-  const totalHa = filteredFarmers
+  // Stats — always derived from all farmers (unaffected by filters)
+  const totalHa = farmers
     .reduce((sum, f) => sum + (f.farm_size_hectares || 0), 0)
     .toFixed(1);
   const stats = [
-    { label: 'Total Farmers', value: String(filteredFarmers.length), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-    { label: 'Active Suppliers', value: String(filteredFarmers.filter(f => f.status === 'Active').length), icon: UserCheck, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
+    { label: 'Total Farmers', value: String(farmers.length), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+    { label: 'Active Suppliers', value: String(farmers.filter(f => f.status === 'Active').length), icon: UserCheck, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
     { label: 'Total Hectares', value: `${totalHa} Ha`, icon: Map, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
   ];
 
@@ -188,9 +203,9 @@ const FarmerManagement = () => {
   const handleExportPDF = async () => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
-    const timestamp = new Date().toLocaleString('en-GB', { 
-        day: '2-digit', month: 'short', year: 'numeric', 
-        hour: '2-digit', minute: '2-digit' 
+    const timestamp = new Date().toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
     });
     const toTitleCase = (str: string) => str.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
@@ -213,9 +228,9 @@ const FarmerManagement = () => {
     // ── 3. Summary Section ──
     const summaryFields = [
       { label: 'Total Registered Farmers', value: String(filteredFarmers.length) },
-      { label: 'Active Suppliers',        value: String(farmers.filter(f => f.status.toLowerCase() === 'active').length) },
-      { label: 'Total Managed Land',      value: `${totalHa} Ha` },
-      { label: 'Top Supplier Volume',     value: topSuppliers[0]?.totalKg >= 1000 ? `${(topSuppliers[0].totalKg / 1000).toFixed(2)} T` : `${topSuppliers[0]?.totalKg || 0} kg` },
+      { label: 'Active Suppliers', value: String(farmers.filter(f => f.status.toLowerCase() === 'active').length) },
+      { label: 'Total Managed Land', value: `${totalHa} Ha` },
+      { label: 'Top Supplier Volume', value: topSuppliers[0]?.totalKg >= 1000 ? `${(topSuppliers[0].totalKg / 1000).toFixed(2)} T` : `${topSuppliers[0]?.totalKg || 0} kg` },
     ];
 
     let yPos = 52;
@@ -238,7 +253,7 @@ const FarmerManagement = () => {
     const top4 = topSuppliers.slice(0, 4);
     doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
     doc.text('TOP SUPPLIERS BY VOLUME', 15, yPos + 10);
-    
+
     autoTable(doc, {
       startY: yPos + 15,
       head: [['RANK', 'FARMER', 'FARM NAME', 'TOTAL VOLUME']],
@@ -273,10 +288,10 @@ const FarmerManagement = () => {
       theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
       margin: { left: 15, right: 15, bottom: 30 },
       didParseCell: (data) => {
-        if (data.section === 'body' && data.column.index === 5) {
+        if (data.section === 'body' && data.column.index === 7) {
           const s = String(data.cell.raw).toLowerCase();
-          if (s.includes('active'))   data.cell.styles.textColor = [22, 163, 74];
-          if (s.includes('inactive')) data.cell.styles.textColor = [220, 38, 38];
+          if (s === 'active') data.cell.styles.textColor = '#16a34a';
+          else if (s === 'inactive') data.cell.styles.textColor = '#dc2626';
         }
       }
     });
@@ -284,10 +299,10 @@ const FarmerManagement = () => {
     // ── 5. System Insights ──
     let lastY = (doc as any).lastAutoTable?.finalY || yPos;
     if (lastY > 210) { doc.addPage(); lastY = 20; }
-    
+
     doc.setTextColor(17, 24, 39); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
     doc.text('SYSTEM INSIGHTS', 15, lastY + 15);
-    
+
     const activePercent = ((farmers.filter(f => f.status.toLowerCase() === 'active').length / (farmers.length || 1)) * 100).toFixed(1);
     doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'normal');
     doc.text(`• Network Health: ${activePercent}% of the registered farmer network is currently active.`, 15, lastY + 23);
@@ -300,7 +315,7 @@ const FarmerManagement = () => {
       doc.setPage(i);
       doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
       doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'bold');
-      doc.text('This is a report generated by Fresh Sarura. No signature required.', pageWidth / 2, 280, { align: 'center' });
+      doc.text(getReportFooterText(), pageWidth / 2, 280, { align: 'center' });
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
       const footerY = 288;
       doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
@@ -478,7 +493,7 @@ const FarmerManagement = () => {
                   <option value="all">All Status</option>
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
-                  <option value="auditing">Auditing</option>
+                  {/* <option value="auditing">Auditing</option> */}
                 </select>
                 <Filter className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
               </div>
@@ -531,7 +546,7 @@ const FarmerManagement = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                   {filteredFarmers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((farmer) => (
+                  {filteredFarmers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((farmer) => (
                     <tr
                       key={farmer._id}
                       className="hover:bg-green-50 dark:hover:bg-green-900/10 transition-colors cursor-pointer"
@@ -600,6 +615,14 @@ const FarmerManagement = () => {
                             className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                           >
                             <Pencil size={16} />
+                          </button>
+                          {/* Toggle Status */}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleToggleStatus(farmer); }}
+                            title={farmer.status === 'Active' ? 'Mark Inactive' : 'Mark Active'}
+                            className={`p-2 rounded-lg transition-colors ${farmer.status === 'Active' ? 'text-gray-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20' : 'text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'}`}
+                          >
+                            {farmer.status === 'Active' ? <Ban size={16} /> : <CheckCircle2 size={16} />}
                           </button>
                           {/* Delete */}
                           <button

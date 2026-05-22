@@ -1,199 +1,293 @@
-import { useState } from 'react';
-import { User, Bell, Save, Shield, Mail, Smartphone } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import {
+    User, Mail, Shield, Save,
+    Loader2, Phone, Eye, EyeOff
+} from 'lucide-react';
+import { api } from '@/lib/api';
 import { useToastContext } from '@/context/ToastContext';
 
 const Settings = () => {
-    const [activeTab, setActiveTab] = useState<'profile' | 'notifications'>('profile');
+    const [profile, setProfile] = useState({ name: '', email: '', phone: '' });
+    const [profileLoading, setProfileLoading] = useState(true);
+    const [profileSaving, setProfileSaving] = useState(false);
+    const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
+    const [pwSaving, setPwSaving] = useState(false);
+    const [showPw, setShowPw] = useState(false);
     const { showToast } = useToastContext();
 
-    const handleSaveNotification = (msg: string, sub: string) => {
-        showToast(msg, sub);
+    useEffect(() => {
+        setProfileLoading(true);
+        api.get('/auth/me')
+            .then((res: any) => {
+                const u = res.user ?? res.data?.user ?? {};
+                setProfile({
+                    name: u.name || '',
+                    email: u.email || '',
+                    phone: u.phone || '',
+                });
+                const stored = localStorage.getItem('user');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    localStorage.setItem('user', JSON.stringify({
+                        ...parsed, name: u.name, email: u.email
+                    }));
+                }
+            })
+            .catch(() => {
+                const stored = localStorage.getItem('user');
+                if (stored) {
+                    const u = JSON.parse(stored);
+                    setProfile({ name: u.name || '', email: u.email || '', phone: u.phone || '' });
+                }
+            })
+            .finally(() => setProfileLoading(false));
+    }, []);
+
+    const handleSaveProfile = async () => {
+        if (!profile.name.trim()) {
+            showToast('Validation Error', 'Name cannot be empty.');
+            return;
+        }
+        setProfileSaving(true);
+        try {
+            await api.patch('/auth/me', {
+                name: profile.name,
+                email: profile.email,
+                phone: profile.phone
+            });
+            const stored = localStorage.getItem('user');
+            if (stored) {
+                localStorage.setItem('user', JSON.stringify({
+                    ...JSON.parse(stored),
+                    name: profile.name,
+                    email: profile.email
+                }));
+            }
+            showToast('Profile Updated', 'Your profile has been saved successfully.');
+        } catch (err: any) {
+            showToast('Update Failed', err?.response?.data?.message || 'Failed to save profile.');
+        } finally {
+            setProfileSaving(false);
+        }
     };
 
+    const handleChangePassword = async () => {
+        if (!pwForm.currentPassword) {
+            showToast('Validation Error', 'Please enter your current password.');
+            return;
+        }
+        if (pwForm.newPassword.length < 6) {
+            showToast('Password Too Short', 'New password must be at least 6 characters.');
+            return;
+        }
+        if (pwForm.newPassword !== pwForm.confirm) {
+            showToast('Password Mismatch', 'New passwords do not match.');
+            return;
+        }
+        setPwSaving(true);
+        try {
+            await api.patch('/auth/update-password', {
+                currentPassword: pwForm.currentPassword,
+                newPassword: pwForm.newPassword,
+            });
+            setPwForm({ currentPassword: '', newPassword: '', confirm: '' });
+            showToast('Password Changed', 'Your password has been updated successfully.');
+        } catch (err: any) {
+            showToast('Update Failed', err?.response?.data?.message || 'Incorrect current password.');
+        } finally {
+            setPwSaving(false);
+        }
+    };
+
+    const initials = profile.name
+        ? profile.name.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
+        : '—';
+
     return (
-        <div className="space-y-6 pb-20 md:pb-0 relative animate-fade-in">
-            {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Logistics Settings</h1>
-                <p className="text-gray-500 dark:text-gray-400">Manage your profile, notification preferences, and operational defaults.</p>
-            </div>
+        <div className="flex flex-col items-center pb-20 animate-fade-in">
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-
-                {/* Left Column: Menu */}
-                <div className="md:col-span-1 space-y-2">
-                    <button
-                        onClick={() => setActiveTab('profile')}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'profile' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                    >
-                        <User size={18} /> Profile & Security
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('notifications')}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'notifications' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                    >
-                        <Bell size={18} /> Notifications
-                    </button>
-                </div>
-
-                {/* Right Column: Content */}
-                <div className="md:col-span-3">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
-
-                        {activeTab === 'profile' && <ProfilePanel onSave={() => handleSaveNotification('Profile Updated', 'Your changes have been saved successfully.')} />}
-                        {activeTab === 'notifications' && <NotificationsPanel onSave={() => handleSaveNotification('Preferences Saved', 'Notification settings updated.')} />}
-                    </div>
-                </div>
-
-            </div>
-
-        </div>
-    );
-};
-
-// Panel A: Profile & Security
-const ProfilePanel = ({ onSave }: { onSave: () => void }) => {
-    return (
-        <div className="space-y-8 animate-fade-in">
-            {/* Personal Info */}
-            <div className="space-y-4">
+            {/* Page Header */}
+            <div className="w-full max-w-3xl mb-8 flex items-center justify-between">
                 <div>
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Personal Information</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Update your basic profile details.</p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">First Name</label>
-                        <input type="text" defaultValue="Thierry" className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</label>
-                        <input type="text" defaultValue="M." className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Email Address</label>
-                        <input type="email" defaultValue="logistics@freshsarura.com" className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Phone Number</label>
-                        <input type="tel" defaultValue="+250 780389786" className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
-                    </div>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                        Settings & Preferences
+                    </h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Manage your profile and account security.
+                    </p>
                 </div>
             </div>
 
-            <hr className="border-gray-100 dark:border-gray-700" />
+            <div className="w-full max-w-3xl space-y-6">
 
-            {/* Security */}
-            <div className="space-y-4">
-                <div>
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Security</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Manage your password and 2FA settings.</p>
-                </div>
-                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-indigo-100 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg">
-                            <Shield size={20} />
+                {/* ── CARD 1: MY PROFILE ── */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-700/30 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <User size={18} className="text-green-600" />
+                            <h2 className="font-semibold text-gray-900 dark:text-white">My Profile</h2>
                         </div>
-                        <div>
-                            <p className="font-bold text-gray-900 dark:text-white">Two-Factor Authentication (2FA)</p>
-                            <p className="text-xs text-gray-500">Secure your account with SMS codes.</p>
-                        </div>
+                        <button
+                            onClick={handleSaveProfile}
+                            disabled={profileSaving || profileLoading}
+                            className="flex items-center gap-2 px-4 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-60"
+                        >
+                            {profileSaving
+                                ? <Loader2 size={14} className="animate-spin" />
+                                : <Save size={14} />
+                            }
+                            Save Changes
+                        </button>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" defaultChecked />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-500"></div>
-                    </label>
-                </div>
-                <div>
-                    <button className="text-sm font-bold text-indigo-600 hover:text-indigo-500 hover:underline">Change Password</button>
-                </div>
-            </div>
 
-            {/* Action */}
-            <div className="flex justify-end pt-4">
-                <button 
-                    onClick={onSave}
-                    className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 transition-all hover:scale-105 active:scale-95"
-                >
-                    <Save size={18} />
-                    Save Changes
-                </button>
+                    <div className="p-6">
+                        {profileLoading ? (
+                            <div className="flex items-center gap-3 text-gray-400">
+                                <Loader2 size={20} className="animate-spin text-green-600" />
+                                <span className="text-sm">Loading profile...</span>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col md:flex-row gap-8 items-start">
+                                {/* Avatar — display only, no upload */}
+                                <div className="flex flex-col items-center gap-2 flex-shrink-0">
+                                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-xl font-bold shadow-md border-4 border-white dark:border-gray-800">
+                                        {initials}
+                                    </div>
+                                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                                        {profile.name || 'Your Name'}
+                                    </span>
+                                </div>
+
+                                {/* Fields */}
+                                <div className="flex-1 w-full space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                                Full Name
+                                            </label>
+                                            <div className="relative">
+                                                <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                                <input
+                                                    type="text"
+                                                    value={profile.name}
+                                                    onChange={e => setProfile(p => ({ ...p, name: e.target.value }))}
+                                                    className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none dark:text-white"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                                Email Address
+                                            </label>
+                                            <div className="relative">
+                                                <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                                <input
+                                                    type="email"
+                                                    value={profile.email}
+                                                    onChange={e => setProfile(p => ({ ...p, email: e.target.value }))}
+                                                    className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none dark:text-white"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                            Phone
+                                        </label>
+                                        <div className="relative">
+                                            <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <input
+                                                type="tel"
+                                                value={profile.phone}
+                                                onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))}
+                                                placeholder="+250 7XX XXX XXX"
+                                                className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none dark:text-white"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* ── CARD 2: CHANGE PASSWORD ── */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-700/30 flex items-center gap-2">
+                        <Shield size={18} className="text-green-600" />
+                        <h2 className="font-semibold text-gray-900 dark:text-white">Change Password</h2>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {([
+                                { label: 'Current Password', key: 'currentPassword' },
+                                { label: 'New Password',     key: 'newPassword' },
+                                { label: 'Confirm New',      key: 'confirm' },
+                            ] as const).map(({ label, key }) => (
+                                <div key={key} className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                        {label}
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type={showPw ? 'text' : 'password'}
+                                            value={pwForm[key]}
+                                            onChange={e => setPwForm(p => ({ ...p, [key]: e.target.value }))}
+                                            placeholder="••••••••"
+                                            className="w-full pl-3 pr-9 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none dark:text-white"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPw(v => !v)}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                        >
+                                            {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Inline validation hints */}
+                        {pwForm.newPassword && pwForm.newPassword.length < 6 && (
+                            <p className="text-xs text-red-500 font-medium">
+                                Password must be at least 6 characters.
+                            </p>
+                        )}
+                        {pwForm.confirm && pwForm.newPassword !== pwForm.confirm && (
+                            <p className="text-xs text-red-500 font-medium">
+                                Passwords do not match.
+                            </p>
+                        )}
+                        {pwForm.confirm && pwForm.newPassword === pwForm.confirm && pwForm.newPassword.length >= 6 && (
+                            <p className="text-xs text-green-600 font-medium">
+                                Passwords match.
+                            </p>
+                        )}
+
+                        <button
+                            onClick={handleChangePassword}
+                            disabled={
+                                pwSaving ||
+                                !pwForm.currentPassword ||
+                                !pwForm.newPassword ||
+                                pwForm.newPassword !== pwForm.confirm ||
+                                pwForm.newPassword.length < 6
+                            }
+                            className="flex items-center gap-2 px-4 py-2 bg-gray-800 dark:bg-gray-700 text-white rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors disabled:opacity-50"
+                        >
+                            {pwSaving
+                                ? <Loader2 size={15} className="animate-spin" />
+                                : <Shield size={15} />
+                            }
+                            Update Password
+                        </button>
+                    </div>
+                </div>
+
             </div>
         </div>
     );
 };
-
-// Panel B: Notifications
-const NotificationsPanel = ({ onSave }: { onSave: () => void }) => {
-    return (
-        <div className="space-y-6 animate-fade-in">
-            <div>
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Alert Preferences</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Choose how and when you want to be notified.</p>
-            </div>
-
-            <div className="space-y-4">
-                {/* Headers */}
-                <div className="grid grid-cols-12 text-xs font-bold text-gray-400 uppercase tracking-wider pb-2 border-b border-gray-100 dark:border-gray-700">
-                    <div className="col-span-8">Event</div>
-                    <div className="col-span-2 text-center">App</div>
-                    <div className="col-span-2 text-center">Email/SMS</div>
-                </div>
-
-                {/* Event Rows */}
-                <NotificationRow
-                    title="New Harvest Ready"
-                    desc="When Farm Manager submits a pickup request."
-                    app={true}
-                    email={true}
-                />
-                <NotificationRow
-                    title="Truck Breakdown / Maintenance"
-                    desc="Critical items logged in Fleet Manager."
-                    app={true}
-                    email={true}
-                    sms={true}
-                />
-                <NotificationRow
-                    title="Flight Departure / Delay"
-                    desc="Real-time updates on airline schedule."
-                    app={true}
-                    sms={true}
-                />
-                <NotificationRow
-                    title="Driver Magic Link Status"
-                    desc="When a driver opens or completes a task."
-                    app={true}
-                />
-            </div>
-
-            <div className="flex justify-end pt-6 border-t border-gray-100 dark:border-gray-700">
-                <button 
-                    onClick={onSave}
-                    className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 transition-all hover:scale-105 active:scale-95"
-                >
-                    <Save size={18} />
-                    Save Preferences
-                </button>
-            </div>
-        </div>
-    );
-};
-
-const NotificationRow = ({ title, desc, app, email, sms }: { title: string, desc: string, app?: boolean, email?: boolean, sms?: boolean }) => (
-    <div className="grid grid-cols-12 items-center py-2">
-        <div className="col-span-8 pr-4">
-            <p className="font-bold text-gray-900 dark:text-white">{title}</p>
-            <p className="text-xs text-gray-500">{desc}</p>
-        </div>
-        <div className="col-span-2 flex justify-center">
-            {app && <input type="checkbox" defaultChecked className="w-5 h-5 text-indigo-600 rounded bg-gray-100 dark:bg-gray-900 border-gray-300 dark:border-gray-700 focus:ring-indigo-500" />}
-        </div>
-        <div className="col-span-2 flex justify-center gap-2">
-            {email && <Mail size={16} className="text-gray-400" />}
-            {sms && <Smartphone size={16} className="text-gray-400" />}
-        </div>
-    </div>
-);
 
 export default Settings;

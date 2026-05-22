@@ -60,15 +60,17 @@ const Dashboard = ({
                 const userStr = localStorage.getItem('user');
                 if (userStr) {
                     const user = JSON.parse(userStr);
-                    if (user.name) setUserName(user.name);
+                    if (user.name) setUserName(user.name.trim().split(' ')[0].charAt(0).toUpperCase() + user.name.trim().split(' ')[0].slice(1).toLowerCase());
                 }
 
                 // But also fetch from API to be 100% sure it's correct from DB
                 const res = await api.get('/auth/me');
-                if (res.user && res.user.name) {
-                    setUserName(res.user.name);
+                if (res.user?.name) {
+                    const fn = res.user.name.trim().split(' ')[0];
+                    setUserName(fn.charAt(0).toUpperCase() + fn.slice(1).toLowerCase());
                 } else if (res.name) {
-                    setUserName(res.name);
+                    const fn = res.name.trim().split(' ')[0];
+                    setUserName(fn.charAt(0).toUpperCase() + fn.slice(1).toLowerCase());
                 }
             } catch (err) {
                 console.error('Failed to fetch user name:', err);

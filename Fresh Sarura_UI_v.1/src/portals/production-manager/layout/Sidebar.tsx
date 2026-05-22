@@ -3,21 +3,7 @@ import {
     Home, Users, Sprout, Package, ShieldCheck,
     BarChart3, FileCheck, Settings, DoorOpen, LogOut
 } from 'lucide-react';
-import { usePMContext } from '@/context/PMContext';
-
 const Sidebar = () => {
-    const {
-        pendingRequests,
-        pendingRoomRequests,
-        qcDoneBatches,
-    } = usePMContext();
-
-    // Dot conditions — one per relevant nav item
-    const dots: Record<string, boolean> = {
-        '/pm/crop-planning': pendingRequests.length > 0,
-        '/pm/inventory':     (pendingRoomRequests.length > 0) || (qcDoneBatches?.length > 0),
-        '/pm/quality-control': false, // no actionable items here yet
-    };
 
     const navGroups = [
         {
@@ -29,18 +15,18 @@ const Sidebar = () => {
         {
             title: 'Operations',
             items: [
-                { path: '/pm/farmers',         icon: Users,       label: 'Farmer Management' },
-                { path: '/pm/crop-planning',   icon: Sprout,      label: 'Crop Planning' },
-                { path: '/pm/inventory',       icon: Package,     label: 'Inventory & Batches' },
-                { path: '/pm/rooms',           icon: DoorOpen,    label: 'Room Management' },
+                { path: '/pm/farmers', icon: Users, label: 'Farmer Management' },
+                { path: '/pm/crop-planning', icon: Sprout, label: 'Crop Planning' },
+                { path: '/pm/inventory', icon: Package, label: 'Inventory & Batches' },
+                { path: '/pm/rooms', icon: DoorOpen, label: 'Room Management' },
                 { path: '/pm/quality-control', icon: ShieldCheck, label: 'QC Insights' },
             ]
         },
         {
             title: 'Insights',
             items: [
-                { path: '/pm/analytics',     icon: BarChart3, label: 'Analytics & Reporting' },
-                { path: '/pm/traceability',  icon: FileCheck, label: 'Traceability' },
+                { path: '/pm/analytics', icon: BarChart3, label: 'Analytics & Reporting' },
+                { path: '/pm/traceability', icon: FileCheck, label: 'Traceability' },
             ]
         },
         {
@@ -52,7 +38,7 @@ const Sidebar = () => {
     ];
 
     const bottomGroup = navGroups.find(g => g.title === 'System');
-    const mainGroups  = navGroups.filter(g => g.title !== 'System');
+    const mainGroups = navGroups.filter(g => g.title !== 'System');
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -61,10 +47,9 @@ const Sidebar = () => {
     };
 
     const linkClass = ({ isActive }: { isActive: boolean }) =>
-        `w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-            isActive
-                ? 'bg-[#5cb85c] text-white shadow-lg shadow-green-900/10'
-                : 'text-gray-500 hover:bg-gray-100/50 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'
+        `w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 ${isActive
+            ? 'bg-[#5cb85c] text-white shadow-lg shadow-green-900/10'
+            : 'text-gray-500 hover:bg-gray-100/50 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'
         }`;
 
     return (
@@ -86,18 +71,10 @@ const Sidebar = () => {
                                     end={item.path === '/pm'}
                                     className={linkClass}
                                 >
-                                    {({ isActive }) => (
-                                        <>
-                                            {/* Icon wrapper with dot */}
-                                            <div className="relative flex-shrink-0">
-                                                <item.icon size={18} strokeWidth={2} />
-                                                {dots[item.path] && !isActive && (
-                                                    <span className="absolute -top-1 -right-1.5 w-2 h-2 bg-[#5cb85c] rounded-full ring-2 ring-white dark:ring-gray-900" />
-                                                )}
-                                            </div>
-                                            <span className="font-medium text-sm">{item.label}</span>
-                                        </>
-                                    )}
+                                    <div className="relative flex-shrink-0">
+                                        <item.icon size={18} strokeWidth={2} />
+                                    </div>
+                                    <span className="font-medium text-sm">{item.label}</span>
                                 </NavLink>
                             ))}
                         </div>
@@ -120,7 +97,7 @@ const Sidebar = () => {
                                 <span className="font-medium text-sm">{item.label}</span>
                             </NavLink>
                         ))}
-                        <button 
+                        <button
                             onClick={handleLogout}
                             className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:text-gray-400 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                         >

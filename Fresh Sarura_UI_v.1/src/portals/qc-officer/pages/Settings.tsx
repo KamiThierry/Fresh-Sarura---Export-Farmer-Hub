@@ -1,197 +1,291 @@
-import { useState } from 'react';
-import { User, Bell, Shield, Globe, Moon, Save, Smartphone } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import {
+    User, Mail, Shield, Save,
+    Loader2, Phone, Eye, EyeOff
+} from 'lucide-react';
+import { api } from '@/lib/api';
 import { useToastContext } from '@/context/ToastContext';
 
 const Settings = () => {
-    const [profile, setProfile] = useState({ name: 'QC Inspector', phone: '+250 788 000 100' });
-    const [isEditing, setIsEditing] = useState(false);
-
-    const [preferences, setPreferences] = useState({
-        language: 'English',
-        darkMode: false,
-    });
-
-    const [notifications, setNotifications] = useState({
-        newIntakeAlert: true,
-        qcReminders: true,
-        expiryAlerts: true,
-        push: true,
-        sms: false,
-    });
+    const [profile, setProfile] = useState({ name: '', email: '', phone: '' });
+    const [profileLoading, setProfileLoading] = useState(true);
+    const [profileSaving, setProfileSaving] = useState(false);
+    const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
+    const [pwSaving, setPwSaving] = useState(false);
+    const [showPw, setShowPw] = useState(false);
     const { showToast } = useToastContext();
 
+    useEffect(() => {
+        setProfileLoading(true);
+        api.get('/auth/me')
+            .then((res: any) => {
+                const u = res.user ?? res.data?.user ?? {};
+                setProfile({
+                    name: u.name || '',
+                    email: u.email || '',
+                    phone: u.phone || '',
+                });
+                const stored = localStorage.getItem('user');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    localStorage.setItem('user', JSON.stringify({
+                        ...parsed, name: u.name, email: u.email
+                    }));
+                }
+            })
+            .catch(() => {
+                const stored = localStorage.getItem('user');
+                if (stored) {
+                    const u = JSON.parse(stored);
+                    setProfile({ name: u.name || '', email: u.email || '', phone: u.phone || '' });
+                }
+            })
+            .finally(() => setProfileLoading(false));
+    }, []);
+
+    const handleSaveProfile = async () => {
+        if (!profile.name.trim()) {
+            showToast('Validation Error', 'Name cannot be empty.');
+            return;
+        }
+        setProfileSaving(true);
+        try {
+            await api.patch('/auth/me', {
+                name: profile.name,
+                email: profile.email,
+                phone: profile.phone
+            });
+            const stored = localStorage.getItem('user');
+            if (stored) {
+                localStorage.setItem('user', JSON.stringify({
+                    ...JSON.parse(stored),
+                    name: profile.name,
+                    email: profile.email
+                }));
+            }
+            showToast('Profile Updated', 'Your profile has been saved successfully.');
+        } catch (err: any) {
+            showToast('Update Failed', err?.response?.data?.message || 'Failed to save profile.');
+        } finally {
+            setProfileSaving(false);
+        }
+    };
+
+    const handleChangePassword = async () => {
+        if (!pwForm.currentPassword) {
+            showToast('Validation Error', 'Please enter your current password.');
+            return;
+        }
+        if (pwForm.newPassword.length < 6) {
+            showToast('Password Too Short', 'New password must be at least 6 characters.');
+            return;
+        }
+        if (pwForm.newPassword !== pwForm.confirm) {
+            showToast('Password Mismatch', 'New passwords do not match.');
+            return;
+        }
+        setPwSaving(true);
+        try {
+            await api.patch('/auth/update-password', {
+                currentPassword: pwForm.currentPassword,
+                newPassword: pwForm.newPassword,
+            });
+            setPwForm({ currentPassword: '', newPassword: '', confirm: '' });
+            showToast('Password Changed', 'Your password has been updated successfully.');
+        } catch (err: any) {
+            showToast('Update Failed', err?.response?.data?.message || 'Incorrect current password.');
+        } finally {
+            setPwSaving(false);
+        }
+    };
+
+    const initials = profile.name
+        ? profile.name.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
+        : '—';
+
     return (
-        <div className="p-6 space-y-6">
-            {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">Manage your QC Officer profile and notification preferences.</p>
+        <div className="flex flex-col items-center pb-20 animate-fade-in">
+
+            {/* Page Header */}
+            <div className="w-full max-w-3xl mb-8 flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                        Settings & Preferences
+                    </h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Manage your profile and account security.
+                    </p>
+                </div>
             </div>
 
-            {/* Section 1: Profile */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border-theme shadow-sm p-6 flex flex-col md:flex-row items-start gap-6">
-                <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-700 dark:text-green-400 text-2xl font-bold shrink-0">
-                    QC
-                </div>
-                <div className="flex-1 w-full space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Full Name</label>
-                            <div className="relative">
-                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                <input
-                                    type="text"
-                                    value={profile.name}
-                                    onChange={e => { setProfile({ ...profile, name: e.target.value }); setIsEditing(true); }}
-                                    className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
-                                />
-                            </div>
+            <div className="w-full max-w-3xl space-y-6">
+
+                {/* ── CARD 1: MY PROFILE ── */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-700/30 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <User size={18} className="text-green-600" />
+                            <h2 className="font-semibold text-gray-900 dark:text-white">My Profile</h2>
                         </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Phone Number</label>
-                            <div className="relative">
-                                <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                <input
-                                    type="tel"
-                                    value={profile.phone}
-                                    onChange={e => { setProfile({ ...profile, phone: e.target.value }); setIsEditing(true); }}
-                                    className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 border border-green-100 dark:border-green-900/30">
-                            QC Officer – Packhouse Floor
-                        </span>
                         <button
-                            onClick={() => {
-                                setIsEditing(false);
-                                showToast("Profile Updated", "Your settings have been saved successfully.");
-                            }}
-                            disabled={!isEditing}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${isEditing
-                                ? 'bg-green-600 text-white hover:bg-green-700 shadow-md'
-                                : 'bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-700/50 dark:text-gray-500'
-                                }`}
+                            onClick={handleSaveProfile}
+                            disabled={profileSaving || profileLoading}
+                            className="flex items-center gap-2 px-4 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-60"
                         >
-                            <Save size={16} /> Save Changes
+                            {profileSaving
+                                ? <Loader2 size={14} className="animate-spin" />
+                                : <Save size={14} />
+                            }
+                            Save Changes
                         </button>
                     </div>
-                </div>
-            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Section 2: App Preferences */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl border-theme shadow-sm p-6">
-                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <Globe size={18} className="text-blue-500" /> App Preferences
-                    </h3>
-                    <div className="space-y-4">
-                        <div className="bg-gray-50 dark:bg-gray-900/30 rounded-lg p-4 space-y-3">
-                            <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1">Language</label>
-                                <select
-                                    value={preferences.language}
-                                    onChange={e => setPreferences({ ...preferences, language: e.target.value })}
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                                >
-                                    <option>English</option>
-                                    <option>Kinyarwanda</option>
-                                    <option>Français</option>
-                                </select>
+                    <div className="p-6">
+                        {profileLoading ? (
+                            <div className="flex items-center gap-3 text-gray-400">
+                                <Loader2 size={20} className="animate-spin text-green-600" />
+                                <span className="text-sm">Loading profile...</span>
                             </div>
-                            <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-600 dark:text-gray-400">Timezone</span>
-                                <span className="font-medium text-gray-900 dark:text-white">Central Africa Time (CAT)</span>
-                            </div>
-                        </div>
+                        ) : (
+                            <div className="flex flex-col md:flex-row gap-8 items-start">
+                                {/* Avatar — display only, no upload */}
+                                <div className="flex flex-col items-center gap-2 flex-shrink-0">
+                                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-xl font-bold shadow-md border-4 border-white dark:border-gray-800">
+                                        {initials}
+                                    </div>
+                                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                                        {profile.name || 'Your Name'}
+                                    </span>
+                                </div>
 
-                        {/* Dark Mode Toggle */}
-                        <div
-                            className="flex items-center justify-between p-3 border border-gray-100 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors cursor-pointer"
-                            onClick={() => setPreferences({ ...preferences, darkMode: !preferences.darkMode })}
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-full ${preferences.darkMode ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-500'}`}>
-                                    <Moon size={18} />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-medium text-gray-900 dark:text-white">Dark Mode</p>
-                                    <p className="text-xs text-gray-500">Easier on the eyes at night</p>
+                                {/* Fields */}
+                                <div className="flex-1 w-full space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                                Full Name
+                                            </label>
+                                            <div className="relative">
+                                                <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                                <input
+                                                    type="text"
+                                                    value={profile.name}
+                                                    onChange={e => setProfile(p => ({ ...p, name: e.target.value }))}
+                                                    className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none dark:text-white"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                                Email Address
+                                            </label>
+                                            <div className="relative">
+                                                <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                                <input
+                                                    type="email"
+                                                    value={profile.email}
+                                                    onChange={e => setProfile(p => ({ ...p, email: e.target.value }))}
+                                                    className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none dark:text-white"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                            Phone
+                                        </label>
+                                        <div className="relative">
+                                            <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <input
+                                                type="tel"
+                                                value={profile.phone}
+                                                onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))}
+                                                placeholder="+250 7XX XXX XXX"
+                                                className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none dark:text-white"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div className={`w-11 h-6 rounded-full relative transition-colors ${preferences.darkMode ? 'bg-purple-600' : 'bg-gray-200'}`}>
-                                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${preferences.darkMode ? 'left-6' : 'left-1'}`}></div>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 </div>
 
-                {/* Section 3: Notifications */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl border-theme shadow-sm p-6">
-                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <Bell size={18} className="text-orange-500" /> Alert Preferences
-                    </h3>
-                    <div className="space-y-4">
-                        <div className="space-y-3">
-                            {[
-                                { key: 'newIntakeAlert', label: 'New Intake Arrival', desc: 'Alert when a truck arrives for receiving' },
-                                { key: 'qcReminders', label: 'QC Inspection Due', desc: 'Remind me when batches need review' },
-                                { key: 'expiryAlerts', label: 'Cold Room Expiry', desc: 'Alert when stock is within 2 days of expiry' },
-                            ].map(item => (
-                                <div key={item.key} className="flex items-center justify-between">
-                                    <div className="pr-4">
-                                        <p className="text-sm font-medium text-gray-900 dark:text-white">{item.label}</p>
-                                        <p className="text-xs text-gray-500">{item.desc}</p>
-                                    </div>
-                                    <div
-                                        className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${notifications[item.key as keyof typeof notifications] ? 'bg-green-600' : 'bg-gray-200'}`}
-                                        onClick={() => setNotifications({ ...notifications, [item.key]: !notifications[item.key as keyof typeof notifications] })}
-                                    >
-                                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${notifications[item.key as keyof typeof notifications] ? 'left-6' : 'left-1'}`}></div>
+                {/* ── CARD 2: CHANGE PASSWORD ── */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-700/30 flex items-center gap-2">
+                        <Shield size={18} className="text-green-600" />
+                        <h2 className="font-semibold text-gray-900 dark:text-white">Change Password</h2>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {([
+                                { label: 'Current Password', key: 'currentPassword' },
+                                { label: 'New Password',     key: 'newPassword' },
+                                { label: 'Confirm New',      key: 'confirm' },
+                            ] as const).map(({ label, key }) => (
+                                <div key={key} className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                        {label}
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type={showPw ? 'text' : 'password'}
+                                            value={pwForm[key]}
+                                            onChange={e => setPwForm(p => ({ ...p, [key]: e.target.value }))}
+                                            placeholder="••••••••"
+                                            className="w-full pl-3 pr-9 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none dark:text-white"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPw(v => !v)}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                        >
+                                            {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                                        </button>
                                     </div>
                                 </div>
                             ))}
                         </div>
 
-                        <div className="h-px bg-gray-100 dark:bg-gray-700"></div>
+                        {/* Inline validation hints */}
+                        {pwForm.newPassword && pwForm.newPassword.length < 6 && (
+                            <p className="text-xs text-red-500 font-medium">
+                                Password must be at least 6 characters.
+                            </p>
+                        )}
+                        {pwForm.confirm && pwForm.newPassword !== pwForm.confirm && (
+                            <p className="text-xs text-red-500 font-medium">
+                                Passwords do not match.
+                            </p>
+                        )}
+                        {pwForm.confirm && pwForm.newPassword === pwForm.confirm && pwForm.newPassword.length >= 6 && (
+                            <p className="text-xs text-green-600 font-medium">
+                                Passwords match.
+                            </p>
+                        )}
 
-                        <div>
-                            <p className="text-xs font-bold text-gray-400 uppercase mb-3">Notification Channels</p>
-                            <div className="flex gap-4">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" checked={notifications.push} onChange={() => setNotifications({ ...notifications, push: !notifications.push })} className="rounded text-green-600 focus:ring-green-500" />
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">Push</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" checked={notifications.sms} onChange={() => setNotifications({ ...notifications, sms: !notifications.sms })} className="rounded text-green-600 focus:ring-green-500" />
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">SMS</span>
-                                </label>
-                            </div>
-                        </div>
+                        <button
+                            onClick={handleChangePassword}
+                            disabled={
+                                pwSaving ||
+                                !pwForm.currentPassword ||
+                                !pwForm.newPassword ||
+                                pwForm.newPassword !== pwForm.confirm ||
+                                pwForm.newPassword.length < 6
+                            }
+                            className="flex items-center gap-2 px-4 py-2 bg-gray-800 dark:bg-gray-700 text-white rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors disabled:opacity-50"
+                        >
+                            {pwSaving
+                                ? <Loader2 size={15} className="animate-spin" />
+                                : <Shield size={15} />
+                            }
+                            Update Password
+                        </button>
                     </div>
                 </div>
-            </div>
 
-            {/* Section 4: Security */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border-theme shadow-sm p-6">
-                <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <Shield size={18} className="text-indigo-500" /> Security
-                </h3>
-                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl max-w-lg">
-                    <div>
-                        <p className="font-bold text-gray-900 dark:text-white text-sm">Two-Factor Authentication (2FA)</p>
-                        <p className="text-xs text-gray-500">Secure your account with SMS codes.</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" defaultChecked />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-500"></div>
-                    </label>
-                </div>
-                <button className="mt-4 text-sm font-bold text-indigo-600 hover:text-indigo-500 hover:underline">Change Password</button>
             </div>
-
         </div>
     );
 };

@@ -29,7 +29,7 @@ interface FarmPin {
 
 const STATUS_LEGEND = [
     { color: '#22c55e', label: 'Active',   sub: 'Supplying produce' },
-    { color: '#f59e0b', label: 'Auditing', sub: 'Under inspection' },
+    // { color: '#f59e0b', label: 'Auditing', sub: 'Under inspection' },
     { color: '#ef4444', label: 'Inactive', sub: 'Not supplying' },
 ];
 

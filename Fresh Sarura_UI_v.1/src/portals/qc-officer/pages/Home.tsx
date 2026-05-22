@@ -209,7 +209,7 @@ const Home = () => {
                 <div className="relative overflow-hidden rounded-2xl bg-[#5cb85c] p-8 text-white shadow-lg">
                     <div className="relative z-10">
                         <h1 className="text-3xl font-bold mb-1">
-                            Welcome back, {user.name.split(' ')[0]}.
+                            Welcome back, {user.name.trim().split(' ')[0].charAt(0).toUpperCase() + user.name.trim().split(' ')[0].slice(1).toLowerCase()}.
                         </h1>
                         <p className="text-green-100 text-base opacity-90">
                             Monitor today's intake, pending inspections, and packhouse floor status.
