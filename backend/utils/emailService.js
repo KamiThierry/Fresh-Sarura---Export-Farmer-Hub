@@ -249,3 +249,40 @@ export const sendContactReplyEmail = async ({ toName, toEmail, inquiryType, orig
         throw error;
     }
 };
+
+export const sendOtpEmail = async ({ email, userName, otp }) => {
+    const mailOptions = {
+        from: `"FreshSarura Security" <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: 'Your FreshSarura Login Code',
+        html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; padding: 20px; border: 1px solid #e5e7eb; border-radius: 16px;">
+          <div style="padding: 8px 12px;">
+            <h2 style="color: #065f46; font-size: 20px; margin: 0 0 12px 0;">Hello, ${userName}</h2>
+            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 24px 0;">
+              Use the verification code below to complete your login. It expires in <strong>10 minutes</strong>.
+            </p>
+            <div style="background: #f0fdf4; border: 1px solid #d1fae5; border-radius: 12px; padding: 32px; text-align: center; margin-bottom: 24px;">
+              <p style="color: #065f46; font-size: 36px; font-weight: bold; letter-spacing: 12px; margin: 0;">${otp}</p>
+            </div>
+            <p style="color: #6b7280; font-size: 13px; text-align: center; margin: 0;">
+              If you did not attempt to log in, please ignore this email or contact your administrator.
+            </p>
+          </div>
+          <div style="text-align: center; padding: 24px 16px 8px 16px; border-top: 1px solid #f3f4f6; margin-top: 20px;">
+            <p style="color: #9ca3af; font-size: 11px; margin: 0; line-height: 1.6;">
+              <strong>Fresh Sarura</strong> · Export & Farmer Hub · Rwanda
+            </p>
+          </div>
+        </div>
+        `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        logger.info(`OTP email sent to: ${email}`);
+    } catch (error) {
+        logger.error(`Failed to send OTP email to ${email}: ${error.message}`);
+        throw error;
+    }
+};

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { DoorOpen, Search, Bell, LogOut, Loader2, ChevronDown } from 'lucide-react';
+import { DoorOpen, Search, Bell, Loader2, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import NotificationsModal from '../../shared/component/NotificationsModal';
@@ -76,11 +76,6 @@ const Header = () => {
         return () => clearInterval(interval);
     }, []);
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        navigate('/login');
-    };
 
     const formatRole = (role: string) => {
         return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -223,14 +218,6 @@ const Header = () => {
                         </div>
                         <ChevronDown size={14} className="text-gray-400 ml-1" />
                     </div>
-                    {/* Separate logout button */}
-                    <button
-                        onClick={handleLogout}
-                        title="Sign out"
-                        className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
-                    >
-                        <LogOut size={16} />
-                    </button>
                 </div>
             </div>
 

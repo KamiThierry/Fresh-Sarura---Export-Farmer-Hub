@@ -364,11 +364,8 @@ const CropCycleDetailModal = ({
     doc.line(15, 30, pageWidth - 15, 30);
 
     // 2. Report Title & Cycle Identity
-    doc.setTextColor(17, 24, 39);
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-    doc.text('CROP PRODUCTION REPORT', 15, 42);
-    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-    doc.text(`Internal ID: ${displayCycleId}`, 15, 47);
+    doc.setTextColor(17, 24, 39); doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+    doc.text(`CROP PRODUCTION REPORT - ${displayCycleId}`, 15, 42);
 
     // 3. Overview Summary Section
     const summaryFields = [
@@ -392,8 +389,8 @@ const CropCycleDetailModal = ({
       yPos += 10;
     });
 
-    const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [21, 128, 61] };
-    const commonBodyStyles: any = { fontSize: 8, textColor: [17, 24, 39], cellPadding: { top: 4, bottom: 4, left: 3, right: 3 } };
+    const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [92, 184, 92] };
+    const commonBodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } };
     const alternateRowStyles: any = { fillColor: [249, 250, 251] };
 
     // 4. Financial Performance Table
@@ -430,18 +427,18 @@ const CropCycleDetailModal = ({
 
       autoTable(doc, {
         startY: yPos + 5,
-        head: [['METRIC', 'PROJECTED', isClosed ? 'ACTUAL' : '—']],
+        head: [['METRIC', 'PROJECTED', isClosed ? 'ACTUAL' : 'CURRENT (TO DATE)']],
         body: [
-          ['Yield (kg)',         `${yieldGoalKg.toLocaleString()} kg`,  isClosed && finalYieldKg ? `${finalYieldKg.toLocaleString()} kg` : '—'],
+          ['Yield (kg)',         `${fmt(yieldGoalKg)} kg`,              `${fmt(finalYieldKg)} kg`],
           ['Selling Price',      `${fmt(pricePerKg)} Rwf/kg`,           `${fmt(pricePerKg)} Rwf/kg`],
-          ['Revenue',            `${fmt(projRevenue)} Rwf`,             isClosed && finalYieldKg ? `${fmt(actualRevenue)} Rwf` : '—'],
-          ['Production Cost',    `${fmt(displayBudget)} Rwf`,           isClosed ? `${fmt(totalSpent)} Rwf` : '—'],
-          ['Profit / Loss',      `${projProfit >= 0 ? '+' : ''}${fmt(projProfit)} Rwf`, isClosed && finalYieldKg ? `${actualProfit >= 0 ? '+' : ''}${fmt(actualProfit)} Rwf` : '—'],
-          ['Profit Margin',      `${projMargin.toFixed(1)}%`,           isClosed && finalYieldKg ? `${actualMargin.toFixed(1)}%` : '—'],
-          ['Cost per kg',        `${fmt(projCostPerKg)} Rwf`,           isClosed && finalYieldKg ? `${fmt(actualCostPerKg)} Rwf` : '—'],
+          ['Revenue',            `${fmt(projRevenue)} Rwf`,             `${fmt(actualRevenue)} Rwf`],
+          ['Production Cost',    `${fmt(displayBudget)} Rwf`,           `${fmt(totalSpent)} Rwf`],
+          ['Profit / Loss',      `${projProfit >= 0 ? '+' : ''}${fmt(projProfit)} Rwf`, `${actualProfit >= 0 ? '+' : ''}${fmt(actualProfit)} Rwf`],
+          ['Profit Margin',      `${projMargin.toFixed(1)}%`,           `${actualMargin.toFixed(1)}%`],
+          ['Cost per kg',        `${fmt(projCostPerKg)} Rwf`,           `${fmt(actualCostPerKg)} Rwf`],
         ],
         theme: 'striped',
-        headStyles: { ...commonHeadStyles, fillColor: [124, 58, 237] }, // Purple for P&L
+        headStyles: commonHeadStyles,
         bodyStyles: commonBodyStyles,
         alternateRowStyles,
         margin: { left: 15, right: 15 },
@@ -478,7 +475,7 @@ const CropCycleDetailModal = ({
           `${(r.totalRequestedRwf || 0).toLocaleString()} Rwf`,
           toTitleCase(r.approvalStatus)
         ]),
-        theme: 'striped', headStyles: { ...commonHeadStyles, fillColor: [37, 99, 235] }, // Blue for log
+        theme: 'striped', headStyles: commonHeadStyles,
         bodyStyles: commonBodyStyles, alternateRowStyles,
         margin: { left: 15, right: 15, bottom: 30 },
       });

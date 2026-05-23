@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Truck, PackageCheck, Clock, CheckCircle2, Loader2, RefreshCw, Search, Filter, ChevronDown, Users, Download, FileSpreadsheet, FileText } from 'lucide-react';
+import { Truck, PackageCheck, Clock, CheckCircle2, Loader2, RefreshCw, Search, Filter, ChevronDown, Users, Download, FileSpreadsheet, FileText, Calendar } from 'lucide-react';
 import { api } from '../../../lib/api';
 import LogPickupModal from '../components/LogPickupModal';
 import { useToastContext } from '@/context/ToastContext';
@@ -33,7 +33,12 @@ const PendingPickups = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'PickedUp'>('All');
   const [farmerFilter, setFarmerFilter] = useState('All');
-  const [dateFilter, setDateFilter] = useState('All');
+  const [startDate, setStartDate] = useState(() => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 3); // Default to last 3 months
+      return d.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [selectedDeclaration, setSelectedDeclaration] = useState<Declaration | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { showToast } = useToastContext();
@@ -65,29 +70,16 @@ const PendingPickups = () => {
     const matchFarmer = farmerFilter === 'All' || name === farmerFilter;
 
     let matchDate = true;
-    if (dateFilter !== 'All') {
-      const createdAt = new Date(d.createdAt);
-      const now = new Date();
-      if (dateFilter === 'Week') {
-        const weekAgo = new Date();
-        weekAgo.setDate(now.getDate() - 7);
-        matchDate = createdAt >= weekAgo;
-      } else if (dateFilter === 'Month') {
-        const monthAgo = new Date();
-        monthAgo.setMonth(now.getMonth() - 1);
-        matchDate = createdAt >= monthAgo;
-      } else if (dateFilter === '3Months') {
-        const threeMonthsAgo = new Date();
-        threeMonthsAgo.setMonth(now.getMonth() - 3);
-        matchDate = createdAt >= threeMonthsAgo;
-      }
+    if (startDate && endDate) {
+      const createdDateStr = new Date(d.createdAt).toISOString().split('T')[0];
+      matchDate = createdDateStr >= startDate && createdDateStr <= endDate;
     }
 
     return matchSearch && matchStatus && matchFarmer && matchDate;
   });
 
   const uniqueFarmers = Array.from(new Set(declarations.map((d: Declaration) => d.farmName || d.farmerId?.full_name || '—'))).filter(f => f !== '—').sort();
-  const pendingCount = declarations.filter((d: Declaration) => d.status === 'Pending').length;
+  const pendingCount = filtered.filter((d: Declaration) => d.status === 'Pending').length;
   const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
 
@@ -253,7 +245,24 @@ const PendingPickups = () => {
               Harvest declarations awaiting truck dispatch and pickup logging.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 shadow-sm">
+              <Calendar size={15} className="text-blue-500 flex-shrink-0" />
+              <span className="text-xs text-gray-400 font-medium">From:</span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer"
+              />
+              <span className="text-xs text-gray-400 font-medium ml-2">To:</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={e => setEndDate(e.target.value)}
+                className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer"
+              />
+            </div>
             <div className="relative">
               <button onClick={() => setIsExportOpen(!isExportOpen)}
                 className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-all shadow-sm relative">
@@ -301,9 +310,9 @@ const PendingPickups = () => {
         {/* Stats */}
         <div className="grid grid-cols-3 gap-6">
           {[
-            { label: 'Total Declarations', value: declarations.length, icon: PackageCheck, color: 'text-gray-600', bg: 'bg-gray-50 dark:bg-gray-700/50' },
+            { label: 'Total Declarations', value: filtered.length, icon: PackageCheck, color: 'text-gray-600', bg: 'bg-gray-50 dark:bg-gray-700/50' },
             { label: 'Pending Pickup', value: pendingCount, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
-            { label: 'Picked Up', value: declarations.filter(d => d.status === 'PickedUp').length, icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
+            { label: 'Picked Up', value: filtered.filter(d => d.status === 'PickedUp').length, icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
           ].map((s, i) => (
             <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
               <div className="flex justify-between items-start">
@@ -366,20 +375,14 @@ const PendingPickups = () => {
               <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
             </div>
 
-            <div className="relative">
-              <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              <select
-                value={dateFilter}
-                onChange={e => { setDateFilter(e.target.value); setCurrentPage(1); }}
-                className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer shadow-sm"
+            {(searchTerm || statusFilter !== 'All' || farmerFilter !== 'All') && (
+              <button
+                onClick={() => { setSearchTerm(''); setStatusFilter('All'); setFarmerFilter('All'); setCurrentPage(1); }}
+                className="text-xs text-blue-500 hover:text-blue-700 font-bold px-2 flex-shrink-0"
               >
-                <option value="All">All Time</option>
-                <option value="Week">This Week</option>
-                <option value="Month">This Month</option>
-                <option value="3Months">Last 3 Months</option>
-              </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
-            </div>
+                Clear
+              </button>
+            )}
           </div>
 
         <div className="overflow-x-auto">

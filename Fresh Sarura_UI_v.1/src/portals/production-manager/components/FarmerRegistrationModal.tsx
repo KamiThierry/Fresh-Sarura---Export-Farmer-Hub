@@ -69,7 +69,20 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
             onFarmerAdded(formData.full_name);
             onClose();
         } catch (err: any) {
-            setError(err.message || 'Failed to register farmer. Please try again.');
+            const msg = err.message?.toLowerCase() || '';
+            if (msg.includes('duplicate') || msg.includes('e11000')) {
+                if (msg.includes('national_id')) {
+                    setError('A farmer with this National ID already exists.');
+                } else if (msg.includes('email')) {
+                    setError('A farmer with this email address already exists.');
+                } else if (msg.includes('phone')) {
+                    setError('A farmer with this phone number already exists.');
+                } else {
+                    setError('A farmer with these unique details already exists.');
+                }
+            } else {
+                setError(err.message || 'Failed to register farmer. Please try again.');
+            }
         } finally {
             setIsSubmitting(false);
         }
@@ -138,11 +151,14 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
 
                         {/* National ID */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">National ID (16 Digits) *</label>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">National ID (16 Digits) *</label>
+                                <span className="text-[10px] text-blue-500 font-medium">Checked for duplicates</span>
+                            </div>
                             <input
-                                type="text" required maxLength={16}
+                                type="text" required maxLength={16} minLength={16} pattern="\d{16}" title="National ID must be exactly 16 digits"
                                 value={formData.national_id}
-                                onChange={e => setFormData({ ...formData, national_id: e.target.value })}
+                                onChange={e => setFormData({ ...formData, national_id: e.target.value.replace(/\D/g, '') })}
                                 className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                                 placeholder="e.g. 1199008012345678"
                             />
@@ -197,7 +213,7 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Cell *</label>
                                 <input
-                                    type="text" required
+                                    type="text" required minLength={2}
                                     value={formData.cell}
                                     onChange={e => setFormData({ ...formData, cell: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
@@ -207,7 +223,7 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Village *</label>
                                 <input
-                                    type="text" required
+                                    type="text" required minLength={2}
                                     value={formData.village}
                                     onChange={e => setFormData({ ...formData, village: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
@@ -246,7 +262,7 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Farm Size (Ha) *</label>
                                 <input
-                                    type="number" step="0.01" min="0.01" required
+                                    type="number" step="0.01" min="0.01" max="10000" required
                                     value={formData.farm_size_hectares}
                                     onChange={e => setFormData({ ...formData, farm_size_hectares: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
@@ -256,7 +272,7 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Capacity (Tons/Year) *</label>
                                 <input
-                                    type="number" step="0.01" min="0.01" required
+                                    type="number" step="0.01" min="0.01" max="50000" required
                                     value={formData.production_capacity_tons}
                                     onChange={e => setFormData({ ...formData, production_capacity_tons: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
@@ -270,17 +286,17 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Phone Number *</label>
                                 <input
-                                    type="tel" required
+                                    type="tel" required pattern="^(?:\+2507|07)\d{8}$" title="Must be a valid Rwandan phone number starting with +2507 or 07 followed by 8 digits"
                                     value={formData.phone}
-                                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                                    onChange={e => setFormData({ ...formData, phone: e.target.value.replace(/[^\d+]/g, '') })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                                    placeholder="+250 7xx xxx xxx"
+                                    placeholder="+2507xxxxxxxx or 07xxxxxxxx"
                                 />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email Address *</label>
                                 <input
-                                    type="email" required
+                                    type="email" required pattern="[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}" title="Please enter a valid email address"
                                     value={formData.email}
                                     onChange={e => setFormData({ ...formData, email: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"

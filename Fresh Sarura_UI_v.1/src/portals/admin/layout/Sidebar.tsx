@@ -178,7 +178,7 @@ const Sidebar = () => {
                 </div>
             </nav>
 
-            {/* ── Bottom: Settings + Sign Out ── */}
+            {/* ── Bottom: Settings + Log Out ── */}
             <div className="p-3 mt-auto mb-2">
                 <div className="flex items-center px-3 mb-2">
                     <h3 className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
@@ -196,7 +196,7 @@ const Sidebar = () => {
                         className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:text-gray-400 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                     >
                         <LogOut size={18} strokeWidth={2} />
-                        <span className="font-medium text-sm">Sign Out</span>
+                        <span className="font-medium text-sm">Log Out</span>
                     </button>
                 </div>
             </div>

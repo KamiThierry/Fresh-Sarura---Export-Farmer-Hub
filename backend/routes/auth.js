@@ -3,7 +3,7 @@ import {
     login, createUser, getMe, updateMe,
     updatePassword, forgotPassword, resetPassword,
     getAllUsers, updateUser, deleteUser, permanentlyDeleteUser,
-    updateProfile
+    updateProfile, verifyOtp
 } from '../controllers/authController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -11,6 +11,7 @@ const router = express.Router();
 
 
 router.post('/login', login);
+router.post('/verify-otp', verifyOtp);
 router.post('/create-user', protect, restrictTo('admin'), createUser);
 router.get('/me', protect, getMe);
 router.post('/forgot-password', forgotPassword);

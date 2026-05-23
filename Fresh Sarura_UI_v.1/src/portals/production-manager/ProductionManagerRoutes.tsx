@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Layout from './layout/Layout';
 import Dashboard from './pages/Dashboard';
 
@@ -19,7 +19,7 @@ import FarmerRegistrationModal from './components/FarmerRegistrationModal';
 import CreateCropCycleModal from './components/CreateCropCycleModal';
 import CreateExportBatchModal from './components/CreateExportBatchModal';
 import { PMProvider, usePMContext } from '@/context/PMContext';
-// import { useToastContext } from '@/context/ToastContext';
+import { useToastContext } from '@/context/ToastContext';
 
 const ProductionManagerRoutes = () => {
     return (
@@ -29,6 +29,8 @@ const ProductionManagerRoutes = () => {
     );
 };
 const ProductionManagerApp = () => {
+    const { showToast } = useToastContext();
+    const navigate = useNavigate();
     const [isIntakeOpen, setIsIntakeOpen] = useState(false);
     // const [isQCOpen, setIsQCOpen] = useState(false);
     const [isTraceabilityOpen, setIsTraceabilityOpen] = useState(false);
@@ -78,15 +80,18 @@ const ProductionManagerApp = () => {
     };
 
     const handleRegisterFarmer = () => {
-        setIsRegistrationOpen(true);
+        navigate('/pm/farmers');
+        setTimeout(() => setIsRegistrationOpen(true), 100);
     };
 
     const handleCreateCycle = () => {
-        setIsCreateCycleOpen(true);
+        navigate('/pm/crop-planning');
+        setTimeout(() => setIsCreateCycleOpen(true), 100);
     };
 
     const handleCreateBatch = () => {
-        setIsCreateBatchOpen(true);
+        navigate('/pm/inventory');
+        setTimeout(() => setIsCreateBatchOpen(true), 100);
     };
 
     const handlePackingListSubmit = (data: any) => {
@@ -160,7 +165,10 @@ const ProductionManagerApp = () => {
             <FarmerRegistrationModal
                 isOpen={isRegistrationOpen}
                 onClose={() => setIsRegistrationOpen(false)}
-                onFarmerAdded={() => setIsRegistrationOpen(false)}
+                onFarmerAdded={(name: string) => {
+                    setIsRegistrationOpen(false);
+                    showToast('Farmer Registered', `${name} has been successfully registered.`);
+                }}
             />
 
             <CreateCropCycleModal

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Bell, LogOut, Loader2, ChevronDown } from 'lucide-react';
+import { Search, Bell, Loader2, ChevronDown } from 'lucide-react';
 import logo from '@/assets/sarura_logo_nav.png';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../../production-manager/components/ThemeToggle';
@@ -184,18 +184,6 @@ const Header = () => {
                         </div>
                         <ChevronDown size={14} className="text-gray-400 ml-1" />
                     </div>
-                    {/* Separate logout button */}
-                    <button
-                        onClick={() => {
-                            localStorage.removeItem('token');
-                            localStorage.removeItem('user');
-                            navigate('/login');
-                        }}
-                        title="Sign out"
-                        className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
-                    >
-                        <LogOut size={16} />
-                    </button>
                 </div>
             </header>
 

@@ -325,12 +325,12 @@ const EventLogs = () => {
                     </div>
 
                     {/* Module Filter */}
-                    <div className="relative">
+                    <div className="relative w-48 flex-shrink-0">
                         <Sprout size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                         <select
                             value={moduleFilter}
                             onChange={(e) => { setModuleFilter(e.target.value); setCurrentPage(1); }}
-                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm"
+                            className="w-full pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm text-ellipsis overflow-hidden whitespace-nowrap"
                         >
                             <option value="All">All Modules</option>
                             {modules.map(m => <option key={m} value={m}>{m}</option>)}
@@ -339,12 +339,12 @@ const EventLogs = () => {
                     </div>
 
                     {/* Action Filter */}
-                    <div className="relative">
+                    <div className="relative w-56 flex-shrink-0">
                         <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                         <select
                             value={actionFilter}
                             onChange={(e) => { setActionFilter(e.target.value); setCurrentPage(1); }}
-                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm"
+                            className="w-full pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm text-ellipsis overflow-hidden whitespace-nowrap"
                         >
                             <option value="All">All Actions</option>
                             {actions.map(a => <option key={a} value={a}>{a}</option>)}
@@ -353,12 +353,12 @@ const EventLogs = () => {
                     </div>
 
                     {/* Actor Filter */}
-                    <div className="relative">
+                    <div className="relative w-48 flex-shrink-0">
                         <UserCog size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                         <select
                             value={actorFilter}
                             onChange={(e) => { setActorFilter(e.target.value); setCurrentPage(1); }}
-                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm"
+                            className="w-full pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm text-ellipsis overflow-hidden whitespace-nowrap"
                         >
                             <option value="All">All Actors</option>
                             {actors.map(a => <option key={a} value={a}>{a}</option>)}

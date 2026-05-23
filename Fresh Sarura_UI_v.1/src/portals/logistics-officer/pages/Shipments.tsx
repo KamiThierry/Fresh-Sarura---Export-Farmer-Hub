@@ -1,12 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, FileText, Plane, Package, ArrowUpRight, 
-         Search, Filter, Loader2, RefreshCw, AlertTriangle, CheckCircle, ChevronDown } from 'lucide-react';
+         Search, Filter, Loader2, RefreshCw, AlertTriangle, CheckCircle, ChevronDown, Download, FileSpreadsheet } from 'lucide-react';
 import ShipmentBuilderModal from '../components/ShipmentBuilderModal';
 import ShipmentDetailsModal from '../components/ShipmentDetailsModal';
 import Pagination from '../../shared/component/Pagination';
 import { api } from '../../../lib/api';
-import { formatDate } from '@/lib/dateUtils';
+import { formatDate, formatDateTime } from '@/lib/dateUtils';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import logo from '@/assets/sarura_logo_nav.png';
+import * as XLSX from 'xlsx';
+import { getReportFooterText } from '@/lib/utils';
 
 // ── Single source of truth for status display ─────────────────────
 const STATUS_CONFIG: Record<string, {
@@ -69,9 +74,12 @@ const Shipments = () => {
     const [shipments, setShipments]           = useState<any[]>([]);
     const [loading, setLoading]               = useState(true);
     const [isBuilderOpen, setIsBuilderOpen]   = useState(false);
+    const [isExportOpen, setIsExportOpen]     = useState(false);
     const [selectedShipment, setSelectedShipment] = useState<any>(null);
     const [searchTerm, setSearchTerm]         = useState('');
     const [statusFilter, setStatusFilter]     = useState('all');
+    const [clientFilter, setClientFilter]     = useState('all');
+    const [destFilter, setDestFilter]         = useState('all');
     const [searchParams]                      = useSearchParams();
     const [currentPage, setCurrentPage]       = useState(1);
     const itemsPerPage = 5;
@@ -102,10 +110,14 @@ const Shipments = () => {
             s.flightNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             s.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             s.destination?.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesStatus = statusFilter === 'all' ||
-            s.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
+        const matchesClient = clientFilter === 'all' || s.clientName === clientFilter;
+        const matchesDest   = destFilter === 'all' || s.destination === destFilter;
+        return matchesSearch && matchesStatus && matchesClient && matchesDest;
     });
+
+    const uniqueClients = Array.from(new Set(shipments.map(s => s.clientName).filter(Boolean))).sort();
+    const uniqueDestinations = Array.from(new Set(shipments.map(s => s.destination).filter(Boolean))).sort();
 
     // Stats derived from real status field
     const weeklyVolumeKg  = shipments.reduce((sum, s) => sum + (s.totalWeightKg || 0), 0);
@@ -118,6 +130,130 @@ const Shipments = () => {
     const pendingDocsCount = shipments.filter(s =>
         s.status === 'PackingListGenerated' || s.status === 'Departed'
     ).length;
+
+    const handleExportXLSX = () => {
+        const wb = XLSX.utils.book_new();
+        const headers = ['Departure Date', 'Flight', 'Destination', 'Client', 'PL Number', 'Boxes', 'Volume (kg)', 'Status'];
+        const rows = shipments.map(s => [
+            s.departureDate ? formatDate(s.departureDate) : 'N/A',
+            s.flightNumber || 'N/A',
+            s.destination || 'N/A',
+            s.clientName || 'N/A',
+            s.plNumber || 'N/A',
+            s.totalBoxes || 0,
+            s.totalWeightKg || 0,
+            STATUS_CONFIG[s.status]?.label || 'Draft'
+        ]);
+
+        const data = [headers, ...rows];
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        
+        ws['!cols'] = headers.map((h, i) => {
+            const maxLen = Math.max(h.length, ...rows.map(r => String(r[i] ?? '').length));
+            return { wch: Math.min(maxLen + 4, 80) };
+        });
+        ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Shipments');
+        XLSX.writeFile(wb, `FreshSarura_Shipments_${new Date().toISOString().split('T')[0]}.xlsx`);
+        setIsExportOpen(false);
+    };
+
+    const handleExportPDF = () => {
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const timestamp = formatDateTime(new Date());
+
+        // Header
+        try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch {}
+        doc.setTextColor(21, 128, 61);
+        doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+        doc.text('Fresh Sarura', 28, 19);
+        doc.setTextColor(107, 114, 128);
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+        doc.text('Export & Farmer Hub', 28, 23);
+        doc.setFontSize(10); doc.setTextColor(17, 24, 39);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+        doc.setTextColor(107, 114, 128);
+        doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+        doc.setDrawColor(229, 231, 235);
+        doc.line(15, 30, pageWidth - 15, 30);
+
+        // Report Title
+        doc.setTextColor(17, 24, 39);
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+        doc.text('EXPORT SHIPMENTS REPORT', 15, 42);
+
+        // Summary Fields
+        let yPos = 52;
+        doc.setFontSize(9);
+        const activeFilters = [
+            { label: 'Total Shipments', value: shipments.length.toString() },
+            { label: 'Total Volume', value: `${weeklyVolumeKg.toLocaleString()} kg` },
+            { label: 'Active Shipments', value: activeCount.toString() },
+            { label: 'Pending Docs', value: pendingDocsCount.toString() }
+        ];
+
+        activeFilters.forEach(field => {
+            doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
+            doc.text(field.label, 15, yPos);
+            doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
+            doc.text(field.value, pageWidth - 15, yPos, { align: 'right' });
+            doc.setDrawColor(243, 244, 246);
+            doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+            yPos += 10;
+        });
+
+        // Table
+        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+        doc.text('SHIPMENTS LOG', 15, yPos + 10);
+        
+        const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [92, 184, 92] };
+        const commonBodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } };
+        const alternateRowStyles: any = { fillColor: [249, 250, 251] };
+
+        autoTable(doc, {
+            startY: yPos + 15,
+            head: [['DATE / FLIGHT', 'DESTINATION', 'CLIENT', 'PL NUMBER', 'VOLUME', 'STATUS']],
+            body: shipments.map(s => [
+                `${s.departureDate ? formatDate(s.departureDate) : 'N/A'}\n${s.flightNumber || 'N/A'}`,
+                s.destination || 'N/A',
+                s.clientName || 'N/A',
+                s.plNumber || 'N/A',
+                `${s.totalBoxes || 0} Boxes\n${s.totalWeightKg || 0} kg`,
+                STATUS_CONFIG[s.status]?.label || 'Draft'
+            ]),
+            theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+            margin: { left: 15, right: 15, bottom: 30 }
+        });
+
+        // System Insights
+        let lastY = (doc as any).lastAutoTable?.finalY || yPos;
+        if (lastY > 240) { doc.addPage(); lastY = 20; }
+        doc.setTextColor(17, 24, 39); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+        doc.text('SYSTEM INSIGHTS', 15, lastY + 15);
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(75, 85, 99);
+        doc.text('• This report details packing lists, flight schedules, and overall export volumes.', 15, lastY + 25);
+
+        // Footer
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
+            doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'bold');
+            doc.text(getReportFooterText(), pageWidth / 2, 280, { align: 'center' });
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+            const footerY = 288;
+            doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
+            doc.setFont('helvetica', 'bold');
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
+        }
+
+        doc.save(`FreshSarura_Shipments_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+        setIsExportOpen(false);
+    };
 
     return (
         <div className="space-y-6 animate-fade-in pb-12">
@@ -137,9 +273,56 @@ const Shipments = () => {
                     >
                         <RefreshCw size={15} /> Refresh
                     </button>
+                    
+                    <div className="relative">
+                        <button
+                            onClick={() => setIsExportOpen(prev => !prev)}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-bold shadow-sm transition-colors"
+                        >
+                            <Download size={15} />
+                            Export Data
+                            <ChevronDown size={13} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isExportOpen && (
+                            <>
+                                <div className="fixed inset-0 z-10" onClick={() => setIsExportOpen(false)} />
+                                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden">
+                                    <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Select Format</p>
+                                    <button
+                                        onClick={handleExportXLSX}
+                                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+                                    >
+                                        <div className="p-1.5 bg-green-50 dark:bg-green-900/20 rounded-lg flex-shrink-0">
+                                            <FileSpreadsheet size={16} className="text-green-600 dark:text-green-400" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export Excel</p>
+                                            <p className="text-[11px] text-gray-400 mt-0.5">Spreadsheet (.xlsx)</p>
+                                        </div>
+                                    </button>
+                                    <div className="mx-4 border-t border-gray-100 dark:border-gray-700" />
+                                    <button
+                                        onClick={handleExportPDF}
+                                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+                                    >
+                                        <div className="p-1.5 bg-red-50 dark:bg-red-900/20 rounded-lg flex-shrink-0">
+                                            <FileText size={16} className="text-red-500 dark:text-red-400" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export PDF</p>
+                                            <p className="text-[11px] text-gray-400 mt-0.5">Shipments Report (.pdf)</p>
+                                        </div>
+                                    </button>
+                                    <div className="pb-2" />
+                                </div>
+                            </>
+                        )}
+                    </div>
+
                     <button
                         onClick={() => setIsBuilderOpen(true)}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-900/20 transition-all hover:scale-105 active:scale-95"
+                        className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-900/20 transition-all hover:scale-105 active:scale-95 text-sm"
                     >
                         <Plus size={18} /> Create Packing List
                     </button>
@@ -228,12 +411,12 @@ const Shipments = () => {
                             className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-all"
                         />
                     </div>
-                    <div className="relative">
+                    <div className="relative w-40 flex-shrink-0">
                         <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                         <select
                             value={statusFilter}
                             onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer shadow-sm"
+                            className="w-full pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer shadow-sm text-ellipsis overflow-hidden whitespace-nowrap"
                         >
                             <option value="all">All Statuses</option>
                             <option value="PackingListGenerated">Scheduled</option>
@@ -243,10 +426,34 @@ const Shipments = () => {
                         </select>
                         <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
                     </div>
-                    {(searchTerm || statusFilter !== 'all') && (
+                    <div className="relative w-40 flex-shrink-0">
+                        <Package size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <select
+                            value={clientFilter}
+                            onChange={e => { setClientFilter(e.target.value); setCurrentPage(1); }}
+                            className="w-full pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer shadow-sm text-ellipsis overflow-hidden whitespace-nowrap"
+                        >
+                            <option value="all">All Clients</option>
+                            {uniqueClients.map((c: any) => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                    </div>
+                    <div className="relative w-40 flex-shrink-0">
+                        <Plane size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <select
+                            value={destFilter}
+                            onChange={e => { setDestFilter(e.target.value); setCurrentPage(1); }}
+                            className="w-full pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer shadow-sm text-ellipsis overflow-hidden whitespace-nowrap"
+                        >
+                            <option value="all">All Destinations</option>
+                            {uniqueDestinations.map((d: any) => <option key={d} value={d}>{d}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                    </div>
+                    {(searchTerm || statusFilter !== 'all' || clientFilter !== 'all' || destFilter !== 'all') && (
                         <button
-                            onClick={() => { setSearchTerm(''); setStatusFilter('all'); setCurrentPage(1); }}
-                            className="text-xs text-indigo-500 hover:text-indigo-700 font-bold px-2"
+                            onClick={() => { setSearchTerm(''); setStatusFilter('all'); setClientFilter('all'); setDestFilter('all'); setCurrentPage(1); }}
+                            className="text-xs text-indigo-500 hover:text-indigo-700 font-bold px-2 flex-shrink-0"
                         >
                             Clear
                         </button>

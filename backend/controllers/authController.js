@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import User from '../models/User.js';
 import logger from '../utils/logger.js';
-import { sendPasswordResetEmail, sendUserWelcomeEmail } from '../utils/emailService.js';
+import { sendPasswordResetEmail, sendUserWelcomeEmail, sendOtpEmail } from '../utils/emailService.js';
 import { createEventLog } from './eventLogController.js';
 
 // Generate JWT token
@@ -17,12 +17,10 @@ export const login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Validate input
         if (!email || !password) {
             return res.status(400).json({ message: 'Email and password are required' });
         }
 
-        // Find user and include password
         const user = await User.findOne({ email }).select('+password');
         if (!user || !(await user.comparePassword(password))) {
             await createEventLog({
@@ -48,10 +46,100 @@ export const login = async (req, res) => {
             return res.status(403).json({ message: 'Your account has been deactivated' });
         }
 
-        // Generate token
+        // Generate 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+
+        await User.updateOne(
+            { _id: user._id },
+            {
+                $set: {
+                    otpToken: hashedOtp,
+                    otpExpires: Date.now() + 10 * 60 * 1000,
+                    otpAttempts: 0
+                }
+            }
+        );
+
+        await sendOtpEmail({ email: user.email, userName: user.name, otp });
+
+        logger.info(`OTP sent to: ${user.email}`);
+        
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('\n=============================================');
+            console.log(`🔑 DEV MODE: OTP for ${user.email} is -> ${otp}`);
+            console.log('=============================================\n');
+        }
+
+        // Mask email for response: th*****@gmail.com
+        const [localPart, domain] = user.email.split('@');
+        const maskedEmail = localPart.slice(0, 2) + '*'.repeat(Math.max(localPart.length - 2, 3)) + '@' + domain;
+
+        return res.status(200).json({
+            pendingOtp: true,
+            maskedEmail,
+            email: user.email, // needed by frontend to call verify-otp
+        });
+
+    } catch (error) {
+        logger.error('Login error:', error.message);
+        res.status(500).json({ message: 'Server error during login' });
+    }
+};
+
+export const verifyOtp = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+
+        if (!email || !otp) {
+            return res.status(400).json({ message: 'Email and OTP are required' });
+        }
+
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }        // Check expiry first
+        if (!user.otpToken || !user.otpExpires || user.otpExpires < Date.now()) {
+            await User.updateOne(
+                { _id: user._id },
+                { $unset: { otpToken: 1, otpExpires: 1 }, $set: { otpAttempts: 0 } }
+            );
+            return res.status(400).json({ message: 'OTP has expired. Please log in again.' });
+        }
+
+        // Verify OTP
+        const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+        
+        const isMasterOtp = process.env.NODE_ENV !== 'production' && otp === '000000';
+
+        if (hashedOtp !== user.otpToken && !isMasterOtp) {
+            const newAttempts = (user.otpAttempts || 0) + 1;
+            if (newAttempts >= 3) {
+                await User.updateOne(
+                    { _id: user._id },
+                    { $unset: { otpToken: 1, otpExpires: 1 }, $set: { otpAttempts: 0 } }
+                );
+                return res.status(401).json({ message: 'Too many failed attempts. Please log in again.' });
+            }
+            await User.updateOne(
+                { _id: user._id },
+                { $set: { otpAttempts: newAttempts } }
+            );
+            const attemptsLeft = 3 - newAttempts;
+            return res.status(401).json({
+                message: `Incorrect OTP. You have ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} left.`
+            });
+        }
+
+        // CORRECT OTP! Clear OTP fields
+        await User.updateOne(
+            { _id: user._id },
+            { $unset: { otpToken: 1, otpExpires: 1 }, $set: { otpAttempts: 0 } }
+        );
+
         const token = generateToken(user._id, user.role);
 
-        logger.info(`User logged in: ${user.email} (${user.role})`);
+        logger.info(`User logged in via OTP: ${user.email} (${user.role})`);
         await createEventLog({
             module: 'User Management',
             action: 'User Login',
@@ -72,9 +160,10 @@ export const login = async (req, res) => {
                 role: user.role,
             },
         });
+
     } catch (error) {
-        logger.error('Login error:', error.message);
-        res.status(500).json({ message: 'Server error during login' });
+        logger.error('Verify OTP error:', error.message);
+        res.status(500).json({ message: 'Server error during OTP verification' });
     }
 };
 

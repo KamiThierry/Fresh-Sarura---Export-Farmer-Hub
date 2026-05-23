@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Leaf, Search, Bell, Loader2, LogOut, ChevronDown } from 'lucide-react';
+import { Search, Bell, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../../shared/component/ThemeToggle';
 import NotificationsModal from '../../shared/component/NotificationsModal';
@@ -25,8 +25,8 @@ const FarmManagerHeader = () => {
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Pull live data from context for search
-    const { cycles, forecasts, fieldReports } = useFarmManager();
-    const searchResults = useFMSearch(searchQuery, cycles, forecasts, fieldReports);
+    const { cycles, forecasts } = useFarmManager();
+    const searchResults = useFMSearch(searchQuery, cycles, forecasts);
 
     const fetchNotifications = async () => {
         try {
@@ -79,11 +79,6 @@ const FarmManagerHeader = () => {
         return () => document.removeEventListener('mousedown', handler);
     }, []);
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        navigate('/login');
-    };
 
     const unreadCount = notifications.filter(n => !n.isRead).length;
     const initials = currentUser?.name
@@ -189,13 +184,6 @@ const FarmManagerHeader = () => {
                         </div>
                         <ChevronDown size={14} className="text-gray-400 ml-1" />
                     </div>
-                    <button
-                        onClick={handleLogout}
-                        title="Sign out"
-                        className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
-                    >
-                        <LogOut size={16} />
-                    </button>
                 </div>
             </div>
 

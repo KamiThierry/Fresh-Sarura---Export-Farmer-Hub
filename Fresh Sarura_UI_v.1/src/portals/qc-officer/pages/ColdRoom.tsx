@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Package, AlertTriangle, CheckCircle, Clock, Search, Filter, ChevronDown, Download, FileSpreadsheet, FileText, RefreshCw } from 'lucide-react';
+import { Package, AlertTriangle, CheckCircle, Clock, Search, Filter, ChevronDown, Download, FileSpreadsheet, FileText, RefreshCw, Calendar, Leaf } from 'lucide-react';
 import { api } from '../../../lib/api';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -15,8 +15,10 @@ interface StockItem {
     received: number;
     processed: number;
     rejected: number;
+    defectType?: string;
     netStock: number;
     entryDate: string;
+    createdAt: string;
     status: string;
 }
 
@@ -25,6 +27,13 @@ const ColdRoom = () => {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
+    const [cropFilter, setCropFilter] = useState('All');
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - 3);
+        return d.toISOString().split('T')[0];
+    });
+    const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
     const [isExportOpen, setIsExportOpen] = useState(false);
 
     const fetchStock = async () => {
@@ -38,8 +47,10 @@ const ColdRoom = () => {
                 received: b.receivedWeightKg,
                 processed: b.processedWeightKg,
                 rejected: b.rejectedWeightKg,
+                defectType: b.primaryDefectType,
                 netStock: (b.processedWeightKg || 0) - (b.rejectedWeightKg || 0),
                 entryDate: formatDate(b.updatedAt),
+                createdAt: b.createdAt,
                 status: b.status
             }));
             setStock(data);
@@ -58,8 +69,18 @@ const ColdRoom = () => {
         const matchesSearch = r.crop.toLowerCase().includes(search.toLowerCase()) ||
             r.batchId.toLowerCase().includes(search.toLowerCase());
         const matchesStatus = statusFilter === 'All' || r.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        const matchesCrop = cropFilter === 'All' || r.crop === cropFilter;
+        
+        let matchDate = true;
+        if (startDate && endDate && r.createdAt) {
+            const createdDateStr = new Date(r.createdAt).toISOString().split('T')[0];
+            matchDate = createdDateStr >= startDate && createdDateStr <= endDate;
+        }
+
+        return matchesSearch && matchesStatus && matchesCrop && matchDate;
     });
+
+    const uniqueCrops = Array.from(new Set(stock.map(s => s.crop).filter(Boolean))).sort();
 
     const totalWeight = stock.reduce((acc, i) => acc + i.netStock, 0);
 
@@ -194,15 +215,32 @@ const ColdRoom = () => {
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Cold Room (Stock)</h1>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Monitor all batches currently in cold storage with temperature and expiry tracking.</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center justify-end gap-3 flex-wrap md:flex-nowrap">
+                    <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 shadow-sm">
+                        <Calendar size={15} className="text-green-500 flex-shrink-0" />
+                        <span className="text-xs text-gray-400 font-medium">From:</span>
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={e => setStartDate(e.target.value)}
+                            className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer"
+                        />
+                        <span className="text-xs text-gray-400 font-medium ml-2">To:</span>
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={e => setEndDate(e.target.value)}
+                            className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer"
+                        />
+                    </div>
                     <div className="relative">
                         <button 
                             onClick={() => setIsExportOpen(!isExportOpen)}
                             className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-all shadow-sm relative"
                         >
-                            <Download size={15} />
+                            <Download size={16} />
                             Export Data
-                            <ChevronDown size={13} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
+                            <ChevronDown size={14} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
                         </button>
 
                         {isExportOpen && (
@@ -241,13 +279,12 @@ const ColdRoom = () => {
                         )}
                     </div>
 
-                    <button
+                    {/* <button
                         onClick={fetchStock}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm"
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors shadow-sm"
                     >
-                        <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-                        Refresh
-                    </button>
+                        <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh
+                    </button> */}
                 </div>
             </div>
 
@@ -283,11 +320,24 @@ const ColdRoom = () => {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                         <input
                             type="text"
-                            placeholder="Search by crop or batch ID..."
+                            placeholder="Search by batch ID..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             className="pl-9 pr-4 py-2 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 shadow-sm transition-all"
                         />
+                    </div>
+
+                    <div className="relative">
+                        <Leaf size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <select
+                            value={cropFilter}
+                            onChange={e => setCropFilter(e.target.value)}
+                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm min-w-[140px]"
+                        >
+                            <option value="All">All Crops</option>
+                            {uniqueCrops.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
                     </div>
 
                     <div className="relative">
@@ -303,6 +353,15 @@ const ColdRoom = () => {
                         </select>
                         <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
                     </div>
+
+                    {(search || statusFilter !== 'All' || cropFilter !== 'All') && (
+                        <button
+                            onClick={() => { setSearch(''); setStatusFilter('All'); setCropFilter('All'); }}
+                            className="text-xs text-green-600 hover:text-green-700 font-bold px-2 flex-shrink-0"
+                        >
+                            Clear
+                        </button>
+                    )}
                 </div>
 
                 <div className="overflow-x-auto">
@@ -332,7 +391,18 @@ const ColdRoom = () => {
                                     <td className="px-5 py-4 text-sm text-gray-700 dark:text-gray-300">{row.crop}</td>
                                     <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{row.received.toLocaleString()}</td>
                                     <td className="px-5 py-4 text-sm font-medium text-blue-600 dark:text-blue-400">{row.processed.toLocaleString()}</td>
-                                    <td className="px-5 py-4 text-sm font-medium text-red-500 dark:text-red-400">{row.rejected.toLocaleString()}</td>
+                                    <td className="px-5 py-4">
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-medium text-red-500 dark:text-red-400">
+                                                {row.rejected.toLocaleString()}
+                                            </span>
+                                            {row.defectType && row.defectType !== 'None' && row.rejected > 0 && (
+                                                <span className="text-[11px] text-red-400/80 dark:text-red-500/80">
+                                                    ({row.defectType})
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
                                     <td className="px-5 py-4 text-sm font-bold text-green-600 dark:text-green-400">{row.netStock.toLocaleString()}</td>
                                     <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{row.entryDate}</td>
                                     <td className="px-5 py-4">
