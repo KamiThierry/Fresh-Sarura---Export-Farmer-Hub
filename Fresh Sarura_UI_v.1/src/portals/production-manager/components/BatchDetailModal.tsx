@@ -284,8 +284,19 @@ const BatchDetailModal = ({ isOpen, onClose, batch, onStatusChange }: BatchDetai
                     )}
 
                     {batch.status === 'Shipped' && (
-                        <span className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-900/30">
-                            <CheckCircle2 size={16} /> Shipped
+                        <span className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border ${
+                            linkedShipment?.status === 'Shipped'
+                                ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200'
+                                : linkedShipment?.status === 'Departed'
+                                ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200'
+                                : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200'
+                        }`}>
+                            <CheckCircle2 size={16} />
+                            {linkedShipment?.status === 'Shipped'
+                                ? 'Shipped'
+                                : linkedShipment?.status === 'Departed'
+                                ? 'In Transit'
+                                : 'Scheduled'}
                         </span>
                     )}
                 </div>

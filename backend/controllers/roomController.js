@@ -170,15 +170,28 @@ export const clearRoom = async (req, res) => {
         const room = await Room.findById(req.params.id);
         if (!room) return res.status(404).json({ status: 'error', message: 'Room not found.' });
 
+        // Update any active batches in this room to be 'Spoiled' so they no longer consume space
+        await ProcessingBatch.updateMany({
+            $or: [
+                { assignedRoomId: room._id },
+                { coldRoomId: room._id }
+            ],
+            status: { $in: ['Processing', 'QCDone', 'Done'] }
+        }, {
+            status: 'Spoiled'
+        });
+
         const updated = await Room.findByIdAndUpdate(
             req.params.id,
             { currentLoadKg: 0, status: 'Available' },
             { new: true }
         );
 
+        await syncAllRoomLoads();
+
         res.json({
             status: 'success',
-            message: `Room "${room.name}" cleared and marked as Available.`,
+            message: `Room "${room.name}" cleared and marked as Available. Associated stock was marked as Spoiled.`,
             data: updated
         });
     } catch (err) {

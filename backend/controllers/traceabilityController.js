@@ -176,6 +176,25 @@ export const getTraceabilityData = async (req, res) => {
 
         // Node 4 — Export batch (only if one exists for this stock)
         if (exportBatch) {
+            let displayStatus = exportBatch.status;
+            if (shipment) {
+                if (shipment.status === 'PackingListGenerated' || shipment.status === 'Draft') {
+                    displayStatus = 'Scheduled';
+                } else if (shipment.status === 'Departed') {
+                    displayStatus = 'In Transit';
+                } else if (shipment.status === 'Shipped') {
+                    displayStatus = 'Shipped';
+                }
+            } else {
+                if (exportBatch.status === 'ReadyForExport') {
+                    displayStatus = 'Ready for Export';
+                }
+            }
+
+            const friendlyShipmentStatus = shipment
+                ? (shipment.status === 'PackingListGenerated' || shipment.status === 'Draft' ? 'Scheduled' : (shipment.status === 'Departed' ? 'In Transit' : shipment.status))
+                : '';
+
             nodes.push({
                 id: 'export',
                 type: 'export',
@@ -188,18 +207,22 @@ export const getTraceabilityData = async (req, res) => {
                     { label: 'Grade',       value: exportBatch.gradeLabel || '—' },
                     {
                         label: 'Status',
-                        value: exportBatch.status,
-                        highlight: exportBatch.status === 'Shipped' ? 'text-green-600 font-bold' : ''
+                        value: displayStatus,
+                        highlight: displayStatus === 'Shipped' ? 'text-green-600 font-bold' : (displayStatus === 'Scheduled' ? 'text-amber-500 font-bold' : '')
                     },
                 ],
                 action: shipment
-                    ? { label: `Shipment ${shipment.plNumber} — ${shipment.status}`, link: '/pm/inventory' }
+                    ? { label: `Shipment ${shipment.plNumber} — ${friendlyShipmentStatus}`, link: '/pm/inventory' }
                     : null
             });
         }
 
         // Node 5 — Shipment (only if exists and not cancelled)
         if (shipment) {
+            const displayShipmentStatus = shipment.status === 'PackingListGenerated' || shipment.status === 'Draft'
+                ? 'Scheduled'
+                : (shipment.status === 'Departed' ? 'In Transit' : shipment.status);
+
             nodes.push({
                 id: 'shipment',
                 type: 'shipment',
@@ -219,8 +242,8 @@ export const getTraceabilityData = async (req, res) => {
                     { label: 'Total Boxes',  value: shipment.totalBoxes ? String(shipment.totalBoxes) : 'N/A' },
                     {
                         label: 'Status',
-                        value: shipment.status,
-                        highlight: shipment.status === 'Dispatched' ? 'text-green-600 font-bold' : ''
+                        value: displayShipmentStatus,
+                        highlight: (shipment.status === 'Shipped' || shipment.status === 'Departed') ? 'text-green-600 font-bold' : 'text-amber-500 font-bold'
                     },
                 ],
                 action: null

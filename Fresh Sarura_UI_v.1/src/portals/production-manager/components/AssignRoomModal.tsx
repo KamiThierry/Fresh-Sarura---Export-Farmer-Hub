@@ -8,9 +8,10 @@ interface AssignRoomModalProps {
     onClose: () => void;
     batch: any;
     onSuccess: () => void;
+    mode?: 'assign' | 'confirm';
 }
 
-const AssignRoomModal = ({ isOpen, onClose, batch, onSuccess }: AssignRoomModalProps) => {
+const AssignRoomModal = ({ isOpen, onClose, batch, onSuccess, mode = 'assign' }: AssignRoomModalProps) => {
     const [selectedRoomId, setSelectedRoomId] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -27,6 +28,7 @@ const AssignRoomModal = ({ isOpen, onClose, batch, onSuccess }: AssignRoomModalP
                 setAvailableRooms(
                     rooms.filter((r: any) =>
                         r.status !== 'Maintenance' &&
+                        (mode === 'confirm' ? r.type === 'Cold Room' : true) &&
                         (r.capacityKg - (r.currentLoadKg || 0)) > 0
                     )
                 );
@@ -47,7 +49,11 @@ const AssignRoomModal = ({ isOpen, onClose, batch, onSuccess }: AssignRoomModalP
         setError(null);
 
         try {
-            await api.patch(`/processing-batches/${batch._id}/assign-room`, { roomId: selectedRoomId });
+            if (mode === 'confirm') {
+                await api.patch(`/processing-batches/${batch._id}/confirm`, { roomId: selectedRoomId });
+            } else {
+                await api.patch(`/processing-batches/${batch._id}/assign-room`, { roomId: selectedRoomId });
+            }
             onSuccess();
             onClose();
         } catch (err: any) {
@@ -75,8 +81,12 @@ const AssignRoomModal = ({ isOpen, onClose, batch, onSuccess }: AssignRoomModalP
                             <Thermometer size={20} />
                         </div>
                         <div>
-                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Assign Cold Room</h2>
-                            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wider mt-0.5">Inventory Intake</p>
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                                {mode === 'confirm' ? 'Assign Cold Room' : 'Assign Processing Room'}
+                            </h2>
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wider mt-0.5">
+                                {mode === 'confirm' ? 'Inventory Stock' : 'Inventory Intake'}
+                            </p>
                         </div>
                     </div>
                     <button 
@@ -211,7 +221,7 @@ const AssignRoomModal = ({ isOpen, onClose, batch, onSuccess }: AssignRoomModalP
                             ) : (
                                 <CheckCircle2 size={18} />
                             )}
-                            {isSubmitting ? 'Assigning...' : 'Assign Room'}
+                            {isSubmitting ? 'Processing...' : (mode === 'confirm' ? 'Confirm & Add to Stock' : 'Assign Room')}
                         </button>
                     </div>
                 </form>

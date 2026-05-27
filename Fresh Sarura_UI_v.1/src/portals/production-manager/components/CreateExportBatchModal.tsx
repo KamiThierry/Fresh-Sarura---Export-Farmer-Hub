@@ -35,6 +35,7 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
     const [selectedLines, setSelectedLines] = useState<SelectedLine[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
+    const [isPastDate, setIsPastDate] = useState(false);
     const { showToast } = useToastContext();
 
     // Reset form when modal opens
@@ -45,8 +46,21 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
             setTargetShipmentDate('');
             setSelectedLines([]);
             setSubmitError('');
+            setIsPastDate(false);
         }
     }, [isOpen]);
+
+    useEffect(() => {
+        if (targetShipmentDate) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const shipmentDate = new Date(targetShipmentDate);
+            shipmentDate.setHours(0, 0, 0, 0);
+            setIsPastDate(shipmentDate < today);
+        } else {
+            setIsPastDate(false);
+        }
+    }, [targetShipmentDate]);
 
     if (!isOpen) return null;
 
@@ -110,10 +124,10 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
 
     const totalAllocatedKg = selectedLines.reduce((sum, l) => sum + (l.allocateKg || 0), 0);
     const hasErrors = selectedLines.some(l => l.error);
-    const canSubmit = clientName && destination && targetShipmentDate && selectedLines.length > 0 && !hasErrors && !isSubmitting;
+    const canSubmit = clientName && destination && targetShipmentDate && selectedLines.length > 0 && !hasErrors && !isSubmitting && !isPastDate;
 
     const handleSubmit = async () => {
-        if (!canSubmit) return;
+        if (!canSubmit || isPastDate) return;
         setIsSubmitting(true);
         setSubmitError('');
         try {
@@ -206,10 +220,21 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
                             <input
                                 type="date"
                                 required
+                                min={new Date().toISOString().split('T')[0]}
                                 value={targetShipmentDate}
                                 onChange={e => setTargetShipmentDate(e.target.value)}
-                                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                                className={`w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border rounded-lg focus:outline-none focus:ring-2 text-sm transition-all ${
+                                    isPastDate
+                                        ? 'border-red-500 focus:ring-red-500'
+                                        : 'border-gray-200 dark:border-gray-700 focus:ring-purple-500'
+                                }`}
                             />
+                            {isPastDate && (
+                                <p className="text-xs text-red-600 flex items-center gap-1 mt-1 font-bold animate-pulse">
+                                    <AlertCircle size={12} />
+                                    Shipment date cannot be in the past!
+                                </p>
+                            )}
                         </div>
                         <div>
                             {/* Grade inherits from selected stock items automatically */}

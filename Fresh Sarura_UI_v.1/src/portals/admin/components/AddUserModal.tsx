@@ -16,16 +16,34 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }: AddUserModalProps) => {
 
     const roles = [
         { value: 'production_manager', label: 'Production Manager' },
-        { value: 'farm_manager',       label: 'Farm Manager' },
+        // { value: 'farm_manager',       label: 'Farm Manager' },
         { value: 'logistic_officer',   label: 'Logistics Officer' },
         { value: 'quality_officer',    label: 'QC Officer' },
-        { value: 'admin',              label: 'Admin' },
+        // { value: 'admin',              label: 'Admin' },
     ];
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
         setError('');
+
+        // Email validation for gmail
+        if (!formData.email.toLowerCase().endsWith('@gmail.com')) {
+            setError('Email must be a valid @gmail.com account.');
+            setIsSubmitting(false);
+            return;
+        }
+
+        // Phone validation for Rwandan format (+2507... or 07...)
+        if (formData.phone) {
+            const phoneRegex = /^(?:\+250|0)7[2389]\d{7}$/;
+            const strippedPhone = formData.phone.replace(/[\s-]/g, '');
+            if (!phoneRegex.test(strippedPhone)) {
+                setError('Please enter a valid Rwandan phone number (e.g., +25078... or 078...).');
+                setIsSubmitting(false);
+                return;
+            }
+        }
         try {
             await api.post('/auth/create-user', formData);
             onUserAdded?.(formData.name);

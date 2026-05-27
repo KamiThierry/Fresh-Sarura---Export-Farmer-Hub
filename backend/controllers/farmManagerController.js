@@ -3,6 +3,7 @@ import CropCycle from '../models/CropCycle.js';
 import BudgetRequest from '../models/BudgetRequest.js';
 import YieldForecast from '../models/YieldForecast.js';
 import FieldReport from '../models/FieldReport.js';
+import HarvestDeclaration from '../models/HarvestDeclaration.js';
 import User from '../models/User.js';
 import { createNotification } from './notificationController.js';
  
@@ -93,8 +94,13 @@ export const getMyCycles = async (req, res) => {
                     cycleId: cycle._id,
                     submittedBy: req.user._id,
                 }).sort({ createdAt: -1 });
+
+                const harvests = await HarvestDeclaration.find({
+                    cycleId: cycle._id,
+                    declaredBy: req.user._id,
+                }).sort({ createdAt: -1 });
  
-                return { ...cycle.toObject(), myRequests: requests, myFieldReports: fieldReports };
+                return { ...cycle.toObject(), myRequests: requests, myFieldReports: fieldReports, myHarvests: harvests };
             })
         );
  

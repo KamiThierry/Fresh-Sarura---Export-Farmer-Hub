@@ -366,10 +366,10 @@ const LoginPage = () => {
         {/* ── Footer (credentials step only) ───────────────── */}
         {step === "credentials" && (
           <div className="text-center mt-5 relative z-30">
-            <p className="text-white/55 text-[13px]">
+            {/* <p className="text-white/55 text-[13px]">
               Don't have an account?{" "}
               <Link to="/signup" className="text-[#7ec99a] font-medium hover:underline">Sign Up</Link>
-            </p>
+            </p> */}
             <div className="flex items-center justify-center gap-1.5 text-[#c9a84c]/70 text-[9.5px] font-bold uppercase tracking-[1.2px] mt-5">
               <span>GlobalG.A.P. Certified</span>
               <span className="opacity-40">·</span>

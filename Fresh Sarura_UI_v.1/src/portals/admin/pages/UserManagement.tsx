@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Users, Search, UserPlus, Edit2, PowerOff, Trash2, Filter, CheckCircle, ShieldOff, Clock, X, ChevronDown, Download, FileSpreadsheet, FileText, AlertTriangle } from 'lucide-react';
+import { Users, Search, UserPlus, Edit2, PowerOff, Trash2, Filter, CheckCircle, ShieldOff, Clock, X, ChevronDown, Download, FileSpreadsheet, FileText, AlertTriangle, Calendar } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AddUserModal from '../components/AddUserModal';
 import { useToastContext } from '@/context/ToastContext';
@@ -23,13 +23,16 @@ const ROLE_LABELS: Record<string, string> = {
 
 const UserManagement = () => {
     const displayDate = (date: string | Date) => formatDate(date);
+    const currentUserStr = localStorage.getItem('user');
+    const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
 
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
     const [roleFilter, setRoleFilter] = useState('All');
-    const [dateFilter, setDateFilter] = useState('All');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
     const [isAddUserOpen, setIsAddUserOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<any | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
@@ -225,30 +228,27 @@ const UserManagement = () => {
     };
 
     const filtered = users.filter(u => {
-        const matchSearch = u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            ROLE_LABELS[u.role]?.toLowerCase().includes(searchTerm.toLowerCase());
+        const searchLower = searchTerm.toLowerCase();
+        const matchSearch = (u.name || '').toLowerCase().includes(searchLower) ||
+            (u.email || '').toLowerCase().includes(searchLower) ||
+            (ROLE_LABELS[u.role] || u.role || '').toLowerCase().includes(searchLower);
         const matchStatus = statusFilter === 'All' ||
             (statusFilter === 'Active' && u.isActive) ||
             (statusFilter === 'Inactive' && !u.isActive);
         const matchRole = roleFilter === 'All' || u.role === roleFilter;
 
         let matchDate = true;
-        if (dateFilter !== 'All') {
+        if (startDate || endDate) {
             const joinedDate = new Date(u.createdAt);
-            const now = new Date();
-            if (dateFilter === 'Week') {
-                const weekAgo = new Date();
-                weekAgo.setDate(now.getDate() - 7);
-                matchDate = joinedDate >= weekAgo;
-            } else if (dateFilter === 'Month') {
-                const monthAgo = new Date();
-                monthAgo.setMonth(now.getMonth() - 1);
-                matchDate = joinedDate >= monthAgo;
-            } else if (dateFilter === '3Months') {
-                const threeMonthsAgo = new Date();
-                threeMonthsAgo.setMonth(now.getMonth() - 3);
-                matchDate = joinedDate >= threeMonthsAgo;
+            if (startDate) {
+                const start = new Date(startDate);
+                start.setHours(0, 0, 0, 0);
+                if (joinedDate < start) matchDate = false;
+            }
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                if (joinedDate > end) matchDate = false;
             }
         }
 
@@ -275,7 +275,24 @@ const UserManagement = () => {
                         <p className="text-sm text-gray-500 dark:text-gray-400">Manage platform users and access</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 shadow-sm">
+                        <Calendar size={15} className="text-green-500 flex-shrink-0" />
+                        <span className="text-xs text-gray-400 font-medium">From:</span>
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={e => { setStartDate(e.target.value); setCurrentPage(1); }}
+                            className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer"
+                        />
+                        <span className="text-xs text-gray-400 font-medium ml-2">To:</span>
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={e => { setEndDate(e.target.value); setCurrentPage(1); }}
+                            className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer"
+                        />
+                    </div>
                     <button onClick={() => setIsExportOpen(!isExportOpen)}
                         className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-all shadow-sm relative">
                         <Download size={16} /> Export Data
@@ -361,17 +378,6 @@ const UserManagement = () => {
                         </select>
                         <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
                     </div>
-                    <div className="relative">
-                        <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                        <select value={dateFilter} onChange={e => { setDateFilter(e.target.value); setCurrentPage(1); }}
-                            className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm">
-                            <option value="All">All Time</option>
-                            <option value="Week">This Week</option>
-                            <option value="Month">This Month</option>
-                            <option value="3Months">Last 3 Months</option>
-                        </select>
-                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
-                    </div>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -389,7 +395,9 @@ const UserManagement = () => {
                         <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
                             {paginated.length === 0 ? (
                                 <tr><td colSpan={6} className="py-10 text-center text-gray-400 text-sm">No users found.</td></tr>
-                            ) : paginated.map(u => (
+                            ) : paginated.map(u => {
+                                const isCurrentUser = currentUser && (u._id === currentUser._id || u._id === currentUser.id);
+                                return (
                                 <tr key={u._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
                                     <td className="px-5 py-4">
                                         <div className="flex items-center gap-3">
@@ -397,7 +405,14 @@ const UserManagement = () => {
                                                 {u.name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                                             </div>
                                             <div>
-                                                <p className="font-semibold text-gray-900 dark:text-white">{u.name}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-semibold text-gray-900 dark:text-white">{u.name}</p>
+                                                    {isCurrentUser && (
+                                                        <span className="text-[9px] font-bold bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                                            You
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <p className="text-xs text-gray-400">{u.email}</p>
                                             </div>
                                         </div>
@@ -418,19 +433,22 @@ const UserManagement = () => {
                                                 className="p-1.5 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors" title="Edit">
                                                 <Edit2 size={15} />
                                             </button>
-                                            <button onClick={() => toggleActive(u)}
-                                                className={`p-1.5 rounded-lg transition-colors ${u.isActive ? 'hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20' : 'hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'}`}
-                                                title={u.isActive ? 'Deactivate' : 'Activate'}>
+                                            <button onClick={() => !isCurrentUser && toggleActive(u)}
+                                                disabled={isCurrentUser}
+                                                className={`p-1.5 rounded-lg transition-colors ${isCurrentUser ? 'opacity-30 cursor-not-allowed' : u.isActive ? 'hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20' : 'hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'}`}
+                                                title={isCurrentUser ? "You cannot deactivate your own account." : (u.isActive ? 'Deactivate' : 'Activate')}>
                                                 <PowerOff size={15} />
                                             </button>
-                                            <button onClick={() => setDeletingUser(u)}
-                                                className="p-1.5 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="Delete">
+                                            <button onClick={() => !isCurrentUser && setDeletingUser(u)}
+                                                disabled={isCurrentUser}
+                                                className={`p-1.5 rounded-lg transition-colors ${isCurrentUser ? 'opacity-30 cursor-not-allowed' : 'hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20'}`} 
+                                                title={isCurrentUser ? "You cannot delete your own account." : "Delete"}>
                                                 <Trash2 size={15} />
                                             </button>
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                            )})}
                         </tbody>
                     </table>
                 )}

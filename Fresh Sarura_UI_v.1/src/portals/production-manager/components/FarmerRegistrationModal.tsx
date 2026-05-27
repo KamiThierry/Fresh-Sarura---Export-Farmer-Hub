@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Upload, User, AlertCircle } from 'lucide-react';
+import { X, User, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { getProvinces, getDistricts, getSectors } from '@/lib/rwandaLocations';
 
@@ -56,6 +56,22 @@ const FarmerRegistrationModal = ({ isOpen, onClose, onFarmerAdded }: FarmerRegis
         if (formData.produce_types.length === 0) {
             setError('Please select at least one produce type.');
             return;
+        }
+
+        // Email validation for gmail (if provided)
+        if (formData.email && !formData.email.toLowerCase().endsWith('@gmail.com')) {
+            setError('Email must be a valid @gmail.com account.');
+            return;
+        }
+
+        // Phone validation for Rwandan format (+2507... or 07...) (if provided)
+        if (formData.phone) {
+            const phoneRegex = /^(?:\+250|0)7[2389]\d{7}$/;
+            const strippedPhone = formData.phone.replace(/[\s-]/g, '');
+            if (!phoneRegex.test(strippedPhone)) {
+                setError('Please enter a valid Rwandan phone number (e.g., +25078... or 078...).');
+                return;
+            }
         }
 
         setIsSubmitting(true);

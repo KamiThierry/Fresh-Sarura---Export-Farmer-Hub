@@ -8,6 +8,7 @@ import {
 import CreateExportBatchModal from '../components/CreateExportBatchModal';
 import BatchDetailModal from '../components/BatchDetailModal';
 import StockDetailModal from '../components/StockDetailModal';
+import AssignRoomModal from '../components/AssignRoomModal';
 import Pagination from '../../shared/component/Pagination';
 
 import { api } from '../../../lib/api';
@@ -47,10 +48,8 @@ const InventoryManagement = () => {
     const [activityLoading, setActivityLoading] = useState(false);
 
     // New states for QC Confirmation
-    const [availableRooms, setAvailableRooms] = useState<any[]>([]);
-    const [confirmingBatchId, setConfirmingBatchId] = useState<string | null>(null);
-    const [selectedRoomForConfirm, setSelectedRoomForConfirm] = useState<string>('');
-    const [isConfirming, setIsConfirming] = useState(false);
+    const [selectedBatchForConfirm, setSelectedBatchForConfirm] = useState<any>(null);
+    const [isAssignStockRoomModalOpen, setIsAssignStockRoomModalOpen] = useState(false);
 
     // Action Menu State
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -58,7 +57,6 @@ const InventoryManagement = () => {
     // Stock tab filter
     const [produceFilter, setProduceFilter] = useState<string>('all');
     const [roomFilter, setRoomFilter] = useState<string>('all');
-    const [allRooms, setAllRooms] = useState<any[]>([]);
     // Global search & filters
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [eventTypeFilter, setEventTypeFilter] = useState<string>('all');
@@ -85,36 +83,7 @@ const InventoryManagement = () => {
 
     // (Removed local fetchQcDoneBatches, using PMContext instead)
 
-    const fetchRooms = async () => {
-        try {
-            const res = await api.get('/rooms');
-            const data = res.data?.data || res.data || [];
-            setAllRooms(data);
-            setAvailableRooms(
-                data.filter((r: any) => r.status === 'Available' && r.type === 'Cold Room')
-            );
-        } catch (err) {
-            console.error('Failed to fetch rooms:', err);
-        }
-    };
 
-    const handleConfirmBatch = async (batchId: string) => {
-        setIsConfirming(true);
-        try {
-            await api.patch(`/processing-batches/${batchId}/confirm`, {
-                roomId: selectedRoomForConfirm || undefined,
-            });
-            showToast("Stock Confirmed", "Batch has been successfully moved to active inventory");
-            setConfirmingBatchId(null);
-            setSelectedRoomForConfirm('');
-            // Refresh everything affected
-            await Promise.all([refreshStock(), refreshProcessingBatches(), fetchActivityFeed()]);
-        } catch (err) {
-            console.error('Failed to confirm batch:', err);
-        } finally {
-            setIsConfirming(false);
-        }
-    };
 
 
 
@@ -189,11 +158,11 @@ const InventoryManagement = () => {
                     });
 
                     // If room was assigned by PM → separate event using updatedAt
-                    if (b.assignedBy && b.assignedRoom) {
+                    if (b.assignedBy && b.assignedRoom && b.status !== 'Done') {
                         events.push({
                             id: `pb-ra-${b._id}`,
                             timestamp: new Date(
-                                (b.status !== 'RoomRequested' ? (b.updatedAt || b.createdAt) : b.createdAt) || Date.now()
+                                (b.status === 'Processing' ? (b.updatedAt || b.createdAt) : b.createdAt) || Date.now()
                             ),
                             type: 'Room Assigned',
                             description: `PM assigned "${b.assignedRoom}" to ${b.cropName || 'batch'} — QC can now begin processing`,
@@ -211,11 +180,11 @@ const InventoryManagement = () => {
                         events.push({
                             id: `pb-done-${b._id}`,
                             timestamp: new Date(b.updatedAt || b.createdAt || Date.now()),
-                            type: 'Stock Recorded',
-                            description: `${b.cropName || 'Batch'} processed — ${approved} kg approved${rejected > 0 ? `, ${rejected} kg rejected${b.primaryDefectType && b.primaryDefectType !== 'None' ? ` due to ${b.primaryDefectType}` : ''}` : ''}`,
-                            impact: `+${approved} kg / −${rejected} kg`,
+                            type: 'Stock Confirmed',
+                            description: `PM confirmed stock: ${b.cropName || 'Batch'} — ${approved} kg approved${rejected > 0 ? `, ${rejected} kg rejected${b.primaryDefectType && b.primaryDefectType !== 'None' ? ` due to ${b.primaryDefectType}` : ''}` : ''}`,
+                            impact: `+${approved} kg stored in ${b.coldRoomName || b.assignedRoom || 'cold room'}`,
                             impactType: rejected > 0 ? 'mixed' : 'positive',
-                            actor: b.requestedBy?.name || 'QC Officer',
+                            actor: b.confirmedBy?.name || b.requestedBy?.name || 'Production Manager',
                             ref: b.stockId || '',
                         });
                     }
@@ -317,7 +286,6 @@ const InventoryManagement = () => {
         
         fetchActivityFeed();
         // fetchQcDoneBatches(); // No longer needed
-        fetchRooms();
     }, []);
 
     // --- DERIVED / FILTERED DATA ---
@@ -978,8 +946,8 @@ const InventoryManagement = () => {
                                     className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer shadow-sm"
                                 >
                                     <option value="all">All Rooms</option>
-                                    {allRooms.map(room => (
-                                        <option key={room._id} value={room.name}>{room.name}</option>
+                                    {[...new Set(inventoryItems.map((i: any) => i.storageLocation).filter(Boolean))].map(name => (
+                                        <option key={name as string} value={name as string}>{name as string}</option>
                                     ))}
                                 </select>
                                 <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
@@ -1140,53 +1108,14 @@ const InventoryManagement = () => {
 
                                                 <button
                                                     onClick={() => {
-                                                        setConfirmingBatchId(
-                                                            confirmingBatchId === batch._id ? null : batch._id
-                                                        );
-                                                        setSelectedRoomForConfirm('');
-                                                        fetchRooms();
+                                                        setSelectedBatchForConfirm(batch);
+                                                        setIsAssignStockRoomModalOpen(true);
                                                     }}
-                                                    className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                                                    className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm"
                                                 >
-                                                    {confirmingBatchId === batch._id ? 'Cancel' : 'Review & Confirm'}
+                                                    Review & Confirm
                                                 </button>
                                             </div>
-
-                                            {/* Expanded confirm panel */}
-                                            {confirmingBatchId === batch._id && (
-                                                <div className="border-t border-amber-100 dark:border-amber-800/20 bg-amber-50/40 dark:bg-amber-900/5 p-4 flex items-end gap-4">
-                                                    <div className="flex flex-col gap-1 flex-1">
-                                                        <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                                                            Select Cold Room for Long-term Storage <span className="text-red-500">*</span>
-                                                        </label>
-                                                        <select
-                                                            value={selectedRoomForConfirm}
-                                                            onChange={e => setSelectedRoomForConfirm(e.target.value)}
-                                                            className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                                                        >
-                                                            <option value="">— Select a cold room —</option>
-                                                            {availableRooms.map(room => (
-                                                                <option key={room._id} value={room._id}>
-                                                                    {room.name} — {room.type} ({room.capacityKg} kg capacity)
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-
-                                                    <button
-                                                        onClick={() => handleConfirmBatch(batch._id)}
-                                                        disabled={isConfirming || !selectedRoomForConfirm}
-                                                        className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors disabled:opacity-50 flex items-center gap-2"
-                                                    >
-                                                        {isConfirming ? (
-                                                            <>
-                                                                <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                                Confirming...
-                                                            </>
-                                                        ) : 'Confirm & Add to Stock'}
-                                                    </button>
-                                                </div>
-                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -1429,89 +1358,92 @@ const InventoryManagement = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                {filteredExportBatches.slice((exportPage - 1) * itemsPerPage, exportPage * itemsPerPage).map((item) => (
-                                    <tr key={item._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                        <td className="px-6 py-4 font-mono text-sm font-bold text-gray-700 dark:text-gray-300">{item.batchId}</td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-gray-900 dark:text-white">{item.clientName}</span>
-                                                <span className="text-xs text-gray-500">{item.destination}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                                            {item.cropName} — {item.boxCount} {item.boxCount === 1 ? 'box' : 'boxes'} ({item.allocatedWeightKg?.toLocaleString()} kg)
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                                            {(() => {
-                                                const shipment = getShipmentForBatch(item._id);
-                                                const confirmedDate = shipment?.departureDate;
-                                                const plannedDate = item.targetShipmentDate;
+                                {filteredExportBatches.slice((exportPage - 1) * itemsPerPage, exportPage * itemsPerPage).map((item) => {
+                                    const shipment = getShipmentForBatch(item._id);
+                                    return (
+                                        <tr key={item._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                            <td className="px-6 py-4 font-mono text-sm font-bold text-gray-700 dark:text-gray-300">{item.batchId}</td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-bold text-gray-900 dark:text-white">{item.clientName}</span>
+                                                    <span className="text-xs text-gray-500">{item.destination}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
+                                                {item.cropName} — {item.boxCount} {item.boxCount === 1 ? 'box' : 'boxes'} ({item.allocatedWeightKg?.toLocaleString()} kg)
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
+                                                {(() => {
+                                                    const confirmedDate = shipment?.departureDate;
+                                                    const plannedDate = item.targetShipmentDate;
 
-                                                if (confirmedDate) {
-                                                    return (
-                                                        <div className="flex flex-col">
-                                                            <span className="font-medium text-gray-900 dark:text-white">
-                                                                {formatDate(confirmedDate)}
-                                                            </span>
-                                                            <span className="text-[10px] text-green-600 dark:text-green-400 font-medium mt-0.5">
-                                                                Confirmed flight
-                                                            </span>
-                                                        </div>
-                                                    );
-                                                }
+                                                    if (confirmedDate) {
+                                                        return (
+                                                            <div className="flex flex-col">
+                                                                <span className="font-medium text-gray-900 dark:text-white">
+                                                                    {formatDate(confirmedDate)}
+                                                                </span>
+                                                                <span className="text-[10px] text-green-600 dark:text-green-400 font-medium mt-0.5">
+                                                                    Confirmed flight
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    }
 
-                                                if (plannedDate) {
-                                                    return (
-                                                        <div className="flex flex-col">
-                                                            <span className="text-gray-600 dark:text-gray-300">
-                                                                {formatDate(plannedDate)}
-                                                            </span>
-                                                            <span className="text-[10px] text-amber-500 font-medium mt-0.5">
-                                                                Target — not yet booked
-                                                            </span>
-                                                        </div>
-                                                    );
-                                                }
+                                                    if (plannedDate) {
+                                                        return (
+                                                            <div className="flex flex-col">
+                                                                <span className="text-gray-600 dark:text-gray-300">
+                                                                    {formatDate(plannedDate)}
+                                                                </span>
+                                                                <span className="text-[10px] text-amber-500 font-medium mt-0.5">
+                                                                    Target — not yet booked
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    }
 
-                                                return <span className="text-gray-400">—</span>;
-                                            })()}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {(() => {
-                                                const shipment = getShipmentForBatch(item._id);
-                                                if (!shipment) return (
+                                                    return <span className="text-gray-400">—</span>;
+                                                })()}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {!shipment ? (
                                                     <span className="text-xs text-gray-400">Awaiting shipment</span>
-                                                );
-                                                return (
+                                                ) : (
                                                     <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
                                                         {shipment.plNumber}
                                                     </span>
-                                                );
-                                            })()}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                                                item.status === 'ReadyForExport' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
-                                                item.status === 'Shipped' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
-                                                'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
-                                            }`}>
-                                                {item.status === 'ReadyForExport' ? 'Ready for Export' : item.status}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button
-                                                onClick={() => { setSelectedBatch(item); setIsBatchModalOpen(true); }}
-                                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                                                    item.status === 'Pending'
-                                                        ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50'
-                                                        : 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50'
-                                                }`}
-                                            >
-                                                {item.status === 'Pending' ? 'Mark Ready' : 'View Details'}
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                                                    item.status === 'ReadyForExport' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                                                    (item.status === 'Shipped' && (shipment?.status === 'PackingListGenerated' || shipment?.status === 'Draft')) ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
+                                                    (item.status === 'Shipped' && shipment?.status === 'Departed') ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                                                    item.status === 'Shipped' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                                                    'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                                                }`}>
+                                                    {item.status === 'ReadyForExport' ? 'Ready for Export' :
+                                                     (item.status === 'Shipped' && (shipment?.status === 'PackingListGenerated' || shipment?.status === 'Draft')) ? 'Scheduled' :
+                                                     (item.status === 'Shipped' && shipment?.status === 'Departed') ? 'In Transit' :
+                                                     item.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <button
+                                                    onClick={() => { setSelectedBatch(item); setIsBatchModalOpen(true); }}
+                                                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                                                        item.status === 'Pending'
+                                                            ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50'
+                                                            : 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50'
+                                                    }`}
+                                                >
+                                                    {item.status === 'Pending' ? 'Mark Ready' : 'View Details'}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                         <Pagination currentPage={exportPage} totalItems={filteredExportBatches.length} itemsPerPage={itemsPerPage} onPageChange={setExportPage} />
@@ -1657,6 +1589,21 @@ const InventoryManagement = () => {
 
 
 
+            <AssignRoomModal
+                isOpen={isAssignStockRoomModalOpen}
+                onClose={() => {
+                    setIsAssignStockRoomModalOpen(false);
+                    setSelectedBatchForConfirm(null);
+                }}
+                batch={selectedBatchForConfirm}
+                mode="confirm"
+                onSuccess={() => {
+                    showToast("Stock Confirmed", "Batch has been successfully moved to active inventory");
+                    refreshStock();
+                    refreshProcessingBatches();
+                    fetchActivityFeed();
+                }}
+            />
         </div>
     );
 };
