@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Package2, Download, ChevronDown, FileSpreadsheet, FileText, Calendar, Search } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { X, Package2, Download, Calendar, Search } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import logo from '@/assets/sarura_logo_nav.png';
@@ -12,7 +11,6 @@ const PackagingLotDetailModal = ({ lot, onClose }: { lot: any; onClose: () => vo
     const [searchTerm, setSearchTerm] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-    const [isExportOpen, setIsExportOpen] = useState(false);
 
     const totalConsumed = lot.quantityReceived - lot.quantityAvailable;
     const totalValue = lot.quantityReceived * lot.pricePerBox;
@@ -47,26 +45,6 @@ const PackagingLotDetailModal = ({ lot, onClose }: { lot: any; onClose: () => vo
     const filteredBoxesUsed = filteredLog.reduce((sum: number, entry: any) => sum + (entry.boxesUsed || 0), 0);
     const filteredCostUsed = filteredBoxesUsed * lot.pricePerBox;
 
-    const handleExportXLSX = () => {
-        const wb = XLSX.utils.book_new();
-        const headers = ['Date', 'Time', 'Batch / Client', 'Boxes Used', 'Cost (Rwf)'];
-        const rows = filteredLog.map((entry: any) => [
-            new Date(entry.consumedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-            new Date(entry.consumedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-            entry.exportBatchRef || '—',
-            -entry.boxesUsed,
-            -(entry.boxesUsed * lot.pricePerBox)
-        ]);
-
-        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        ws['!cols'] = headers.map((h, i) => ({
-            wch: Math.max(h.length, ...rows.map(r => String(r[i] ?? '').length)) + 4
-        }));
-
-        XLSX.utils.book_append_sheet(wb, ws, 'Consumption Ledger');
-        XLSX.writeFile(wb, `FreshSarura_Packaging_${lot.vendor.replace(/\s/g, '_')}_Ledger.xlsx`);
-        setIsExportOpen(false);
-    };
 
     const handleExportPDF = () => {
         const doc = new jsPDF('p', 'mm', 'a4');
@@ -110,11 +88,34 @@ const PackagingLotDetailModal = ({ lot, onClose }: { lot: any; onClose: () => vo
                 `-${entry.boxesUsed.toLocaleString()}`,
                 `-${(entry.boxesUsed * lot.pricePerBox).toLocaleString()} Rwf`
             ]),
+            foot: [[
+                '', 
+                '', 
+                (searchTerm || startDate || endDate) ? 'FILTERED TOTAL' : 'TOTAL CONSUMED', 
+                `-${filteredBoxesUsed.toLocaleString()}`, 
+                `-${filteredCostUsed.toLocaleString()} Rwf`
+            ]],
             theme: 'striped',
             headStyles: { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [147, 51, 234] }, // Purple matching modal
             bodyStyles: { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } },
+            footStyles: { fillColor: [249, 250, 251], fontSize: 8.5, fontStyle: 'bold', cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } },
             alternateRowStyles: { fillColor: [249, 250, 251] },
+            didParseCell: (data: any) => {
+                if (data.section === 'foot') {
+                    if (data.column.index === 4) {
+                        data.cell.styles.textColor = [220, 38, 38]; // red
+                    } else {
+                        data.cell.styles.textColor = [17, 24, 39]; // dark
+                    }
+                }
+            }
         });
+
+        const finalY = (doc as any).lastAutoTable.finalY || 72;
+        doc.setFontSize(8.5);
+        doc.setTextColor(107, 114, 128);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Notes: ${lot.notes || '—'}`, 15, finalY + 10);
 
         // Footer
         const pageCount = (doc as any).internal.getNumberOfPages();
@@ -130,7 +131,6 @@ const PackagingLotDetailModal = ({ lot, onClose }: { lot: any; onClose: () => vo
         }
 
         doc.save(`FreshSarura_Packaging_${lot.vendor.replace(/\s/g, '_')}_Ledger.pdf`);
-        setIsExportOpen(false);
     };
 
     return createPortal(
@@ -249,10 +249,9 @@ const PackagingLotDetailModal = ({ lot, onClose }: { lot: any; onClose: () => vo
 
                             {/* Export dropdown */}
                             <div className="relative">
-                                <button onClick={onClose}
+                                <button onClick={handleExportPDF}
                                     className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors shadow-sm">
                                     <Download size={13} /> Export
-                                    
                                 </button>
                                 
                             </div>
