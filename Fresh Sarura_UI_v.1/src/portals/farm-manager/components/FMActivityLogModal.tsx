@@ -6,6 +6,7 @@ import {
     MapPin, Inbox, AlertCircle
 } from 'lucide-react';
 import type { Task } from '../../shared/types/activity';
+import { formatDate } from '@/lib/dateUtils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,7 +45,7 @@ const ActivityRow = ({ task, onResubmit }: { task: Task, onResubmit?: (t: Task) 
             <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-medium">
                     <CalendarDays size={11} />
-                    {task.statusDate ?? task.date}
+                    {formatDate(task.statusDate ?? task.date)}
                 </div>
                 {isFlagged ? (
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white animate-pulse">

@@ -4,13 +4,37 @@ import {
   X, ClipboardList, FileText, CheckCircle2,
   AlertCircle, TrendingUp,
   Target, Coins, Activity, Sprout, ThumbsUp, ThumbsDown,
-  ListChecks, Lock, Plus, Loader2, Download, ChevronDown
+  ListChecks, Lock, Plus, Loader2, Download, ChevronDown, FileSpreadsheet
 } from 'lucide-react';
 import EvidenceViewModal from './EvidenceViewModal';
 import BudgetLedgerModal from './BudgetLedgerModal';
 import BudgetRejectionModal from './BudgetRejectionModal';
 import { api } from '@/lib/api';
-import Toast from '../../shared/component/Toast';
+import { usePMContext } from '@/context/PMContext';
+import { useToastContext } from '@/context/ToastContext';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import logo from '@/assets/sarura_logo_nav.png';
+import { formatDate, formatDateTime } from '@/lib/dateUtils';
+import { getReportFooterText } from '@/lib/utils';
+
+// Helper for embedding images in PDFs
+const getBase64FromUrl = async (url: string): Promise<string | null> => {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.warn("Failed to fetch image for PDF:", url, err);
+    return null;
+  }
+};
 
 interface CropCycleDetailModalProps {
   isOpen: boolean;
@@ -49,8 +73,15 @@ const CropCycleDetailModal = ({
 
   // ─── Per-forecast reply text ───────────────────────────────────────
   const [replyText, setReplyText] = useState<{ [id: string]: string }>({});
-  const [toast, setToast] = useState<{ message: string; subtitle?: string } | null>(null);
+  const { showToast } = useToastContext();
   const [showExportMenu, setShowExportMenu] = useState(false);
+
+  const {
+    refreshPendingRequests,
+    refreshPendingForecasts,
+    refreshPendingReports,
+    refreshCycles
+  } = usePMContext();
 
   // ─── Fetch all cycle data ──────────────────────────────────────────
   const fetchFull = async () => {
@@ -128,11 +159,14 @@ const CropCycleDetailModal = ({
       await api.patch(`/crop-cycles/budget-requests/${requestId}/approve`, { forceApprove });
       setOverdraftWarning(null);
       fetchFull();
+      refreshPendingRequests();
+      refreshCycles();
+      if (onCycleUpdated) onCycleUpdated();
     } catch (err: any) {
       if (err.code === 'BUDGET_OVERDRAFT') {
         setOverdraftWarning({ requestId, details: err.overdraftDetails });
       } else if (err.code === 'CYCLE_CLOSED') {
-        alert(err.message);
+        showToast("Action Forbidden", err.message);
       } else {
         console.error(err);
       }
@@ -143,6 +177,9 @@ const CropCycleDetailModal = ({
     try {
       await api.patch(`/crop-cycles/budget-requests/${requestId}/reject`, { pmNote });
       fetchFull();
+      refreshPendingRequests();
+      refreshCycles();
+      if (onCycleUpdated) onCycleUpdated();
     } catch (err) { console.error(err); }
   };
 
@@ -154,6 +191,8 @@ const CropCycleDetailModal = ({
     try {
       await api.patch(`/crop-cycles/yield-forecasts/${forecastId}/verify`, { pmReply });
       fetchFull();
+      refreshPendingForecasts();
+      if (onCycleUpdated) onCycleUpdated();
     } catch (err) { console.error(err); }
   };
 
@@ -161,7 +200,9 @@ const CropCycleDetailModal = ({
     try {
       await api.patch(`/crop-cycles/field-reports/${reportId}/flag`, { reason });
       fetchFull();
+      refreshPendingReports();
       setSelectedFieldReport(null);
+      if (onCycleUpdated) onCycleUpdated();
     } catch (err) { console.error(err); }
   };
 
@@ -174,6 +215,7 @@ const CropCycleDetailModal = ({
       if (onCloseCycle) onCloseCycle(finalYield);
       if (onCycleUpdated) onCycleUpdated();
       fetchFull();
+      refreshCycles();
     } catch (err) { console.error(err); }
   };
 
@@ -181,255 +223,331 @@ const CropCycleDetailModal = ({
     try {
       await api.patch(`/crop-cycles/${cycle._id}/adjust-budget`, { categoryName, newAllocated });
       fetchFull();
+      refreshCycles();
       setIsAdjustBudgetOpen(false);
+      if (onCycleUpdated) onCycleUpdated();
     } catch (err) { console.error(err); }
   };
 
   const handleCloseAttempt = () => {
     const pendingCount = budgetRequests.filter((r: any) => r.approvalStatus === 'Pending').length;
     if (pendingCount > 0) {
-      setToast({
-        message: "Pending Requests Found",
-        subtitle: `There are ${pendingCount} pending budget requests for this cycle. Reject or approve them before closing.`
-      });
+      showToast("Pending Requests Found", `There are ${pendingCount} pending budget requests for this cycle. Reject or approve them before closing.`);
       return;
     }
     setIsConfirmCloseOpen(true);
   };
 
-  const handleExportCSV = () => {
-    let csvContent = '';
-    let filename = `${displayCycleId}_${activeTab}.csv`;
+  // ─── Export Logic ────────────────────────────────────────────────
+  const handleExportXLSX = () => {
+    const wb = XLSX.utils.book_new();
+    const toTitleCase = (str: string) => str?.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || 'N/A';
 
-    if (activeTab === 'overview') {
-      csvContent = [
-        ['Field', 'Value'],
+    // Helper: create a styled worksheet
+    const makeSheet = (headers: string[], rows: (string | number)[][]) => {
+      const data = [headers, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      ws['!cols'] = headers.map((h, i) => {
+        const maxLen = Math.max(h.length, ...rows.map(r => String(r[i] ?? '').length));
+        return { wch: Math.min(maxLen + 4, 40) };
+      });
+      return ws;
+    };
+
+    // Sheet 1: Overview
+    const overviewWs = makeSheet(
+      ['Metric', 'Value'],
+      [
         ['Cycle ID', displayCycleId],
         ['Crop', displayCrop],
         ['Farmer', displayFarmer],
-        ['Status', cycleStatus],
+        ['Status', toTitleCase(cycleStatus)],
         ['Land Size', displayLandSize],
         ['Start Date', displayStartDate],
-        ['Expected Harvest', displayEndDate],
+        ['Harvest Date', displayEndDate],
         ['Yield Goal', displayYieldGoal],
-        ['Total Budget (Rwf)', fmt(displayBudget)],
-        ['Total Approved (Rwf)', fmt(totalApproved)],
-        ['Total Spent (Rwf)', fmt(totalSpent)],
-        ['Cycle Progress (%)', displayBudget > 0 ? Math.round((totalApproved / displayBudget) * 100) : 0],
-        ['Field Reports', fieldReports.length],
-        ['Budget Requests', budgetRequests.length],
-        ['Pending Requests', budgetRequests.filter((r: any) => r.approvalStatus === 'Pending').length],
-      ].map(row => row.join(',')).join('\n');
-    } else if (activeTab === 'financials') {
-      csvContent = [
-        ['Category', 'Allocated (Rwf)', 'Approved (Rwf)', 'Actual Spent (Rwf)', 'Variance (Rwf)'],
-        ...budgetCategories.map((c: any) => [
-          c.name,
-          c.allocated || 0,
-          c.approved || 0,
-          c.spent || 0,
-          (c.allocated || 0) - (c.spent || 0),
-        ]),
-        [],
-        ['TOTAL', totalAllocated, totalApproved, totalSpent, globalVariance],
-      ].map(row => row.join(',')).join('\n');
-    } else if (activeTab === 'requests') {
-      csvContent = [
-        ['Submitted By', 'Status', 'Period Start', 'Period End', 'Activities', 'Total Requested (Rwf)', 'Submitted At', 'PM Note'],
-        ...budgetRequests.map((r: any) => [
-          r.submittedByName || 'Farm Manager',
-          r.approvalStatus,
-          fmtDate(r.startDate),
-          fmtDate(r.endDate),
-          `"${r.lineItems?.map((i: any) => i.activityName).join('; ') || ''}"`,
-          r.totalRequestedRwf || 0,
-          new Date(r.createdAt).toLocaleString(),
-          `"${r.pmNote || ''}"`,
-        ]),
-      ].map(row => row.join(',')).join('\n');
-    } else if (activeTab === 'forecasts') {
-      csvContent = [
-        ['Submitted By', 'Status', 'Expected Harvest', 'Predicted (kg)', 'Confidence', 'Notes', 'PM Reply'],
-        ...forecasts.map((f: any) => [
-          f.submittedByName || 'Farm Manager',
-          f.status,
-          fmtDate(f.harvestDate),
-          f.predictionKg || 0,
-          f.confidence || '',
-          `"${(f.notes || '').replace(/"/g, '""')}"`,
-          `"${(f.pmReply || '').replace(/"/g, '""')}"`,
-        ]),
-      ].map(row => row.join(',')).join('\n');
+        ['Total Budget', `${displayBudget.toLocaleString()} Rwf`],
+        ['Approved Budget', `${totalApproved.toLocaleString()} Rwf`],
+        ['Total Spent', `${totalSpent.toLocaleString()} Rwf`],
+        ['Progress (%)', `${displayBudget > 0 ? Math.round((totalApproved / displayBudget) * 100) : 0}%`]
+      ]
+    );
+    XLSX.utils.book_append_sheet(wb, overviewWs, 'Overview');
+
+    // Sheet 2: Budget Categories
+    const catWs = makeSheet(
+      ['Category Name', 'Allocated (Rwf)', 'Approved (Rwf)', 'Spent (Rwf)', 'Variance (Rwf)'],
+      budgetCategories.map((c: any) => [
+        c.name,
+        c.allocated || 0,
+        c.approved || 0,
+        c.spent || 0,
+        (c.allocated || 0) - (c.spent || 0)
+      ])
+    );
+    XLSX.utils.book_append_sheet(wb, catWs, 'Financials');
+
+    // Sheet 3: Budget Requests
+    const reqWs = makeSheet(
+      ['Date', 'Submitted By', 'Period', 'Activities', 'Amount (Rwf)', 'Status', 'PM Note'],
+      budgetRequests.map((r: any) => [
+        formatDate(r.createdAt),
+        r.submittedByName || 'Farm Manager',
+        `${formatDate(r.startDate)} - ${formatDate(r.endDate)}`,
+        (r.lineItems?.map((li: any) => li.activityName) || []).join('; '),
+        r.totalRequestedRwf || 0,
+        toTitleCase(r.approvalStatus),
+        r.pmNote || ''
+      ])
+    );
+    XLSX.utils.book_append_sheet(wb, reqWs, 'Budget Requests');
+
+    if (hasPnL) {
+      const pnlWs = makeSheet(
+        ['Metric', 'Projected', 'Actual'],
+        [
+          ['Yield (kg)',       yieldGoalKg,   finalYieldKg || 'N/A'],
+          ['Selling Price (Rwf/kg)', pricePerKg, pricePerKg],
+          ['Revenue (Rwf)',   projRevenue,   finalYieldKg ? actualRevenue : 'N/A'],
+          ['Production Cost (Rwf)', displayBudget, totalSpent],
+          ['Profit (Rwf)',    projProfit,    finalYieldKg ? actualProfit : 'N/A'],
+          ['Profit Margin (%)', `${projMargin.toFixed(1)}%`, finalYieldKg ? `${actualMargin.toFixed(1)}%` : 'N/A'],
+          ['Cost per kg (Rwf)', Math.round(projCostPerKg), finalYieldKg ? Math.round(actualCostPerKg) : 'N/A'],
+        ]
+      );
+      XLSX.utils.book_append_sheet(wb, pnlWs, 'P&L Summary');
     }
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+    // Sheet 4: Yield Forecasts
+    if (forecasts.length > 0) {
+      const forecastWs = makeSheet(
+        ['Submission Date', 'Harvest Date', 'Predicted (kg)', 'Confidence', 'Status', 'Notes'],
+        forecasts.map((f: any) => [
+          formatDate(f.createdAt),
+          formatDate(f.harvestDate),
+          f.predictionKg || 0,
+          f.confidence || '',
+          toTitleCase(f.status),
+          f.notes || ''
+        ])
+      );
+      XLSX.utils.book_append_sheet(wb, forecastWs, 'Yield Forecasts');
+    }
+
+    XLSX.writeFile(wb, `Sarura_Cycle_${displayCycleId}_Report.xlsx`);
     setShowExportMenu(false);
   };
 
-  const handleExportPDF = () => {
-    // All display vars are closures from render scope — safe to use here
-    const cycleProgress = displayBudget > 0
-      ? Math.min(Math.round((totalApproved / displayBudget) * 100), 100)
-      : 0;
+  const handleExportPDF = async () => {
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const timestamp = formatDateTime(new Date());
+    const toTitleCase = (str: string) => str?.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || 'N/A';
 
-    const categoryRows = budgetCategories.map((c: any) => {
-      const variance = (c.allocated || 0) - (c.spent || 0);
-      const approvedPct = c.allocated > 0 ? Math.round(((c.approved || 0) / c.allocated) * 100) : 0;
-      return `<tr>
-        <td>${c.name}</td>
-        <td class="num">${(c.allocated || 0).toLocaleString()}</td>
-        <td class="num">${(c.approved || 0).toLocaleString()}</td>
-        <td class="num">${(c.spent || 0).toLocaleString()}</td>
-        <td class="num ${variance < 0 ? 'over' : 'under'}">${variance >= 0 ? '+' : ''}${variance.toLocaleString()}</td>
-        <td class="num">${approvedPct}%</td>
-      </tr>`;
-    }).join('');
+    // 1. Standard Branded Header
+    try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch { }
+    doc.setTextColor(21, 128, 61); // Sarura Green
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('Fresh Sarura', 28, 19);
+    doc.setTextColor(107, 114, 128); // Gray
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+    doc.text('Export & Farmer Hub', 28, 23);
+    
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(17, 24, 39);
+    doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+    
+    doc.setDrawColor(229, 231, 235);
+    doc.line(15, 30, pageWidth - 15, 30);
 
-    const requestRows = budgetRequests.map((r: any) => `<tr>
-      <td>${r.submittedByName || 'Farm Manager'}</td>
-      <td>${fmtDate(r.startDate)} – ${fmtDate(r.endDate)}</td>
-      <td>${(r.lineItems?.map((i: any) => i.activityName) || []).join(', ') || '—'}</td>
-      <td class="num">${(r.totalRequestedRwf || 0).toLocaleString()}</td>
-      <td class="${r.approvalStatus === 'Approved' ? 'st-approved' : r.approvalStatus === 'Rejected' ? 'st-rejected' : 'st-pending'}">${r.approvalStatus}</td>
-      <td>${r.pmNote || '—'}</td>
-    </tr>`).join('');
+    // 2. Report Title & Cycle Identity
+    doc.setTextColor(17, 24, 39); doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+    doc.text(`CROP PRODUCTION REPORT - ${displayCycleId}`, 15, 42);
 
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <title>Financial Report – ${displayCycleId}</title>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:Arial,sans-serif;font-size:11px;color:#111;padding:28px 36px;background:#fff}
-    /* ── Header ── */
-    .header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:2.5px solid #166534;margin-bottom:18px}
-    .brand{display:flex;align-items:center;gap:10px}
-    .brand-logo{width:40px;height:40px;background:#166534;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:900}
-    .brand-name{font-size:20px;font-weight:900;color:#166534;line-height:1.1}
-    .brand-sub{font-size:9px;color:#666;margin-top:1px;letter-spacing:.5px;text-transform:uppercase}
-    .report-info{text-align:right}
-    .report-title{font-size:13px;font-weight:800;color:#166534}
-    .report-sub{font-size:9px;color:#555;margin-top:3px}
-    /* ── Info grid ── */
-    .info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;background:#f0faf3;border:1px solid #bbddc8;border-radius:6px;padding:10px 14px;margin-bottom:16px}
-    .info-label{font-size:8px;font-weight:700;text-transform:uppercase;color:#555;letter-spacing:.4px}
-    .info-value{font-size:11px;font-weight:700;color:#111;margin-top:1px}
-    /* ── Summary cards ── */
-    .summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
-    .card{border:1px solid #ddd;border-radius:6px;padding:10px 12px;text-align:center}
-    .card.hl{border-color:#166534;background:#f0faf3}
-    .card-label{font-size:8px;font-weight:700;text-transform:uppercase;color:#777;letter-spacing:.4px}
-    .card-value{font-size:14px;font-weight:900;color:#111;margin-top:4px}
-    .card-value.green{color:#166534}.card-value.red{color:#b91c1c}.card-value.amber{color:#b45309}
-    /* ── Progress ── */
-    .prog-row{display:flex;justify-content:space-between;font-size:9px;font-weight:700;margin-bottom:4px}
-    .prog-wrap{background:#e5e7eb;border-radius:4px;height:7px;overflow:hidden;margin-bottom:16px}
-    .prog-fill{height:100%;border-radius:4px}
-    /* ── Section titles ── */
-    .sec-title{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.6px;color:#166534;
-      border-bottom:1.5px solid #bbddc8;padding-bottom:4px;margin-bottom:8px}
-    /* ── Tables ── */
-    table{width:100%;border-collapse:collapse;margin-bottom:18px;font-size:10px}
-    th{background:#166534;color:#fff;padding:5px 8px;text-align:left;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
-    td{padding:5px 8px;border-bottom:1px solid #eee;vertical-align:top}
-    tr:nth-child(even) td{background:#f9fafb}
-    .num{text-align:right;font-variant-numeric:tabular-nums;font-family:monospace}
-    .total-row td{font-weight:800;background:#f0faf3!important;border-top:2px solid #166534;font-size:11px}
-    .over{color:#b91c1c}.under{color:#166534}
-    .st-approved{color:#166534;font-weight:700}.st-rejected{color:#b91c1c;font-weight:700}.st-pending{color:#b45309;font-weight:700}
-    /* ── Footer ── */
-    .footer{margin-top:24px;border-top:1px solid #ddd;padding-top:8px;display:flex;justify-content:space-between;font-size:8px;color:#999}
-    @media print{body{padding:12px 20px}button{display:none!important}}
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="brand">
-      <div class="brand-logo">🌿</div>
-      <div>
-        <div class="brand-name">FreshSarura</div>
-        <div class="brand-sub">Export Farmer Hub</div>
-      </div>
-    </div>
-    <div class="report-info">
-      <div class="report-title">Financial Production Report</div>
-      <div class="report-sub">${displayCycleId} &nbsp;•&nbsp; ${displayCrop} &nbsp;•&nbsp; ${(cycleStatus || '').toUpperCase()}</div>
-      <div class="report-sub">Generated: ${new Date().toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}</div>
-    </div>
-  </div>
+    // 3. Overview Summary Section
+    const summaryFields = [
+      { label: 'Cultivated Crop', value: toTitleCase(displayCrop) },
+      { label: 'Assigned Farmer', value: toTitleCase(displayFarmer) },
+      { label: 'Land Size / Plot', value: displayLandSize },
+      { label: 'Current Status', value: toTitleCase(cycleStatus) },
+      { label: 'Production Timeline', value: `${displayStartDate} – ${displayEndDate}` },
+      { label: 'Target Yield Goal', value: displayYieldGoal }
+    ];
 
-  <div class="info-grid">
-    <div><div class="info-label">Farmer</div><div class="info-value">${displayFarmer}</div></div>
-    <div><div class="info-label">Land Size</div><div class="info-value">${displayLandSize}</div></div>
-    <div><div class="info-label">Season</div><div class="info-value">${fullData?.cycle?.season || cycle.season || '—'}</div></div>
-    <div><div class="info-label">Start Date</div><div class="info-value">${displayStartDate}</div></div>
-    <div><div class="info-label">Expected Harvest</div><div class="info-value">${displayEndDate}</div></div>
-    <div><div class="info-label">Yield Goal</div><div class="info-value">${displayYieldGoal}</div></div>
-  </div>
+    let yPos = 58;
+    doc.setFontSize(9);
+    summaryFields.forEach(field => {
+      doc.setTextColor(107, 114, 128); doc.setFont('helvetica', 'normal');
+      doc.text(field.label, 15, yPos);
+      doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
+      doc.text(field.value, pageWidth - 15, yPos, { align: 'right' });
+      doc.setDrawColor(243, 244, 246);
+      doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+      yPos += 10;
+    });
 
-  <div class="summary-grid">
-    <div class="card"><div class="card-label">Total Allocated</div><div class="card-value">${totalAllocated.toLocaleString()} Rwf</div></div>
-    <div class="card hl"><div class="card-label">Total Approved</div><div class="card-value green">${totalApproved.toLocaleString()} Rwf</div></div>
-    <div class="card"><div class="card-label">Actual Spent</div><div class="card-value">${totalSpent.toLocaleString()} Rwf</div></div>
-    <div class="card"><div class="card-label">Budget Variance</div><div class="card-value ${globalVariance >= 0 ? 'green' : 'red'}">${globalVariance >= 0 ? '+' : ''}${globalVariance.toLocaleString()} Rwf</div></div>
-  </div>
+    const commonHeadStyles: any = { textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', fillColor: [92, 184, 92] };
+    const commonBodyStyles: any = { fontSize: 8, textColor: [0, 0, 0], cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } };
+    const alternateRowStyles: any = { fillColor: [249, 250, 251] };
 
-  <div class="prog-row"><span>Cycle Progress (Approved / Allocated)</span><span style="color:${cycleProgress >= 90 ? '#b45309' : '#166534'}">${cycleProgress}%</span></div>
-  <div class="prog-wrap"><div class="prog-fill" style="width:${cycleProgress}%;background:${cycleProgress >= 90 ? '#b45309' : '#166534'}"></div></div>
+    // 4. Financial Performance Table
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+    doc.text('FINANCIAL PERFORMANCE BY CATEGORY', 15, yPos + 8);
+    
+    autoTable(doc, {
+      startY: yPos + 13,
+      head: [['CATEGORY', 'ALLOCATED', 'APPROVED', 'ACTUAL SPENT', 'VARIANCE']],
+      body: budgetCategories.map((c: any) => [
+        toTitleCase(c.name),
+        `${(c.allocated || 0).toLocaleString()} Rwf`,
+        `${(c.approved || 0).toLocaleString()} Rwf`,
+        `${(c.spent || 0).toLocaleString()} Rwf`,
+        `${((c.allocated || 0) - (c.spent || 0)).toLocaleString()} Rwf`
+      ]),
+      theme: 'striped', headStyles: commonHeadStyles, bodyStyles: commonBodyStyles, alternateRowStyles,
+      margin: { left: 15, right: 15 },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 4) {
+          const val = parseInt(String(data.cell.raw).replace(/[^0-9-]/g, ''));
+          if (val < 0) data.cell.styles.textColor = '#dc2626'; // Red for overdraft
+          else data.cell.styles.textColor = '#16a34a'; // Green for under budget
+        }
+      }
+    });
 
-  <div class="sec-title">Budget by Category</div>
-  <table>
-    <thead><tr>
-      <th>Category</th>
-      <th class="num">Allocated (Rwf)</th>
-      <th class="num">Approved (Rwf)</th>
-      <th class="num">Actual Spent (Rwf)</th>
-      <th class="num">Variance (Rwf)</th>
-      <th class="num">% Approved</th>
-    </tr></thead>
-    <tbody>
-      ${categoryRows || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:12px">No category data available</td></tr>'}
-      <tr class="total-row">
-        <td>TOTAL</td>
-        <td class="num">${totalAllocated.toLocaleString()}</td>
-        <td class="num">${totalApproved.toLocaleString()}</td>
-        <td class="num">${totalSpent.toLocaleString()}</td>
-        <td class="num ${globalVariance < 0 ? 'over' : 'under'}">${globalVariance >= 0 ? '+' : ''}${globalVariance.toLocaleString()}</td>
-        <td class="num">${totalAllocated > 0 ? Math.round((totalApproved / totalAllocated) * 100) : 0}%</td>
-      </tr>
-    </tbody>
-  </table>
+    yPos = (doc as any).lastAutoTable.finalY + 15;
 
-  ${budgetRequests.length > 0 ? `
-  <div class="sec-title">Budget Activity Requests (${budgetRequests.length})</div>
-  <table>
-    <thead><tr>
-      <th>Submitted By</th><th>Period</th><th>Activities</th>
-      <th class="num">Amount (Rwf)</th><th>Status</th><th>PM Note</th>
-    </tr></thead>
-    <tbody>${requestRows}</tbody>
-  </table>` : ''}
+    // 5. P&L Summary Table
+    if (hasPnL) {
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+      doc.text(isClosed ? 'ACTUAL PROFIT & LOSS' : 'PROJECTED PROFIT & LOSS', 15, yPos);
 
-  <div class="footer">
-    <span>FreshSarura Export Farmer Hub &nbsp;•&nbsp; Confidential — Internal Use Only</span>
-    <span>Cycle: ${displayCycleId}</span>
-  </div>
-</body>
-</html>`;
+      autoTable(doc, {
+        startY: yPos + 5,
+        head: [['METRIC', 'PROJECTED', isClosed ? 'ACTUAL' : 'CURRENT (TO DATE)']],
+        body: [
+          ['Yield (kg)',         `${fmt(yieldGoalKg)} kg`,              `${fmt(finalYieldKg)} kg`],
+          ['Selling Price',      `${fmt(pricePerKg)} Rwf/kg`,           `${fmt(pricePerKg)} Rwf/kg`],
+          ['Revenue',            `${fmt(projRevenue)} Rwf`,             `${fmt(actualRevenue)} Rwf`],
+          ['Production Cost',    `${fmt(displayBudget)} Rwf`,           `${fmt(totalSpent)} Rwf`],
+          ['Profit / Loss',      `${projProfit >= 0 ? '+' : ''}${fmt(projProfit)} Rwf`, `${actualProfit >= 0 ? '+' : ''}${fmt(actualProfit)} Rwf`],
+          ['Profit Margin',      `${projMargin.toFixed(1)}%`,           `${actualMargin.toFixed(1)}%`],
+          ['Cost per kg',        `${fmt(projCostPerKg)} Rwf`,           `${fmt(actualCostPerKg)} Rwf`],
+        ],
+        theme: 'striped',
+        headStyles: commonHeadStyles,
+        bodyStyles: commonBodyStyles,
+        alternateRowStyles,
+        margin: { left: 15, right: 15 },
+        didParseCell: (data) => {
+          if (data.section === 'body' && data.row.index === 4) {
+            // Profit row — color based on value (Col 1: Projected, Col 2: Actual)
+            const isProj   = data.column.index === 1;
+            const isActual = data.column.index === 2;
+            const val      = isProj ? projProfit : (isActual ? actualProfit : 0);
+            
+            if ((isProj || isActual) && val < 0) {
+              data.cell.styles.textColor = '#dc2626'; // Red
+            } else if ((isProj || isActual) && val > 0) {
+              data.cell.styles.textColor = '#16a34a'; // Green
+            }
+          }
+        }
+      });
 
-    const win = window.open('', '_blank', 'width=900,height=750,scrollbars=yes');
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-      setTimeout(() => win.print(), 600);
+      yPos = (doc as any).lastAutoTable.finalY + 15;
     }
+
+    // 5. Recent Budget Requests (Detailed Table)
+    if (budgetRequests.length > 0) {
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+      doc.text('BUDGET ACTIVITY LOG (RECENT)', 15, yPos);
+      
+      autoTable(doc, {
+        startY: yPos + 5,
+        head: [['DATE', 'ACTIVITIES', 'REQUESTED AMOUNT', 'APPROVAL STATUS']],
+        body: budgetRequests.slice(0, 15).map((r: any) => [
+          formatDate(r.createdAt),
+          (r.lineItems?.map((li: any) => li.activityName) || []).join(', ').slice(0, 50),
+          `${(r.totalRequestedRwf || 0).toLocaleString()} Rwf`,
+          toTitleCase(r.approvalStatus)
+        ]),
+        theme: 'striped', headStyles: commonHeadStyles,
+        bodyStyles: commonBodyStyles, alternateRowStyles,
+        margin: { left: 15, right: 15, bottom: 30 },
+      });
+
+      yPos = (doc as any).lastAutoTable.finalY + 15;
+    }
+
+    // 6. Field Activity Log (with images)
+    if (fieldReports.length > 0) {
+      if (yPos > 240) { doc.addPage(); yPos = 20; }
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+      doc.text('FIELD ACTIVITY & EVIDENCE LOG', 15, yPos);
+
+      for (const report of fieldReports.slice(0, 10)) { // Limit to 10 for reasonable size
+        yPos += 10;
+        if (yPos > 240) { doc.addPage(); yPos = 20; }
+
+        doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+        doc.text(`${formatDate(report.createdAt)} — ${report.description}`, 15, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Category: ${report.category || 'General'} | Cost: ${(report.actualCostRwf || 0).toLocaleString()} Rwf`, 15, yPos + 5);
+        
+        if (report.notes) {
+          doc.setFontSize(8); doc.setTextColor(107, 114, 128);
+          doc.text(`Notes: ${report.notes}`, 15, yPos + 9, { maxWidth: 100 });
+          yPos += 4;
+        }
+
+        if (report.proofUrl) {
+          const base64 = await getBase64FromUrl(report.proofUrl);
+          if (base64) {
+            try {
+              // Add a thumbnail to the right
+              doc.addImage(base64, 'JPEG', pageWidth - 65, yPos - 5, 50, 30, undefined, 'FAST');
+              yPos += 20; // Extra space for image height
+            } catch (e) {
+              console.warn("Failed to add image to PDF", e);
+            }
+          }
+        }
+        
+        doc.setDrawColor(243, 244, 246);
+        doc.line(15, yPos + 10, pageWidth - 15, yPos + 10);
+        yPos += 10;
+        doc.setTextColor(17, 24, 39);
+      }
+    }
+
+    // 6. System Insights
+    let lastY = (doc as any).lastAutoTable?.finalY || yPos;
+    if (lastY > 240) { doc.addPage(); lastY = 20; }
+    doc.setTextColor(17, 24, 39); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+    doc.text('SYSTEM INSIGHTS', 15, lastY + 15);
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(75, 85, 99);
+    doc.text('• This report aggregates crop cycle performance and budget utilization.', 15, lastY + 25);
+    doc.text(`• Status: ${toTitleCase(cycle.status)}`, 15, lastY + 31);
+
+    // 7. Standard Platform Footer
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
+      doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'bold');
+      doc.text(getReportFooterText(), pageWidth / 2, 280, { align: 'center' });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+      const footerY = 288;
+      doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
+    }
+
+    doc.save(`Sarura_Production_Report_${displayCycleId}.pdf`);
     setShowExportMenu(false);
   };
 
@@ -439,30 +557,44 @@ const CropCycleDetailModal = ({
       case 'active':     return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
       case 'planned':    return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
       case 'completed':  return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
+      case 'in_progress':
       case 'harvesting': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
       default:           return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
     }
   };
 
   const fmt = (n: number) => (n || 0).toLocaleString();
-  const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  const fmtDate = (d: string) => formatDate(d);
 
   // Display values — normalise shape from DB vs passed-in cycle prop
   const displayCrop       = fullData?.cycle?.crop_name || cycle.crop || '—';
   const displayLandSize   = fullData?.cycle?.block_size_hectares ? `${fullData.cycle.block_size_hectares} Ha` : cycle.landSize || '—';
-  const displayStartDate  = fmtDate(fullData?.cycle?.start_date || cycle.start_date);
+  const displayStartDate  = fmtDate(fullData?.cycle?.planting_date || cycle.planting_date);
   const displayEndDate    = fmtDate(fullData?.cycle?.expected_harvest_date || cycle.expected_harvest_date);
   const displayCycleId    = fullData?.cycle?.cycleId || cycle.cycleId || cycle._id;
   const displayBudget     = fullData?.cycle?.total_budget || cycle.budget || 0;
   const displaySpent      = fullData?.cycle?.spent || cycle.spent || 0;
   const displayYieldGoal  = fullData?.cycle?.yield_goal_kg ? `${fullData.cycle.yield_goal_kg.toLocaleString()} kg` : cycle.yieldGoal || '—';
   const displayFarmer     = fullData?.cycle?.farmer_id?.full_name || '—';
+  
+  const yieldGoalKg        = fullData?.cycle?.yield_goal_kg || cycle.yield_goal_kg || 0;
+  const finalYieldKg       = fullData?.cycle?.final_yield || 0;
+  const pricePerKg         = fullData?.cycle?.expected_price_per_kg || cycle.expected_price_per_kg || 0;
+  const projRevenue        = yieldGoalKg * pricePerKg;
+  const actualRevenue      = finalYieldKg * pricePerKg;
+  const projProfit         = projRevenue - displayBudget;
+  const actualProfit       = actualRevenue - totalSpent;
+  const projMargin         = projRevenue > 0 ? (projProfit / projRevenue) * 100 : 0;
+  const actualMargin       = actualRevenue > 0 ? (actualProfit / actualRevenue) * 100 : 0;
+  const projCostPerKg      = yieldGoalKg > 0 ? displayBudget / yieldGoalKg : 0;
+  const actualCostPerKg    = finalYieldKg > 0 ? totalSpent / finalYieldKg : 0;
+  const hasPnL             = pricePerKg > 0 && yieldGoalKg > 0;
 
   const isClosed = (cycleStatus || '').toLowerCase() === 'completed';
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-md transition-opacity" onClick={onClose} />
 
       <div className="relative w-full max-w-4xl bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-gray-100 dark:border-gray-700 max-h-[85vh]">
 
@@ -477,8 +609,8 @@ const CropCycleDetailModal = ({
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white font-mono">
                   {displayCycleId}
                 </h2>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(cycleStatus)} ${(cycleStatus || '').toLowerCase() === 'harvesting' ? 'animate-pulse' : ''}`}>
-                  {cycleStatus}
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(cycleStatus)} ${['in_progress', 'harvesting'].includes((cycleStatus || '').toLowerCase()) ? 'animate-pulse' : ''}`}>
+                  {['in_progress', 'harvesting'].includes((cycleStatus || '').toLowerCase()) ? 'In Progress' : cycleStatus}
                 </span>
               </div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
@@ -488,13 +620,14 @@ const CropCycleDetailModal = ({
           </div>
           <div className="flex items-center gap-2">
             {isClosed ? (
-              <button disabled className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-400 text-sm font-bold flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 cursor-not-allowed">
-                <Lock size={16} /> Cycle Closed
+              <button disabled className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-400 text-xs font-bold flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 cursor-not-allowed">
+                <Lock size={14} /> Cycle Closed
               </button>
             ) : (
               <button
                 onClick={handleCloseAttempt}
-                className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 text-sm font-bold transition-colors flex items-center gap-1.5 border border-red-100 dark:border-red-800/50"
+                title="Mark this cycle as completed. All pending requests must be resolved first."
+                className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 text-xs font-bold transition-colors flex items-center gap-1.5 border border-red-100 dark:border-red-800/50"
               >
                 Close Crop Cycle
               </button>
@@ -504,45 +637,15 @@ const CropCycleDetailModal = ({
             {/* Export Dropdown */}
             <div className="relative">
               <button
-                onClick={() => setShowExportMenu(prev => !prev)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors shadow-sm"
+                onClick={onClose}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm text-xs font-bold"
               >
-                <Download size={15} />
+                <Download size={14} />
                 Export Data
-                <ChevronDown size={14} className={`transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
+                
               </button>
-              {showExportMenu && (
-                <>
-                  <div className="fixed inset-0 z-[10000]" onClick={() => setShowExportMenu(false)} />
-                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-[10001] overflow-hidden">
-                    <p className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-700">Export Options</p>
-                    <button
-                      onClick={handleExportCSV}
-                      className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-green-50 dark:bg-green-900/20 flex items-center justify-center shrink-0">
-                        <FileText size={15} className="text-green-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Export CSV</p>
-                        <p className="text-xs text-gray-400">Raw data for current tab</p>
-                      </div>
-                    </button>
-                    <button
-                      onClick={handleExportPDF}
-                      className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left border-t border-gray-50 dark:border-gray-700/50"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center shrink-0">
-                        <Download size={15} className="text-purple-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Save as PDF</p>
-                        <p className="text-xs text-gray-400">Print or save page as PDF</p>
-                      </div>
-                    </button>
-                  </div>
-                </>
-              )}
+
+              
             </div>
 
             <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 transition-colors">
@@ -637,10 +740,10 @@ const CropCycleDetailModal = ({
                     );
                   })()}
                 </div>
-                {(cycleStatus || '').toLowerCase() === 'harvesting' && (
+                {['in_progress', 'harvesting'].includes((cycleStatus || '').toLowerCase()) && (
                   <div className="mb-3 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 text-amber-700 dark:text-amber-400 text-xs font-semibold flex items-center gap-2">
                     <span className="animate-pulse w-2 h-2 rounded-full bg-amber-500 inline-block" />
-                    Harvesting in progress — cycle is financially open for harvest labor requests.
+                    Cycle is in progress — budget requests are being reviewed and field work is underway.
                   </div>
                 )}
                 {isClosed && (
@@ -658,7 +761,7 @@ const CropCycleDetailModal = ({
                         <div
                           className={`h-full rounded-full transition-all duration-700 ${
                             isClosed ? 'bg-gray-400' :
-                            (cycleStatus || '').toLowerCase() === 'harvesting' ? 'bg-amber-500' :
+                            ['in_progress', 'harvesting'].includes((cycleStatus || '').toLowerCase()) ? 'bg-amber-500' :
                             cycleProgress >= 90 ? 'bg-amber-500' : 'bg-green-500'
                           }`}
                           style={{ width: isClosed ? '100%' : `${cycleProgress}%` }}
@@ -673,7 +776,7 @@ const CropCycleDetailModal = ({
                     </div>
                     <div className="text-center">
                       <span className="block font-bold text-gray-900 dark:text-white">Current Stage</span>
-                      {(cycleStatus || '').toLowerCase() === 'harvesting' ? 'Harvesting' : isClosed ? 'Closed' : 'Active'}
+                      {['in_progress', 'harvesting'].includes((cycleStatus || '').toLowerCase()) ? 'In Progress' : isClosed ? 'Closed' : 'Active'}
                     </div>
                     <div className="text-center">
                       <span className="block text-gray-400">Harvest</span>
@@ -712,6 +815,9 @@ const CropCycleDetailModal = ({
                               {new Date(report.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
                             </span>
                           </div>
+                          <p className="text-[10px] text-gray-400 mb-0.5">
+                            {report.category || 'General'} · Submitted by {report.submittedByName || 'Farm Manager'}
+                          </p>
                           {report.notes && (
                             <p className="text-xs text-gray-500 line-clamp-2">"{report.notes}"</p>
                           )}
@@ -721,6 +827,123 @@ const CropCycleDetailModal = ({
                   </div>
                 )}
               </div>
+
+              {hasPnL && (
+                <div className={`rounded-2xl border p-6 shadow-sm ${
+                  (isClosed ? actualProfit : projProfit) >= 0
+                    ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/40'
+                    : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/40'
+                }`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                      {isClosed ? 'Actual P&L' : 'Projected P&L'}
+                    </h3>
+                    {isClosed && finalYieldKg > 0 && (
+                      <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
+                        Final yield: {fmt(finalYieldKg)} kg
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-6">
+                    {/* Left column */}
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {isClosed ? 'Actual revenue' : 'Expected revenue'}
+                        </span>
+                        <span className="font-bold text-gray-800 dark:text-gray-100">
+                          {fmt(isClosed ? actualRevenue : projRevenue)} Rwf
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {isClosed ? 'Actual cost' : 'Production budget'}
+                        </span>
+                        <span className="font-bold text-gray-800 dark:text-gray-100">
+                          {fmt(isClosed ? totalSpent : displayBudget)} Rwf
+                        </span>
+                      </div>
+                      <div className="h-px bg-gray-200 dark:bg-gray-600" />
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-gray-700 dark:text-gray-200">
+                          {isClosed ? 'Net profit' : 'Est. profit'}
+                        </span>
+                        <span className={`font-bold text-lg ${
+                          (isClosed ? actualProfit : projProfit) >= 0
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-600 dark:text-red-400'
+                        }`}>
+                          {(isClosed ? actualProfit : projProfit) >= 0 ? '+' : ''}
+                          {fmt(isClosed ? actualProfit : projProfit)} Rwf
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Right column */}
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">Profit margin</span>
+                        <span className={`font-bold ${
+                          (isClosed ? actualMargin : projMargin) >= 0
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-600 dark:text-red-400'
+                        }`}>
+                          {(isClosed ? actualMargin : projMargin).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">Cost per kg</span>
+                        <span className="font-bold text-gray-800 dark:text-gray-100">
+                          {fmt(isClosed ? actualCostPerKg : projCostPerKg)} Rwf
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">Selling price</span>
+                        <span className="font-bold text-gray-800 dark:text-gray-100">{fmt(pricePerKg)} Rwf/kg</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {isClosed ? 'Yield achieved' : 'Yield target'}
+                        </span>
+                        <span className="font-bold text-gray-800 dark:text-gray-100">
+                          {fmt(isClosed ? finalYieldKg : yieldGoalKg)} kg
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Projected vs Actual comparison row — only show when cycle is closed and both exist */}
+                  {isClosed && yieldGoalKg > 0 && finalYieldKg > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 grid grid-cols-3 gap-4 text-xs text-center">
+                      <div>
+                        <p className="text-gray-400 mb-1">Yield vs Target</p>
+                        <p className={`font-bold text-sm ${finalYieldKg >= yieldGoalKg ? 'text-green-600' : 'text-red-500'}`}>
+                          {finalYieldKg >= yieldGoalKg ? '+' : ''}{fmt(finalYieldKg - yieldGoalKg)} kg
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 mb-1">Revenue vs Projected</p>
+                        <p className={`font-bold text-sm ${actualRevenue >= projRevenue ? 'text-green-600' : 'text-red-500'}`}>
+                          {actualRevenue >= projRevenue ? '+' : ''}{fmt(actualRevenue - projRevenue)} Rwf
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 mb-1">Profit vs Projected</p>
+                        <p className={`font-bold text-sm ${actualProfit >= projProfit ? 'text-green-600' : 'text-red-500'}`}>
+                          {actualProfit >= projProfit ? '+' : ''}{fmt(actualProfit - projProfit)} Rwf
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {!isClosed && (
+                    <p className="text-xs text-gray-400 mt-3">
+                      Estimates based on yield goal of {fmt(yieldGoalKg)} kg at {fmt(pricePerKg)} Rwf/kg. Actuals will be calculated on cycle close.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -756,13 +979,46 @@ const CropCycleDetailModal = ({
                   {!isClosed && (
                     <button
                       onClick={() => setIsAdjustBudgetOpen(true)}
-                      className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-1.5 border border-white/10"
+                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 border border-white/10"
                     >
-                      <Plus size={16} /> Adjust Budget
+                      <Plus size={14} /> Adjust Budget
                     </button>
                   )}
                 </div>
               </div>
+
+              {hasPnL && (
+                <div className={`rounded-xl border p-5 ${
+                  (isClosed ? actualProfit : projProfit) >= 0
+                    ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/40'
+                    : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/40'
+                }`}>
+                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
+                    {isClosed ? 'Actual P&L Summary' : 'Projected P&L Summary'}
+                  </p>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <p className="text-xs text-gray-400 mb-1">{isClosed ? 'Actual Revenue' : 'Projected Revenue'}</p>
+                      <p className="font-bold text-gray-800 dark:text-gray-100">{fmt(isClosed ? actualRevenue : projRevenue)} Rwf</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{fmt(pricePerKg)} Rwf/kg × {fmt(isClosed ? finalYieldKg : yieldGoalKg)} kg</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 mb-1">{isClosed ? 'Actual Cost' : 'Production Budget'}</p>
+                      <p className="font-bold text-gray-800 dark:text-gray-100">{fmt(isClosed ? totalSpent : displayBudget)} Rwf</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Cost/kg: {fmt(isClosed ? actualCostPerKg : projCostPerKg)} Rwf</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 mb-1">{isClosed ? 'Net Profit' : 'Est. Profit'}</p>
+                      <p className={`font-bold text-lg ${(isClosed ? actualProfit : projProfit) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                        {(isClosed ? actualProfit : projProfit) >= 0 ? '+' : ''}{fmt(isClosed ? actualProfit : projProfit)} Rwf
+                      </p>
+                      <p className={`text-xs font-bold ${(isClosed ? actualMargin : projMargin) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                        {(isClosed ? actualMargin : projMargin).toFixed(1)}% margin
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Category Cards */}
               {budgetCategories.length > 0 ? (
@@ -806,7 +1062,7 @@ const CropCycleDetailModal = ({
               {/* Field Reports / Transactions */}
               <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-5">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">Recently Logged Expenses</h3>
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">Expense Log (All Field Reports)</h3>
                   <button onClick={() => setIsLedgerOpen(true)} className="text-xs text-blue-600 font-medium hover:underline">
                     View Full Ledger
                   </button>
@@ -828,7 +1084,7 @@ const CropCycleDetailModal = ({
                           <div>
                             <p className="text-sm font-medium text-gray-900 dark:text-white">{report.description}</p>
                             <p className="text-xs text-gray-500">
-                              {new Date(report.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} • {report.category || 'General'}
+                              {formatDate(report.createdAt)} • {report.category || 'General'}
                             </p>
                           </div>
                         </div>
@@ -847,7 +1103,7 @@ const CropCycleDetailModal = ({
             <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="flex items-center gap-2">
                 <ListChecks size={18} className="text-gray-500" />
-                <h3 className="font-bold text-gray-900 dark:text-white">Pending Budget Requests</h3>
+                <h3 className="font-bold text-gray-900 dark:text-white">Budget Requests</h3>
                 {budgetRequests.filter((r: any) => r.approvalStatus === 'Pending').length > 0 && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                     {budgetRequests.filter((r: any) => r.approvalStatus === 'Pending').length} pending
@@ -948,13 +1204,13 @@ const CropCycleDetailModal = ({
                             <div className="flex gap-2">
                               <button
                                 onClick={() => handleRejectRequest(req._id)}
-                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 text-xs font-bold hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-all font-sans"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 text-xs font-bold hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-all font-sans"
                               >
                                 <ThumbsDown size={13} /> Reject
                               </button>
                               <button
                                 onClick={() => handleApproveRequest(req._id)}
-                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-bold shadow-md transition-all font-sans"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-bold shadow-md transition-all font-sans"
                               >
                                 <ThumbsUp size={13} /> Approve
                               </button>
@@ -971,8 +1227,8 @@ const CropCycleDetailModal = ({
                                 <AlertCircle size={14} /> Rejected
                               </div>
                               {req.pmNote && (
-                                <p className="text-[10px] bg-red-50 dark:bg-red-900/10 p-2 rounded-lg border border-red-100 dark:border-red-800/30">
-                                  Note: {req.pmNote}
+                                <p className="text-[10px] bg-red-50 dark:bg-red-900/10 p-2 rounded-lg border border-red-100 dark:border-red-800/30 break-words whitespace-normal max-w-xs">
+                                  Rejection note: {req.pmNote}
                                 </p>
                               )}
                             </div>
@@ -1011,7 +1267,7 @@ const CropCycleDetailModal = ({
                               : 'bg-yellow-50 text-yellow-600 border border-yellow-100 dark:bg-yellow-900/20 dark:text-yellow-400'
                           }`}>{f.status}</span>
                           <p className="text-xs text-gray-500 mt-2">
-                            Submitted by {f.submittedByName || 'Farm Manager'} · {new Date(f.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                            Submitted by {f.submittedByName || 'Farm Manager'} · {formatDate(f.createdAt)}
                           </p>
                         </div>
                       </div>
@@ -1051,7 +1307,7 @@ const CropCycleDetailModal = ({
                           <div className="flex justify-end">
                             <button
                               onClick={() => handleVerifyForecast(f._id, replyText[f._id] || '')}
-                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
                             >
                               <CheckCircle2 size={14} /> Mark as Verified
                             </button>
@@ -1094,6 +1350,14 @@ const CropCycleDetailModal = ({
         farmName={cycle.farm_name || '—'}
         season={cycle.season || '—'}
       />
+      <FieldReportDetailsModal
+        isOpen={!!selectedFieldReport}
+        onClose={() => setSelectedFieldReport(null)}
+        report={selectedFieldReport}
+        isReadOnly={isClosed}
+        onFlag={(reason: string) => selectedFieldReport?._id && handleFlagReport(selectedFieldReport._id, reason)}
+        cycleId={displayCycleId}
+      />
       <EvidenceViewModal
         isOpen={!!selectedEvidenceTask}
         onClose={() => setSelectedEvidenceTask(null)}
@@ -1132,7 +1396,7 @@ const CropCycleDetailModal = ({
         onConfirm={() => handleApproveRequest(overdraftWarning.requestId, true)}
         onAdjust={() => { setOverdraftWarning(null); setIsAdjustBudgetOpen(true); }}
       />
-      {toast && <Toast message={toast.message} subtitle={toast.subtitle} onClose={() => setToast(null)} />}
+
     </div>,
     document.body
   );
@@ -1284,16 +1548,105 @@ const ConfirmCloseModal = ({
 };
 
 const FieldReportDetailsModal = ({
-  isOpen, onClose, report, isReadOnly, onFlag,
+  isOpen, onClose, report, isReadOnly, onFlag, cycleId
 }: {
   isOpen: boolean;
   onClose: () => void;
   report: any;
   isReadOnly: boolean;
   onFlag: (reason: string) => void;
+  cycleId?: string;
 }) => {
   const [flagReason, setFlagReason] = useState('');
   const [showFlagInput, setShowFlagInput] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  if (!isOpen || !report) return null;
+
+  const handleDownloadReportPDF = async () => {
+    setIsExporting(true);
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const timestamp = formatDateTime(new Date());
+
+    // 1. Header
+    try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch {}
+    doc.setTextColor(21, 128, 61); doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('Fresh Sarura', 28, 19);
+    doc.setTextColor(107, 114, 128); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+    doc.text('Export & Farmer Hub', 28, 23);
+    doc.setFontSize(10); doc.setTextColor(17, 24, 39);
+    doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128);
+    doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+    doc.setDrawColor(229, 231, 235); doc.line(15, 30, pageWidth - 15, 30);
+
+    // 2. Title
+    doc.setTextColor(17, 24, 39); doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('FIELD ACTIVITY REPORT', 15, 42);
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.text(`Cycle ID: ${cycleId || 'N/A'} | Report ID: ${report._id?.slice(-8).toUpperCase()}`, 15, 47);
+
+    // 3. Details
+    const summaryFields = [
+      { label: 'Date Submitted', value: formatDate(report.createdAt) },
+      { label: 'Activity Description', value: report.description },
+      { label: 'Category', value: report.category || 'General' },
+      { label: 'Block / Location', value: report.block || 'Main Plot' },
+      { label: 'Actual Cost (Rwf)', value: `${(report.actualCostRwf || 0).toLocaleString()} Rwf` },
+      { label: 'Approved Amount (Rwf)', value: report.approvedAmountRwf ? `${(report.approvedAmountRwf).toLocaleString()} Rwf` : '—' },
+      { label: 'Status', value: report.status || 'Pending' }
+    ];
+
+    let yPos = 58;
+    doc.setFontSize(9);
+    summaryFields.forEach(field => {
+      doc.setTextColor(107, 114, 128); doc.setFont('helvetica', 'normal');
+      doc.text(field.label, 15, yPos);
+      doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
+      doc.text(String(field.value), pageWidth - 15, yPos, { align: 'right' });
+      doc.setDrawColor(243, 244, 246); doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+      yPos += 10;
+    });
+
+    if (report.notes) {
+      doc.setTextColor(107, 114, 128); doc.setFont('helvetica', 'normal');
+      doc.text('Manager Notes', 15, yPos);
+      doc.setTextColor(17, 24, 39); doc.setFontSize(8.5);
+      const splitNotes = doc.splitTextToSize(report.notes, pageWidth - 30);
+      doc.text(splitNotes, 15, yPos + 5);
+      yPos += (splitNotes.length * 5) + 10;
+    }
+
+    // 4. Evidence Image
+    if (report.proofUrl) {
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(17, 24, 39);
+      doc.text('ATTACHED EVIDENCE', 15, yPos);
+      const base64 = await getBase64FromUrl(report.proofUrl);
+      if (base64) {
+        try {
+          const imgHeight = 80;
+          const imgWidth = 120;
+          if (yPos + imgHeight > 270) doc.addPage();
+          doc.addImage(base64, 'JPEG', 15, yPos + 5, imgWidth, imgHeight);
+        } catch (e) { console.warn(e); }
+      }
+    }
+
+    // 5. Footer
+    doc.setPage(1);
+    doc.setDrawColor(229, 231, 235); doc.line(15, 275, pageWidth - 15, 275);
+    doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'bold');
+    doc.text(getReportFooterText(), pageWidth / 2, 280, { align: 'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+    const footerY = 288;
+    doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Page 1 of 1`, pageWidth - 15, footerY, { align: 'right' });
+
+    doc.save(`Sarura_FieldReport_${report._id?.slice(-8).toUpperCase()}.pdf`);
+    setIsExporting(false);
+  };
 
   if (!isOpen || !report) return null;
 
@@ -1307,10 +1660,21 @@ const FieldReportDetailsModal = ({
           <div>
             <h3 className="text-base font-bold text-gray-900 dark:text-white">Field Report</h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              {new Date(report.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}
+              {formatDate(report.createdAt)}
             </p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 transition-colors"><X size={16} /></button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadReportPDF}
+              disabled={isExporting}
+              className="p-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-600 transition-all flex items-center gap-1.5"
+              title="Download Report as PDF"
+            >
+              {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              <span className="text-[10px] font-bold uppercase tracking-wider">Download PDF</span>
+            </button>
+            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 transition-colors"><X size={16} /></button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
           <div>
@@ -1418,8 +1782,6 @@ const FieldReportDetailsModal = ({
   );
 };
 
-export default CropCycleDetailModal;
-
 const OverdraftWarningModal = ({
     isOpen, onClose, details, onConfirm, onAdjust
 }: {
@@ -1490,3 +1852,5 @@ const OverdraftWarningModal = ({
         document.body
     );
 };
+
+export default CropCycleDetailModal;

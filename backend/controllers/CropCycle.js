@@ -3,13 +3,23 @@ import Farmer from '../models/Farmer.js';
 import BudgetRequest from '../models/BudgetRequest.js';
 import YieldForecast from '../models/YieldForecast.js';
 import FieldReport from '../models/FieldReport.js';
+import HarvestDeclaration from '../models/HarvestDeclaration.js';
 import { createNotification } from './notificationController.js';
+import { createEventLog } from './eventLogController.js';
 
 // GET /api/v1/crop-cycles  (supports ?farmer_id=<id> filter)
 export const getCropCycles = async (req, res) => {
     try {
         const filter = {};
         if (req.query.farmer_id) filter.farmer_id = req.query.farmer_id;
+        
+        const { startDate, endDate } = req.query;
+        if (startDate && endDate) {
+            filter.createdAt = {
+                $gte: new Date(startDate),
+                $lte: new Date(`${endDate}T23:59:59.999Z`)
+            };
+        }
         const cycles = await CropCycle.find(filter)
             .populate('farmer_id')
             .sort({ createdAt: -1 });
@@ -29,7 +39,6 @@ export const createCropCycle = async (req, res) => {
             crop_name,
             season,
             planting_date,
-            start_date,
             expected_harvest_date,
             block_name,
             block_size_hectares,
@@ -40,14 +49,32 @@ export const createCropCycle = async (req, res) => {
             budget_chemicals,
             budget_labor,
             yield_goal_kg,
+            expected_price_per_kg,
         } = req.body;
 
+        // Duplicate check: Same farmer, crop, and season must not have an active cycle
+        const existing = await CropCycle.findOne({
+            farmer_id,
+            crop_name,
+            season,
+            status: { $nin: ['completed', 'cancelled'] },
+        });
+
+        if (existing) {
+            return res.status(409).json({
+                status: 'error',
+                message: `An active cycle for ${crop_name} already exists for this farmer in ${season}. Close or complete it before creating a new one.`
+            });
+        }
+
         // Validate required fields
-        if (!farmer_id || !crop_name || !season || !planting_date || !start_date || !expected_harvest_date || !block_name || block_size_hectares === undefined || field_size_hectares === undefined || total_budget === undefined) {
+        if (!farmer_id || !crop_name || !season || !planting_date || !expected_harvest_date || !block_name || 
+            block_size_hectares === undefined || field_size_hectares === undefined || 
+            total_budget === undefined || expected_price_per_kg === undefined) {
             console.log("Validation failed on backend. Missing fields.");
             return res.status(400).json({
                 status: 'error',
-                message: 'farmer_id, crop_name, season, planting_date, start_date, expected_harvest_date, block_name, block_size_hectares, field_size_hectares, and total_budget are required.',
+                message: 'farmer_id, crop_name, season, planting_date, expected_harvest_date, block_name, block_size_hectares, field_size_hectares, expected_price_per_kg, and total_budget are required.',
             });
         }
 
@@ -56,7 +83,6 @@ export const createCropCycle = async (req, res) => {
             farm_name: farm_name || '',
             crop_name,
             season,
-            start_date: new Date(start_date),
             planting_date: new Date(planting_date),
             expected_harvest_date: new Date(expected_harvest_date),
             block_name: block_name || '',
@@ -67,7 +93,8 @@ export const createCropCycle = async (req, res) => {
             budget_fertilizers: parseFloat(budget_fertilizers) || 0,
             budget_chemicals: parseFloat(budget_chemicals) || 0,
             budget_labor: parseFloat(budget_labor) || 0,
-            yield_goal_kg: yield_goal_kg ? parseFloat(yield_goal_kg) : undefined,
+            yield_goal_kg: yield_goal_kg ? parseFloat(yield_goal_kg) : 0,
+            expected_price_per_kg: parseFloat(expected_price_per_kg) || 0,
             registeredBy: req.user._id,
         });
 
@@ -89,6 +116,15 @@ export const createCropCycle = async (req, res) => {
         }
 
         res.status(201).json({ status: 'success', message: 'Crop cycle created!', data: cycle });
+
+        await createEventLog({
+            module: 'Crop Planning',
+            action: 'Crop Cycle Created',
+            severity: 'INFO',
+            description: `New crop cycle created: ${crop_name} for ${farm_name} (${season})`,
+            actor: req.user.name,
+            metadata: { cycleId: cycle.cycleId, cropName: crop_name, farmName: farm_name, season }
+        });
     } catch (err) {
         console.error("Error creating crop cycle:", err);
         res.status(500).json({ status: 'error', message: err.message });
@@ -112,9 +148,35 @@ export const updateCropCycle = async (req, res) => {
 // DELETE /api/v1/crop-cycles/:id
 export const deleteCropCycle = async (req, res) => {
     try {
-        const cycle = await CropCycle.findByIdAndDelete(req.params.id);
-        if (!cycle) return res.status(404).json({ status: 'error', message: 'Crop cycle not found.' });
-        res.status(200).json({ status: 'success', message: 'Crop cycle deleted.' });
+        const cycle = await CropCycle.findById(req.params.id);
+        if (!cycle) return res.status(404).json({ status: 'error', message: 'Cycle not found.' });
+
+        if (cycle.status === 'completed') {
+            return res.status(403).json({ 
+                status: 'error', 
+                message: 'Cannot delete a completed cycle.' 
+            });
+        }
+
+        // ── Cascading Delete: remove all associated sub-documents ────────
+        await Promise.all([
+            CropCycle.findByIdAndDelete(req.params.id),
+            BudgetRequest.deleteMany({ cycleId: req.params.id }),
+            FieldReport.deleteMany({ cycleId: req.params.id }),
+            YieldForecast.deleteMany({ cycleId: req.params.id }),
+            HarvestDeclaration.deleteMany({ cycleId: req.params.id })
+        ]);
+
+        await createEventLog({
+            module: 'Crop Planning',
+            action: 'Crop Cycle Deleted',
+            severity: 'WARNING',
+            description: `Crop cycle deleted: ${cycle.crop_name} (${cycle.cycleId})`,
+            actor: req.user.name,
+            metadata: { cycleId: cycle.cycleId, crop: cycle.crop_name, farm: cycle.farm_name }
+        });
+
+        res.status(200).json({ status: 'success', message: 'Cycle deleted successfully.' });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }
@@ -265,8 +327,15 @@ export const approveBudgetRequest = async (req, res) => {
 
             cycle.budget_categories = updatedCategories;
             cycle.approved = (cycle.approved || 0) + totalAdded;
-            await cycle.save();
+            
         }
+        
+        // Trigger transition to 'in_progress' on first budget approval
+        if (cycle.status === 'active') {
+            cycle.status = 'in_progress';
+        }
+        
+        await cycle.save();
 
         res.status(200).json({ status: 'success', data: updatedRequest });
 
@@ -330,10 +399,7 @@ export const verifyForecast = async (req, res) => {
         );
         if (!forecast) return res.status(404).json({ status: 'error', message: 'Forecast not found.' });
 
-        // Auto-transition the parent crop cycle to 'harvesting'
-        if (forecast.cycleId) {
-            await CropCycle.findByIdAndUpdate(forecast.cycleId, { status: 'harvesting' });
-        }
+        // Status is managed by budget approval only — no change on forecast submission
 
         res.status(200).json({ status: 'success', data: forecast });
 

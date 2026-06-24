@@ -1,15 +1,17 @@
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { X, FileWarning, Clock, Truck, Eye, Upload, ArrowRight, Bell, CheckCircle2, AlertCircle, TrendingUp, Leaf, Package, Plane } from 'lucide-react';
+import { X, FileWarning, Clock, Truck, Eye, Upload, ArrowRight, Bell, CheckCircle2, AlertCircle, TrendingUp, Leaf, Package, Plane, UserPlus } from 'lucide-react';
+import { formatDate } from '@/lib/dateUtils';
 
-interface Notification {
+export interface Notification {
     _id: string;
-    type: 'BUDGET_REQUEST' | 'BUDGET_APPROVED' | 'BUDGET_REJECTED' | 'REPORT_FLAGGED' | 'FORECAST_VERIFIED' | 'NEW_CYCLE' | 'YIELD_FORECAST' | 'FIELD_REPORT' | 'HARVEST_DECLARED' | 'HARVEST_PICKED_UP' | 'ROOM_REQUESTED' | 'ROOM_ASSIGNED' | 'QC_COMPLETED' | 'EXPORT_READY' | 'SHIPMENT_SCHEDULED' | 'SHIPMENT_DISPATCHED';
+    type: string;
     title: string;
     message: string;
     link?: string;
     isRead: boolean;
     createdAt: string;
+    isLog?: boolean;
 }
 
 interface NotificationsModalProps {
@@ -133,6 +135,42 @@ const typeConfig = {
         action: 'Track Flight',
         actionIcon: TrendingUp,
         btnColor: 'bg-green-600 hover:bg-green-700 text-white',
+    },
+    // Generic Admin/System types
+    REGISTRATION: {
+        icon: UserPlus,
+        iconColor: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20',
+        action: 'Manage User',
+        actionIcon: ArrowRight,
+        btnColor: 'bg-blue-600 hover:bg-blue-700 text-white',
+    },
+    CRITICAL: {
+        icon: FileWarning,
+        iconColor: 'text-red-600 bg-red-50 dark:bg-red-900/20',
+        action: 'Review Alert',
+        actionIcon: Eye,
+        btnColor: 'bg-red-600 hover:bg-red-700 text-white',
+    },
+    WARNING: {
+        icon: AlertCircle,
+        iconColor: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20',
+        action: 'Check Activity',
+        actionIcon: Eye,
+        btnColor: 'bg-amber-600 hover:bg-amber-700 text-white',
+    },
+    SUCCESS: {
+        icon: CheckCircle2,
+        iconColor: 'text-green-600 bg-green-50 dark:bg-green-900/20',
+        action: 'View Detail',
+        actionIcon: Eye,
+        btnColor: 'bg-green-600 hover:bg-green-700 text-white',
+    },
+    INFO: {
+        icon: Bell,
+        iconColor: 'text-gray-600 bg-gray-50 dark:bg-gray-800',
+        action: 'View',
+        actionIcon: Eye,
+        btnColor: 'bg-gray-100 hover:bg-gray-200 text-gray-700',
     }
 };
 
@@ -156,7 +194,7 @@ const NotificationsModal = ({ isOpen, onClose, notifications, onMarkAsRead, onMa
         if (diffMins < 1) return 'Just now';
         if (diffMins < 60) return `${diffMins}m ago`;
         if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
-        return date.toLocaleDateString();
+        return formatDate(date);
     };
 
     return createPortal(
@@ -199,7 +237,7 @@ const NotificationsModal = ({ isOpen, onClose, notifications, onMarkAsRead, onMa
                         </div>
                     ) : (
                         notifications.map((n) => {
-                            const config = typeConfig[n.type] || typeConfig.BUDGET_REQUEST;
+                            const config = (typeConfig as Record<string, any>)[n.type] || typeConfig.BUDGET_REQUEST;
                             const Icon = config.icon;
                             const ActionIcon = config.actionIcon;
 

@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ClipboardCheck, AlertTriangle } from 'lucide-react';
+import { X, ClipboardCheck, AlertTriangle, Scale } from 'lucide-react';
 
 export interface QCInspectionData {
     intakeId: string;
     supplier: string;
     crop: string;
     grossWeight: number;
+    assignedRoom?: string;
 }
 
 interface RecordQCModalProps {
@@ -18,10 +19,12 @@ interface RecordQCModalProps {
 
 const defectTypes = [
     'None',
-    'Pest Damage',
     'Bruising (Mechanical)',
+    'Pest Damage',
     'Undersized',
-    'Coloration'
+    // 'Coloration',
+    // 'Fungal Infection',
+    // 'Dehydration'
 ];
 
 const gradeOptions = [
@@ -31,22 +34,21 @@ const gradeOptions = [
 ];
 
 const inputClass =
-    'w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500 transition-all placeholder:text-gray-400';
-const labelClass = 'block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5';
+    'w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-bold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500 transition-all placeholder:text-gray-400';
+const labelClass = 'block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5 ml-1';
 
 const RecordQCModal = ({ isOpen, onClose, data, onSubmit }: RecordQCModalProps) => {
+    const [processedWeight, setProcessedWeight] = useState<string>('');
     const [rejectedWeight, setRejectedWeight] = useState<string>('');
     const [defectType, setDefectType] = useState<string>('None');
-    const [sampleSize, setSampleSize] = useState<string>('');
     const [grade, setGrade] = useState<string>('Grade A (Export)');
-    const [isFocused, setIsFocused] = useState(false);
 
     // Reset state when opened with new data
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && data) {
+            setProcessedWeight('');
             setRejectedWeight('');
             setDefectType('None');
-            setSampleSize('');
             setGrade('Grade A (Export)');
         }
     }, [isOpen, data]);
@@ -54,17 +56,22 @@ const RecordQCModal = ({ isOpen, onClose, data, onSubmit }: RecordQCModalProps) 
     if (!isOpen || !data) return null;
 
     // Calculation
-    const grossVal = data.grossWeight || 0;
+    const procVal = parseFloat(processedWeight) || 0;
     const rejVal = parseFloat(rejectedWeight) || 0;
-    const netWeight = Math.max(0, grossVal - rejVal);
+    const netWeight = Math.max(0, procVal - rejVal);
+
+    // Validations
+    const processedExceedsReceived = procVal > data.grossWeight;
+    const rejectedExceedsProcessed = rejVal > procVal;
+    const hasValidationError = processedExceedsReceived || rejectedExceedsProcessed;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         onSubmit?.({
             intakeId: data.intakeId,
+            processedWeight: procVal,
             rejectedWeight: rejVal,
             defectType,
-            sampleSize: parseFloat(sampleSize) || 0,
             grade,
             netWeight,
         });
@@ -82,10 +89,15 @@ const RecordQCModal = ({ isOpen, onClose, data, onSubmit }: RecordQCModalProps) 
                 {/* ── Header ── */}
                 <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="p-2.5 rounded-xl bg-blue-100 dark:bg-blue-900/30">
-                            <ClipboardCheck size={22} className="text-blue-600 dark:text-blue-400" />
+                        <div className="p-2.5 rounded-xl bg-green-100 dark:bg-green-900/30">
+                            <Scale size={22} className="text-green-600 dark:text-green-400" />
                         </div>
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Record Quality Inspection</h2>
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Complete Processing Record</h2>
+                            <p className="text-xs text-green-600 dark:text-green-400 font-semibold uppercase tracking-wider mt-0.5">
+                                {data.crop} · Room {data.assignedRoom || 'N/A'}
+                            </p>
+                        </div>
                     </div>
                     <button
                         type="button"
@@ -97,54 +109,92 @@ const RecordQCModal = ({ isOpen, onClose, data, onSubmit }: RecordQCModalProps) 
                 </div>
 
                 {/* ── Scrollable Body ── */}
-                <div className="flex-1 overflow-y-auto p-6">
-                    {/* Context Banner */}
-                    <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-3 rounded-xl mb-6 flex flex-wrap justify-between items-center text-sm border border-blue-100 dark:border-blue-800/30 gap-2">
-                        <div className="text-blue-800 dark:text-blue-300 font-medium">
-                            <span className="font-bold">Intake ID:</span> {data.intakeId} <span className="opacity-50 mx-1">|</span> {data.supplier}
-                        </div>
-                        <div className="text-blue-800 dark:text-blue-300 font-medium tracking-wide">
-                            <span className="font-bold">Crop:</span> {data.crop} <span className="opacity-50 mx-1">|</span> <span className="font-bold">Gross Weight:</span> {data.grossWeight.toLocaleString()} kg
+                <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                    
+                    {/* Reference Info Section */}
+                    <div>
+                        <p className="text-[10.5px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                            <ClipboardCheck size={12} />
+                            Reference Info (Read-only)
+                        </p>
+                        <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                            <div>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase">Received Weight</p>
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">{data.grossWeight.toLocaleString()} kg</p>
+                                <p className="text-[10px] text-gray-500 mt-0.5">Logged by Logistics Officer</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase">Batch Ref</p>
+                                <p className="text-sm font-mono font-bold text-gray-600 dark:text-gray-400">{data.intakeId.slice(-8).toUpperCase()}</p>
+                            </div>
                         </div>
                     </div>
 
-                    <form id="record-qc-form" onSubmit={handleSubmit}>
-
-                        {/* Section 1: Metrics */}
-                        <div className="mb-6">
+                    <form id="merged-qc-form" onSubmit={handleSubmit} className="space-y-8">
+                        
+                        {/* Section 1: Processing Results */}
+                        <div>
                             <p className="text-[10.5px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
                                 <AlertTriangle size={12} />
-                                Defect &amp; Rejection Metrics
+                                Processing Results
                             </p>
-
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                {/* Field 1: Rejected Weight */}
                                 <div>
-                                    <label className={labelClass}>Rejected Weight</label>
-                                    <div className="relative">
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            max={data.grossWeight}
-                                            step="0.1"
-                                            value={rejectedWeight}
-                                            onChange={(e) => setRejectedWeight(e.target.value)}
-                                            onFocus={() => setIsFocused(true)}
-                                            onBlur={() => setIsFocused(false)}
-                                            placeholder="0"
-                                            className={`w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border rounded-xl text-sm text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 ${isFocused || Number(rejectedWeight) > 0
-                                                    ? 'border-red-300 focus:ring-2 focus:ring-red-500/50 dark:border-red-700/50'
-                                                    : 'border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-gray-200'
-                                                } pr-12`}
-                                        />
-                                        <span className={`absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold pointer-events-none ${isFocused || Number(rejectedWeight) > 0 ? 'text-red-500' : 'text-gray-400'
-                                            }`}>
-                                            kg
-                                        </span>
-                                    </div>
+                                    <label className={labelClass}>Processed Weight (kg) *</label>
+                                    <input
+                                        type="number"
+                                        required
+                                        min="0"
+                                        max={data.grossWeight}
+                                        step="0.1"
+                                        value={processedWeight}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setProcessedWeight(val);
+                                            const proc = parseFloat(val) || 0;
+                                            const autoRejected = Math.max(0, data.grossWeight - proc);
+                                            setRejectedWeight(autoRejected > 0 ? String(autoRejected) : '0');
+                                        }}
+                                        placeholder="0.0"
+                                        className={`${inputClass} ${processedExceedsReceived ? 'border-red-400 dark:border-red-500 ring-2 ring-red-200 dark:ring-red-900/40' : ''}`}
+                                    />
+                                    {processedExceedsReceived && (
+                                        <p className="text-[11px] text-red-500 font-semibold mt-1.5 ml-1 flex items-center gap-1">
+                                            <AlertTriangle size={11} />
+                                            Cannot exceed received weight ({data.grossWeight.toLocaleString()} kg)
+                                        </p>
+                                    )}
                                 </div>
+                                <div>
+                                    <label className={labelClass}>Rejected Weight (kg) *</label>
+                                    <input
+                                        type="number"
+                                        required
+                                        min="0"
+                                        max={procVal || undefined}
+                                        step="0.1"
+                                        value={rejectedWeight}
+                                        onChange={(e) => setRejectedWeight(e.target.value)}
+                                        placeholder="0.0"
+                                        className={`${inputClass} ${rejectedExceedsProcessed ? 'border-red-400 dark:border-red-500 ring-2 ring-red-200 dark:ring-red-900/40' : ''}`}
+                                    />
+                                    {rejectedExceedsProcessed && (
+                                        <p className="text-[11px] text-red-500 font-semibold mt-1.5 ml-1 flex items-center gap-1">
+                                            <AlertTriangle size={11} />
+                                            Cannot exceed processed weight ({procVal.toLocaleString()} kg)
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
 
-                                {/* Field 2: Primary Defect Type */}
+                        {/* Section 2: QC Details */}
+                        <div>
+                            <p className="text-[10.5px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <ClipboardCheck size={12} />
+                                QC Details
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                 <div>
                                     <label className={labelClass}>Primary Defect Type</label>
                                     <select
@@ -155,37 +205,12 @@ const RecordQCModal = ({ isOpen, onClose, data, onSubmit }: RecordQCModalProps) 
                                         {defectTypes.map(t => <option key={t} value={t}>{t}</option>)}
                                     </select>
                                 </div>
-
-                                {/* Field 3: Sample Size */}
-                                <div>
-                                    <label className={labelClass}>Sample Size Inspected (Optional)</label>
-                                    <div className="relative">
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            step="0.1"
-                                            value={sampleSize}
-                                            onChange={(e) => setSampleSize(e.target.value)}
-                                            placeholder="10"
-                                            className={`${inputClass} pr-10`}
-                                        />
-                                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-400 pointer-events-none">
-                                            %
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Field 4: Assigned Grade */}
                                 <div>
                                     <label className={labelClass}>Assigned Grade</label>
                                     <select
                                         value={grade}
                                         onChange={(e) => setGrade(e.target.value)}
-                                        className={`${inputClass} font-semibold ${grade.includes('Export') ? 'text-green-700 dark:text-green-400' :
-                                                grade.includes('Rejected') ? 'text-red-700 dark:text-red-400' :
-                                                    'text-blue-700 dark:text-blue-400'
-                                            }`}
+                                        className={`${inputClass} ${grade.includes('Export') ? 'text-green-600' : grade.includes('Rejected') ? 'text-red-600' : 'text-blue-600'}`}
                                     >
                                         {gradeOptions.map(g => <option key={g} value={g}>{g}</option>)}
                                     </select>
@@ -193,12 +218,14 @@ const RecordQCModal = ({ isOpen, onClose, data, onSubmit }: RecordQCModalProps) 
                             </div>
                         </div>
 
-                        {/* Section 2: Net Calculation */}
-                        <div className="border-t border-gray-100 dark:border-gray-700 pt-5 mb-2 mt-8">
+                        {/* Section 3: Live Calculation */}
+                        <div className="border-t border-gray-100 dark:border-gray-700 pt-8 mt-4">
                             <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30 p-5 rounded-2xl flex justify-between items-center">
                                 <div>
-                                    <h3 className="text-green-800 dark:text-green-400 font-bold text-sm tracking-wide">Net Approved Stock</h3>
-                                    <p className="text-green-600/80 dark:text-green-500/80 text-xs mt-0.5">Calculated: Gross ({grossVal} kg) - Rejected ({rejVal || 0} kg)</p>
+                                    <h3 className="text-green-800 dark:text-green-400 font-bold text-sm tracking-wide uppercase">Net Approved Stock</h3>
+                                    <p className="text-green-600/80 dark:text-green-500/80 text-xs mt-0.5">
+                                        Formula: Processed ({procVal} kg) - Rejected ({rejVal} kg)
+                                    </p>
                                 </div>
                                 <div className="text-right">
                                     <span className="block text-3xl font-black text-green-700 dark:text-green-400 tracking-tight">
@@ -207,7 +234,6 @@ const RecordQCModal = ({ isOpen, onClose, data, onSubmit }: RecordQCModalProps) 
                                 </div>
                             </div>
                         </div>
-
                     </form>
                 </div>
 
@@ -222,10 +248,15 @@ const RecordQCModal = ({ isOpen, onClose, data, onSubmit }: RecordQCModalProps) 
                     </button>
                     <button
                         type="submit"
-                        form="record-qc-form"
-                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 active:scale-[0.98] transition-all shadow-sm shadow-green-900/20"
+                        form="merged-qc-form"
+                        disabled={hasValidationError}
+                        className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm font-bold active:scale-[0.98] transition-all shadow-sm shadow-green-900/20 ${
+                            hasValidationError
+                                ? 'bg-gray-400 cursor-not-allowed'
+                                : 'bg-green-600 hover:bg-green-700'
+                        }`}
                     >
-                        Complete Inspection &amp; Send to Stock
+                        Mark as Done →
                     </button>
                 </div>
             </div>

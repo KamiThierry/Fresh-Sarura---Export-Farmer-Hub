@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
-import { X, Printer, CheckCircle2, Loader2, Package, MapPin, Calendar, Tag, Weight, Plane } from 'lucide-react';
+import { X, CheckCircle2, Loader2, Package, MapPin, Calendar, Tag, Weight, Plane, Download } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { api } from '../../../lib/api';
+import { useToastContext } from '@/context/ToastContext';
+import jsPDF from 'jspdf';
+import logo from '@/assets/sarura_logo_nav.png';
+import { getReportFooterText } from '@/lib/utils';
 
 interface BatchDetailModalProps {
     isOpen: boolean;
@@ -18,8 +22,10 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
 
 const BatchDetailModal = ({ isOpen, onClose, batch, onStatusChange }: BatchDetailModalProps) => {
     const [isMarking, setIsMarking] = useState(false);
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [linkedShipment, setLinkedShipment] = useState<any>(null);
+    const { showToast } = useToastContext();
 
     useEffect(() => {
         if (isOpen && batch?._id) {
@@ -42,12 +48,121 @@ const BatchDetailModal = ({ isOpen, onClose, batch, onStatusChange }: BatchDetai
         setError(null);
         try {
             await api.patch(`/export-batches/${batch._id}/ready`, {});
+            showToast("Batch Updated", "Export batch has been marked as ready for export");
             onStatusChange?.();
             onClose();
         } catch (err: any) {
             setError(err.message || 'Failed to mark as ready.');
         } finally {
             setIsMarking(false);
+        }
+    };
+
+    const handleDownloadReport = async () => {
+        if (!batch) return;
+        setIsGeneratingPdf(true);
+        try {
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const timestamp = new Date().toLocaleString('en-GB', {
+                day: '2-digit', month: 'short', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+
+            // ── 1. Header ──────────────────────────────────────────────
+            try { doc.addImage(logo, 'PNG', 15, 12, 10, 10); } catch {}
+            doc.setTextColor(21, 128, 61);
+            doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+            doc.text('Fresh Sarura', 28, 19);
+            doc.setTextColor(107, 114, 128);
+            doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+            doc.text('Export & Farmer Hub', 28, 23);
+            doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+            doc.setTextColor(17, 24, 39);
+            doc.text('Printed on', pageWidth - 15, 15, { align: 'right' });
+            doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+            doc.setTextColor(107, 114, 128);
+            doc.text(timestamp, pageWidth - 15, 20, { align: 'right' });
+            doc.setDrawColor(229, 231, 235);
+            doc.line(15, 30, pageWidth - 15, 30);
+
+            // ── 2. Title ───────────────────────────────────────────────
+            doc.setTextColor(17, 24, 39);
+            doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+            doc.text(`EXPORT BATCH REPORT — ${batch.batchId}`, 15, 42);
+
+            // ── 3. Summary Fields ─────────────────────────────────────
+            const summaryFields = [
+                { label: 'Crop',            value: batch.cropName },
+                { label: 'Grade',           value: batch.gradeLabel || '—' },
+                { label: 'Client',          value: batch.clientName },
+                { label: 'Destination',     value: batch.destination },
+                { label: 'Allocated Weight',value: `${batch.allocatedWeightKg?.toLocaleString()} kg` },
+                { label: 'Box Count',       value: `${batch.boxCount} boxes` },
+                { label: 'Weight per Box',  value: `${batch.weightPerBoxKg} kg` },
+                { label: 'Target Date',     value: batch.targetShipmentDate ? new Date(batch.targetShipmentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
+                { label: 'Status',          value: batch.status === 'ReadyForExport' ? 'Ready for Export' : batch.status },
+            ];
+
+            let yPos = 52;
+            doc.setFontSize(9);
+            summaryFields.forEach(field => {
+                doc.setTextColor(107, 114, 128); doc.setFont('helvetica', 'normal');
+                doc.text(field.label, 15, yPos);
+                doc.setTextColor(17, 24, 39); doc.setFont('helvetica', 'bold');
+                doc.text(String(field.value || '—'), pageWidth - 15, yPos, { align: 'right' });
+                doc.setDrawColor(243, 244, 246);
+                doc.line(15, yPos + 2, pageWidth - 15, yPos + 2);
+                yPos += 10;
+            });
+
+            // ── 4. Shipment Section ───────────────────────────────────
+            if (linkedShipment) {
+                yPos += 5;
+                doc.setFillColor(249, 250, 251);
+                doc.roundedRect(15, yPos, pageWidth - 30, 25, 3, 3, 'F');
+                
+                doc.setTextColor(79, 70, 229); doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+                doc.text('ASSIGNED SHIPMENT', 20, yPos + 7);
+                
+                doc.setTextColor(17, 24, 39); doc.setFontSize(10);
+                doc.text(linkedShipment.plNumber, 20, yPos + 14);
+                
+                doc.setTextColor(107, 114, 128); doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+                doc.text(`${linkedShipment.flightNumber} → ${linkedShipment.destination} | ${new Date(linkedShipment.departureDate).toLocaleDateString('en-GB')}`, 20, yPos + 20);
+                
+                yPos += 35;
+            }
+
+            // ── 5. System Insights ──
+            let lastY = (doc as any).lastAutoTable?.finalY || yPos;
+            if (lastY > 240) { doc.addPage(); lastY = 20; }
+            doc.setTextColor(17, 24, 39); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+            doc.text('SYSTEM INSIGHTS', 15, lastY + 15);
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(75, 85, 99);
+            doc.text('• This report details export batch readiness and assignments.', 15, lastY + 25);
+            doc.text(`• Target Client: ${batch.clientName ? batch.clientName.toUpperCase() : 'N/A'}`, 15, lastY + 31);
+
+            // ── 6. Footer ─────────────────────────────────────────────
+            const pageCount = (doc as any).internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setDrawColor(229, 231, 235);
+                doc.line(15, 275, pageWidth - 15, 275);
+                doc.setFontSize(8.5); doc.setTextColor(75, 85, 99); doc.setFont('helvetica', 'bold');
+                doc.text(getReportFooterText(), pageWidth / 2, 280, { align: 'center' });
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+                const footerY = 288;
+                doc.text('Kigali - Rwanda | +250 780389786 | info@gardenfreshrwanda.com | www.gardenfreshrwanda.com', pageWidth / 2, footerY, { align: 'center' });
+                doc.setFont('helvetica', 'bold');
+                doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, footerY, { align: 'right' });
+            }
+
+            doc.save(`Sarura_Batch_${batch.batchId}_Report.pdf`);
+        } catch (err) {
+            console.error('Failed to generate batch report:', err);
+        } finally {
+            setIsGeneratingPdf(false);
         }
     };
 
@@ -77,7 +192,7 @@ const BatchDetailModal = ({ isOpen, onClose, batch, onStatusChange }: BatchDetai
                     <div className="grid grid-cols-2 gap-3">
                         {[
                             { icon: Package, label: 'Crop', value: batch.cropName },
-                            { icon: Tag, label: 'Grade', value: batch.gradeLabel || 'Grade A' },
+                            { icon: Tag, label: 'Grade', value: batch.gradeLabel || '—' },
                             { icon: MapPin, label: 'Client', value: batch.clientName },
                             { icon: MapPin, label: 'Destination', value: batch.destination },
                             { icon: Weight, label: 'Total Weight', value: `${batch.allocatedWeightKg?.toLocaleString()} kg` },
@@ -108,11 +223,11 @@ const BatchDetailModal = ({ isOpen, onClose, batch, onStatusChange }: BatchDetai
                                 {new Date(linkedShipment.departureDate).toLocaleDateString()}
                             </p>
                             <span className={`inline-flex items-center mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                linkedShipment.status === 'Dispatched'
+                                linkedShipment.status === 'Shipped'
                                     ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                                     : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                             }`}>
-                                {linkedShipment.status === 'Dispatched' ? '✈ Dispatched' : '📋 Scheduled'}
+                                {linkedShipment.status === 'Shipped' ? '✈ Shipped' : '📋 Scheduled'}
                             </span>
                         </div>
                     )}
@@ -137,10 +252,14 @@ const BatchDetailModal = ({ isOpen, onClose, batch, onStatusChange }: BatchDetai
                 {/* Footer */}
                 <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-between gap-3">
                     <button
-                        onClick={() => window.print()}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-200 hover:bg-gray-50 text-sm font-bold shadow-sm transition-colors"
+                        onClick={handleDownloadReport}
+                        disabled={isGeneratingPdf}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-200 hover:bg-gray-50 text-sm font-bold shadow-sm transition-colors disabled:opacity-50"
                     >
-                        <Printer size={16} /> Print Labels
+                        {isGeneratingPdf
+                            ? <><Loader2 size={16} className="animate-spin" /> Generating...</>
+                            : <><Download size={16} /> Download Report</>
+                        }
                     </button>
 
                     {batch.status === 'Pending' && (
@@ -165,8 +284,19 @@ const BatchDetailModal = ({ isOpen, onClose, batch, onStatusChange }: BatchDetai
                     )}
 
                     {batch.status === 'Shipped' && (
-                        <span className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-900/30">
-                            <CheckCircle2 size={16} /> Shipped
+                        <span className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border ${
+                            linkedShipment?.status === 'Shipped'
+                                ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200'
+                                : linkedShipment?.status === 'Departed'
+                                ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200'
+                                : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200'
+                        }`}>
+                            <CheckCircle2 size={16} />
+                            {linkedShipment?.status === 'Shipped'
+                                ? 'Shipped'
+                                : linkedShipment?.status === 'Departed'
+                                ? 'In Transit'
+                                : 'Scheduled'}
                         </span>
                     )}
                 </div>

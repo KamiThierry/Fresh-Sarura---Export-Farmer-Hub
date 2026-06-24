@@ -25,8 +25,14 @@ const Performance = () => {
 
     // ─── Data Processing ───────────────────────────────────────────────────
 
-    // 1. Filter completed cycles for "Harvest Logs"
-    const completedCycles = cycles.filter((c: any) => c.status === 'completed');
+    // 1. Collect all harvests from all cycles
+    const allHarvests = cycles.flatMap((c: any) => 
+        (c.myHarvests || []).map((h: any) => ({
+            ...h,
+            cycleId: c.cycleId,
+            cropName: c.crop_name
+        }))
+    );
     
     // 2. Metrics Calculation
     // Total Yield: Sum of predictionKg from VERIFIED yield reports (forecasts)
@@ -34,8 +40,6 @@ const Performance = () => {
     const totalYield = verifiedForecasts.reduce((sum, f: any) => sum + (f.predictionKg || 0), 0);
 
     const flaggedCount = fieldReports.filter((r: any) => r.status === 'Flagged').length;
-    const clearedCount = fieldReports.filter((r: any) => r.status === 'Cleared').length;
-    const totalReports = fieldReports.length;
 
     // Verified Forecasts: how many forecasts the PM has verified
     const totalForecasts = forecasts.length;
@@ -49,15 +53,15 @@ const Performance = () => {
     const qualityGrade = qualityScore >= 95 ? 'A+' : qualityScore >= 90 ? 'Grade A' : qualityScore >= 80 ? 'Grade B' : 'Grade C';
 
     // 3. Mapping for Tabs
-    const harvestLogs = completedCycles.map((c: any) => ({
-        id: c._id,
-        date: new Date(c.updatedAt || c.createdAt).toLocaleDateString('en-US', { 
+    const harvestLogs = allHarvests.map((h: any) => ({
+        id: h._id,
+        date: new Date(h.createdAt).toLocaleDateString('en-US', { 
             month: 'short', day: '2-digit', year: 'numeric' 
         }),
-        batchId: c.cycleId || 'N/A',
-        crop: c.crop_name,
-        quantity: c.final_yield || 'N/A',
-        status: 'Accepted'
+        batchId: h.cycleId || 'N/A',
+        crop: h.cropName,
+        quantity: h.estimatedWeightKg ? `${h.estimatedWeightKg} kg` : 'N/A',
+        status: h.status === 'PickedUp' ? 'Picked Up' : h.status
     }));
 
     const taskHistory = fieldReports.map((r: any) => ({
@@ -182,8 +186,12 @@ const Performance = () => {
                                             <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{log.crop}</td>
                                             <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-bold">{log.quantity}</td>
                                             <td className="px-6 py-4">
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400">
-                                                    <CheckCircle2 size={12} />
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                                                    log.status === 'Pending'
+                                                        ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400'
+                                                        : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                                                }`}>
+                                                    {log.status === 'Pending' ? <Clock size={12} /> : <CheckCircle2 size={12} />}
                                                     {log.status}
                                                 </span>
                                             </td>

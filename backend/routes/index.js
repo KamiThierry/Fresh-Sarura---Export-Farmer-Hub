@@ -11,6 +11,12 @@ import notificationRoutes from './notifications.js';
 import roomRoutes from './rooms.js';
 import exportRoutes from './export.js';
 import traceabilityRoutes from './traceability.js';
+import adminRoutes from './adminRoutes.js';
+import eventLogRoutes from './eventLogs.js';
+import fleetRoutes from './fleet.js';
+import contactRoutes from './contact.js';
+import cropVarietyRoutes from './cropVarieties.js';
+import packagingRoutes from './packaging.js';
 
 const router = express.Router();
 const apiVersion = '/api/v1';
@@ -26,6 +32,12 @@ router.use(`${apiVersion}/stock`, stockRoutes);
 router.use(`${apiVersion}/notifications`, notificationRoutes);
 router.use(`${apiVersion}/rooms`, roomRoutes);
 router.use(`${apiVersion}/traceability`, traceabilityRoutes);
+router.use(`${apiVersion}/admin`, adminRoutes);
+router.use(`${apiVersion}/event-logs`, eventLogRoutes);
+router.use(`${apiVersion}/fleet`, fleetRoutes);
+router.use(`${apiVersion}/contact`, contactRoutes);
+router.use(`${apiVersion}/crop-varieties`, cropVarietyRoutes);
+router.use(`${apiVersion}/packaging`, packagingRoutes);
 router.use(`${apiVersion}`, exportRoutes);
 
 export default router;

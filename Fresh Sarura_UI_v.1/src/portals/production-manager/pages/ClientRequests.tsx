@@ -5,6 +5,7 @@ import {
     Search, X, CheckCircle, XCircle, Inbox,
     Info, User, Clock, Send
 } from 'lucide-react';
+import { useToastContext } from '@/context/ToastContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -114,30 +115,7 @@ const STATUS_CONFIG: Record<RequestStatus, { label: string; pill: string; dot: s
     },
 };
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
 
-interface ToastState {
-    message: string;
-    type: 'success' | 'error' | 'info';
-}
-
-const Toast = ({ message, type }: ToastState) => {
-    const colours: Record<string, string> = {
-        success: 'bg-emerald-600',
-        error: 'bg-red-600',
-        info: 'bg-blue-600',
-    };
-    return (
-        <div
-            className={`fixed bottom-6 right-6 z-[10001] flex items-center gap-2.5 px-5 py-3 rounded-xl shadow-2xl text-sm font-medium text-white animate-slide-up ${colours[type]}`}
-        >
-            {type === 'success' && <CheckCircle size={16} />}
-            {type === 'error' && <XCircle size={16} />}
-            {type === 'info' && <Info size={16} />}
-            {message}
-        </div>
-    );
-};
 
 // ─── Request Detail Modal ─────────────────────────────────────────────────────
 
@@ -333,18 +311,9 @@ const ClientRequests = () => {
     const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedRequest, setSelectedRequest] = useState<ClientRequest | null>(null);
-    const [toast, setToast] = useState<ToastState | null>(null);
+    const { showToast } = useToastContext();
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 3;
-
-    useEffect(() => {
-        if (!toast) return;
-        const t = setTimeout(() => setToast(null), 3500);
-        return () => clearTimeout(t);
-    }, [toast]);
-
-    const showToast = (message: string, type: ToastState['type']) =>
-        setToast({ message, type });
 
     const handleRowClick = (req: ClientRequest) => {
         setRequests(prev =>
@@ -358,7 +327,7 @@ const ClientRequests = () => {
         const updated: ClientRequest = { ...selectedRequest, status: 'confirmed' };
         setRequests(prev => prev.map(r => (r.id === selectedRequest.id ? updated : r)));
         setSelectedRequest(null);
-        showToast(`${selectedRequest.id} confirmed — stock allocated!`, 'success');
+        showToast("Order Confirmed", `${selectedRequest.id} confirmed — stock allocated!`);
     };
 
     const handleDecline = () => {
@@ -366,7 +335,7 @@ const ClientRequests = () => {
         const updated: ClientRequest = { ...selectedRequest, status: 'declined' };
         setRequests(prev => prev.map(r => (r.id === selectedRequest.id ? updated : r)));
         setSelectedRequest(null);
-        showToast(`${selectedRequest.id} declined.`, 'error');
+        showToast("Request Declined", `${selectedRequest.id} declined.`);
     };
 
     const handleSendReply = (text: string) => {
@@ -378,7 +347,7 @@ const ClientRequests = () => {
         };
         setRequests(prev => prev.map(r => (r.id === selectedRequest.id ? updated : r)));
         setSelectedRequest(updated);
-        showToast('Reply sent successfully.', 'info');
+        showToast("Reply Sent", 'Reply sent successfully.');
     };
 
     const filterPills: { key: FilterKey; label: string }[] = [
@@ -542,8 +511,6 @@ const ClientRequests = () => {
                 />
             )}
 
-            {/* Toast */}
-            {toast && <Toast message={toast.message} type={toast.type} />}
         </div>
     );
 };

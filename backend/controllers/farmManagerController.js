@@ -3,6 +3,7 @@ import CropCycle from '../models/CropCycle.js';
 import BudgetRequest from '../models/BudgetRequest.js';
 import YieldForecast from '../models/YieldForecast.js';
 import FieldReport from '../models/FieldReport.js';
+import HarvestDeclaration from '../models/HarvestDeclaration.js';
 import User from '../models/User.js';
 import { createNotification } from './notificationController.js';
  
@@ -93,8 +94,13 @@ export const getMyCycles = async (req, res) => {
                     cycleId: cycle._id,
                     submittedBy: req.user._id,
                 }).sort({ createdAt: -1 });
+
+                const harvests = await HarvestDeclaration.find({
+                    cycleId: cycle._id,
+                    declaredBy: req.user._id,
+                }).sort({ createdAt: -1 });
  
-                return { ...cycle.toObject(), myRequests: requests, myFieldReports: fieldReports };
+                return { ...cycle.toObject(), myRequests: requests, myFieldReports: fieldReports, myHarvests: harvests };
             })
         );
  
@@ -153,6 +159,56 @@ export const submitBudgetRequest = async (req, res) => {
             }
         }
  
+        // ── V6: Category-Specific Budget Block ────────────────────────────
+        // Check if each activity request fits within its category's remaining budget
+        const existingRequests = await BudgetRequest.find({
+            cycleId,
+            approvalStatus: { $in: ['Approved', 'Pending'] }
+        });
+
+        // Map existing category usage
+        const categoryUsage = {};
+        existingRequests.forEach(r => {
+            r.lineItems.forEach(item => {
+                const cat = item.category;
+                categoryUsage[cat] = (categoryUsage[cat] || 0) + (item.estimatedCostRwf || 0);
+            });
+        });
+
+        // Validate each new line item
+        const errors = [];
+        lineItems.forEach(newItem => {
+            const cat = newItem.category;
+            const requested = newItem.estimatedCostRwf || 0;
+            const alreadyUsed = categoryUsage[cat] || 0;
+            
+            const categoryConfig = cycle.budget_categories.find(c => c.name === cat);
+            const limit = categoryConfig ? categoryConfig.allocated : 0;
+
+            if (alreadyUsed + requested > limit) {
+                errors.push({
+                    category: cat,
+                    requested,
+                    limit,
+                    available: Math.max(0, limit - alreadyUsed)
+                });
+            }
+        });
+
+        if (errors.length > 0) {
+            const errorMsg = errors.map(e => 
+                `${e.category}: requested ${e.requested.toLocaleString()} Rwf, but only ${e.available.toLocaleString()} Rwf remaining (Limit: ${e.limit.toLocaleString()} Rwf)`
+            ).join('; ');
+
+            return res.status(400).json({
+                status: 'error',
+                code: 'CATEGORY_BUDGET_EXCEEDED',
+                message: `Category Budget Limit Exceeded: ${errorMsg}`,
+                errors
+            });
+        }
+        // ─────────────────────────────────────────────────────────────────
+  
         const totalRequestedRwf = lineItems.reduce((sum, item) => sum + (item.estimatedCostRwf || 0), 0);
  
         const request = await BudgetRequest.create({
@@ -392,6 +448,80 @@ export const getMyYieldForecasts = async (req, res) => {
     try {
         const forecasts = await YieldForecast.find({ submittedBy: req.user._id }).sort({ createdAt: -1 });
         res.status(200).json({ status: 'success', results: forecasts.length, data: forecasts });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+// GET /api/v1/farm-manager/activity
+export const getMyActivity = async (req, res) => {
+    try {
+        const farmer = await getMyFarmer(req.user._id);
+        const limit = parseInt(req.query.limit) || 10;
+
+        // 1. Crop Cycles Assigned
+        const cycles = await CropCycle.find({ farmer_id: farmer._id })
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .lean();
+        const formattedCycles = cycles.map(c => ({
+            id: c._id,
+            type: 'cycle',
+            time: c.createdAt,
+            event: `New crop cycle assigned: ${c.crop_name}`,
+            status: c.status.charAt(0).toUpperCase() + c.status.slice(1)
+        }));
+
+        // 2. Budget Requests
+        const budgets = await BudgetRequest.find({ submittedBy: req.user._id })
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .lean();
+        const formattedBudgets = budgets.map(b => ({
+            id: b._id,
+            type: 'budget',
+            time: b.createdAt,
+            event: `Budget request submitted for ${b.cycleName}`,
+            status: b.approvalStatus
+        }));
+
+        // 3. Flagged Reports
+        const reports = await FieldReport.find({ submittedBy: req.user._id, status: 'Flagged' })
+            .sort({ updatedAt: -1 })
+            .limit(limit)
+            .lean();
+        const formattedReports = reports.map(r => ({
+            id: r._id,
+            type: 'report',
+            time: r.updatedAt,
+            event: `Field report flagged by PM: ${r.description}`,
+            status: 'Flagged'
+        }));
+
+        // 4. Yield Forecasts
+        const forecasts = await YieldForecast.find({ submittedBy: req.user._id })
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .lean();
+        const formattedForecasts = forecasts.map(f => ({
+            id: f._id,
+            type: 'forecast',
+            time: f.createdAt,
+            event: `Yield forecast submitted: ${f.predictionKg} kg`,
+            status: f.status
+        }));
+
+        const combined = [
+            ...formattedCycles,
+            ...formattedBudgets,
+            ...formattedReports,
+            ...formattedForecasts
+        ];
+
+        combined.sort((a, b) => new Date(b.time) - new Date(a.time));
+        const topRecent = combined.slice(0, limit);
+
+        res.status(200).json({ status: 'success', data: topRecent });
     } catch (err) {
         res.status(500).json({ status: 'error', message: err.message });
     }

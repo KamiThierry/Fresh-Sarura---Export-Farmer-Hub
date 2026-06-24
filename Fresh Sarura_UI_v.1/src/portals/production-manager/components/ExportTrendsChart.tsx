@@ -5,7 +5,7 @@ import { usePMContext } from '@/context/PMContext';
 const ExportTrendsChart = () => {
   const [timeRange, setTimeRange] = useState('7days');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const { stock, shipments } = usePMContext();
+  const { stock, shipments, intakeLogs } = usePMContext();
 
   const timeRangeOptions = [
     { value: '7days', label: 'Last 7 Days' },
@@ -25,9 +25,9 @@ const ExportTrendsChart = () => {
         const label = d.toLocaleDateString('en-US', { weekday: 'short' });
         const dateStr = d.toISOString().split('T')[0];
 
-        const intake = stock
-          .filter(b => b.updatedAt?.startsWith(dateStr))
-          .reduce((sum: number, b: any) => sum + (b.processedWeightKg || 0), 0) / 1000;
+        const intake = intakeLogs
+          .filter(log => log.createdAt?.startsWith(dateStr))
+          .reduce((sum: number, log: any) => sum + (log.pickedUpWeightKg || 0), 0) / 1000;
 
         const target = shipments
           .filter(s => s.departureDate?.startsWith(dateStr))
@@ -42,9 +42,9 @@ const ExportTrendsChart = () => {
         const weekEnd = new Date(now);
         weekEnd.setDate(weekEnd.getDate() - w * 7);
 
-        const intake = stock
-          .filter(b => { const d = new Date(b.updatedAt); return d >= weekStart && d <= weekEnd; })
-          .reduce((sum: number, b: any) => sum + (b.processedWeightKg || 0), 0) / 1000;
+        const intake = intakeLogs
+          .filter(log => { const d = new Date(log.createdAt); return d >= weekStart && d <= weekEnd; })
+          .reduce((sum: number, log: any) => sum + (log.pickedUpWeightKg || 0), 0) / 1000;
 
         const target = shipments
           .filter(s => { const d = new Date(s.departureDate); return d >= weekStart && d <= weekEnd; })
@@ -58,9 +58,9 @@ const ExportTrendsChart = () => {
         const label = d.toLocaleDateString('en-US', { month: 'short' });
         const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
-        const intake = stock
-          .filter(b => b.updatedAt?.startsWith(monthStr))
-          .reduce((sum: number, b: any) => sum + (b.processedWeightKg || 0), 0) / 1000;
+        const intake = intakeLogs
+          .filter(log => log.createdAt?.startsWith(monthStr))
+          .reduce((sum: number, log: any) => sum + (log.pickedUpWeightKg || 0), 0) / 1000;
 
         const target = shipments
           .filter(s => s.departureDate?.startsWith(monthStr))

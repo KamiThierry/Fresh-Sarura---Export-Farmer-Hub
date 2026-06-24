@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Leaf, Search, Bell, Loader2, LogOut } from 'lucide-react';
+import { Search, Bell, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../../shared/component/ThemeToggle';
 import NotificationsModal from '../../shared/component/NotificationsModal';
-import { api } from '@/lib/api';
 import { useFarmManager } from '../../../lib/useFarmManager';
 import { useFMSearch } from '@/lib/useGlobalSearch';
 import logo from '@/assets/sarura_logo_nav.png';
+import { useNotifications } from '@/context/NotificationContext';
 
 // --- Type badge colours ---
 const TYPE_COLOURS: Record<string, string> = {
@@ -19,43 +19,26 @@ const FarmManagerHeader = () => {
     const navigate = useNavigate();
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-    const [notifications, setNotifications] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Pull live data from context for search
-    const { cycles, forecasts, fieldReports } = useFarmManager();
-    const searchResults = useFMSearch(searchQuery, cycles, forecasts, fieldReports);
+    const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
 
-    const fetchNotifications = async () => {
-        try {
-            const res = await api.get('/notifications');
-            setNotifications(res.data);
-        } catch (err) {
-            console.error('Failed to fetch notifications:', err);
-        }
-    };
+    // Pull live data from context for search
+    const { cycles, forecasts } = useFarmManager();
+    const searchResults = useFMSearch(searchQuery, cycles, forecasts);
 
     const handleMarkAsRead = async (id: string) => {
-        try {
-            await api.patch(`/notifications/${id}/read`, {});
-            fetchNotifications();
-        } catch (err) { console.error(err); }
+        await markAsRead(id);
     };
 
     const handleMarkAllAsRead = async () => {
-        try {
-            await api.patch('/notifications/read-all', {});
-            fetchNotifications();
-        } catch (err) { console.error(err); }
+        await markAllAsRead();
     };
 
     const handleClearAll = async () => {
-        try {
-            await api.delete('/notifications');
-            fetchNotifications();
-        } catch (err) { console.error(err); }
+        await clearAll();
     };
 
     useEffect(() => {
@@ -63,9 +46,6 @@ const FarmManagerHeader = () => {
         if (userStr) {
             try { setCurrentUser(JSON.parse(userStr)); } catch (e) { console.error(e); }
         }
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 30000);
-        return () => clearInterval(interval);
     }, []);
 
     // Close dropdown on outside click
@@ -79,13 +59,7 @@ const FarmManagerHeader = () => {
         return () => document.removeEventListener('mousedown', handler);
     }, []);
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        navigate('/login');
-    };
 
-    const unreadCount = notifications.filter(n => !n.isRead).length;
     const initials = currentUser?.name
         ? currentUser.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
         : 'FM';
@@ -157,17 +131,21 @@ const FarmManagerHeader = () => {
             </div>
 
             {/* Right Side Controls */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
                 <ThemeToggle />
 
                 {/* Notification Icon */}
                 <button
                     onClick={() => setIsNotificationsOpen(true)}
-                    className="relative p-2.5 rounded-xl bg-white/80 hover:bg-[#4CAF50] hover:text-white transition-all shadow-sm dark:bg-gray-700/50 dark:text-gray-200 dark:hover:bg-green-600"
+                    className={`relative p-2.5 rounded-xl transition-all shadow-sm ${
+                        unreadCount > 0 
+                            ? 'bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400' 
+                            : 'bg-white/80 dark:bg-gray-700/50 text-gray-500 dark:text-gray-200 hover:bg-green-500 hover:text-white'
+                    }`}
                 >
                     <Bell size={18} />
                     {unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center bg-green-600 rounded-full text-[10px] font-bold text-white ring-2 ring-white dark:ring-gray-800 animate-pulse">
+                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center bg-green-600 rounded-full text-[10px] font-bold text-white ring-2 ring-white dark:ring-gray-800">
                             {unreadCount}
                         </span>
                     )}
@@ -175,26 +153,16 @@ const FarmManagerHeader = () => {
 
                 {/* User Avatar — click goes to settings */}
                 <div className="flex items-center gap-2 pl-2 border-l border-gray-200 dark:border-gray-700">
-                    <div className="text-right hidden md:block">
-                        <p className="text-sm font-semibold text-[#222222] dark:text-white">
-                            {currentUser?.name || 'Farm Manager'}
-                        </p>
-                        <p className="text-xs text-[#6B7280] dark:text-gray-400">Field Ops</p>
+                    <div onClick={() => navigate('/farm-manager/settings')} className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-bold shadow-md hover:saturate-150 transition-all active:scale-95">
+                            {initials}
+                        </div>
+                        <div className="text-left hidden md:block">
+                            <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{currentUser?.name || 'Farm Manager'}</p>
+                            <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-0.5">{currentUser?.role ? currentUser.role.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : 'Field Ops'}</p>
+                        </div>
+                        <ChevronDown size={14} className="text-gray-400 ml-1" />
                     </div>
-                    <button
-                        onClick={() => navigate('/farm-manager/settings')}
-                        title="My Profile & Settings"
-                        className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-semibold shadow-md hover:saturate-150 transition-all active:scale-95"
-                    >
-                        {initials}
-                    </button>
-                    <button
-                        onClick={handleLogout}
-                        title="Sign out"
-                        className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
-                    >
-                        <LogOut size={16} />
-                    </button>
                 </div>
             </div>
 

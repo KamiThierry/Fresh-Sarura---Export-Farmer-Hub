@@ -6,6 +6,7 @@ export const useFarmManager = () => {
   const [budgetRequests, setBudgetRequests] = useState<any[]>([]);
   const [fieldReports, setFieldReports] = useState<any[]>([]);
   const [forecasts, setForecasts] = useState<any[]>([]);
+  const [activity, setActivity] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,6 +55,15 @@ export const useFarmManager = () => {
     }
   }, []);
 
+  const fetchActivity = useCallback(async () => {
+    try {
+      const res = await api.get('/farm-manager/activity?limit=6');
+      setActivity(res.data);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, []);
+
   const submitBudgetRequest = async (data: {
     cycleId: string;
     cycleName: string;
@@ -62,11 +72,16 @@ export const useFarmManager = () => {
     lineItems: { activityName: string; estimatedCostRwf: number }[];
   }) => {
     console.log('useFarmManager: submitBudgetRequest START', data);
-    const res = await api.post('/farm-manager/budget-requests', data);
-    console.log('useFarmManager: submitBudgetRequest SUCCESS', res);
-    await fetchBudgetRequests();
-    await fetchCycles();
-    return res;
+    try {
+      const res = await api.post('/farm-manager/budget-requests', data);
+      console.log('useFarmManager: submitBudgetRequest SUCCESS', res);
+      await fetchBudgetRequests();
+      await fetchCycles();
+      return res;
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || 'Failed to submit budget request.';
+      throw new Error(message);
+    }
   };
 
   const declareHarvest = async (data: {
@@ -75,9 +90,15 @@ export const useFarmManager = () => {
     cropName: string;
     notes?: string;
   }) => {
-    const res = await api.post('/harvest-declarations', data);
-    await fetchCycles();
-    return res;
+    try {
+      const res = await api.post('/harvest-declarations', data);
+      await fetchCycles();
+      return res;
+    } catch (err: any) {
+      // Extract the backend message and rethrow so the modal can display it
+      const message = err?.response?.data?.message || err?.message || 'Failed to declare harvest.';
+      throw new Error(message);
+    }
   };
 
   const submitFieldReport = async (data: {
@@ -113,9 +134,14 @@ export const useFarmManager = () => {
     confidence: string;
     notes?: string;
   }) => {
-    const res = await api.post('/farm-manager/yield-forecasts', data);
-    await fetchForecasts();
-    return res;
+    try {
+      const res = await api.post('/farm-manager/yield-forecasts', data);
+      await fetchForecasts();
+      return res;
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || 'Failed to submit yield forecast.';
+      throw new Error(message);
+    }
   };
 
 
@@ -144,9 +170,10 @@ export const useFarmManager = () => {
       fetchBudgetRequests(),
       fetchFieldReports(),
       fetchForecasts(),
+      fetchActivity(),
     ]);
     setLoading(false);
-  }, [fetchDashboard, fetchCycles, fetchBudgetRequests, fetchFieldReports, fetchForecasts]);
+  }, [fetchDashboard, fetchCycles, fetchBudgetRequests, fetchFieldReports, fetchForecasts, fetchActivity]);
 
   useEffect(() => {
     refreshAll();
@@ -158,6 +185,7 @@ export const useFarmManager = () => {
     budgetRequests,
     fieldReports,
     forecasts,
+    activity,
     loading,
     error,
     submitBudgetRequest,
@@ -169,5 +197,6 @@ export const useFarmManager = () => {
     refreshAll,
     fetchCycles,
     fetchForecasts,
+    fetchActivity,
   };
 };

@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { DoorOpen, Search, Bell, LogOut, Loader2 } from 'lucide-react';
+import { DoorOpen, Search, Bell, Loader2, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import NotificationsModal from '../../shared/component/NotificationsModal';
 import { api } from '@/lib/api';
-import { usePMSearch } from '@/lib/useGlobalSearch';
+import { useUniversalSearch } from '@/lib/useGlobalSearch';
 import logo from '@/assets/sarura_logo_nav.png';
+import { useNotifications } from '@/context/NotificationContext';
 
 // --- Type badge colours ---
 const TYPE_COLOURS: Record<string, string> = {
@@ -17,26 +18,18 @@ const Header = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-    const [notifications, setNotifications] = useState<any[]>([]);
     const [pendingRooms, setPendingRooms] = useState(0);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
 
-    // Live search
-    const { results: searchResults, loading: searchLoading } = usePMSearch(searchQuery);
+    const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
 
     // Real user from localStorage
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : { name: 'User', role: 'Staff' };
 
-    const fetchNotifications = async () => {
-        try {
-            const res = await api.get('/notifications');
-            setNotifications(res.data);
-        } catch (err) {
-            console.error('Failed to fetch notifications:', err);
-        }
-    };
+    // Live search
+    const { results: searchResults, loading: searchLoading } = useUniversalSearch(searchQuery, user.role || 'production_manager');
 
     const fetchPendingRooms = async () => {
         try {
@@ -46,41 +39,25 @@ const Header = () => {
     };
 
     const handleMarkAsRead = async (id: string) => {
-        try {
-            await api.patch(`/notifications/${id}/read`, {});
-            fetchNotifications();
-        } catch (err) { console.error(err); }
+        await markAsRead(id);
     };
 
     const handleMarkAllAsRead = async () => {
-        try {
-            await api.patch('/notifications/read-all', {});
-            fetchNotifications();
-        } catch (err) { console.error(err); }
+        await markAllAsRead();
     };
 
     const handleClearAll = async () => {
-        try {
-            await api.delete('/notifications');
-            fetchNotifications();
-        } catch (err) { console.error(err); }
+        await clearAll();
     };
 
     useEffect(() => {
-        fetchNotifications();
         fetchPendingRooms();
         const interval = setInterval(() => {
-            fetchNotifications();
             fetchPendingRooms();
         }, 30000); // Poll every 30s
         return () => clearInterval(interval);
     }, []);
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        navigate('/login');
-    };
 
     const formatRole = (role: string) => {
         return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -101,8 +78,6 @@ const Header = () => {
     }, []);
 
 
-    const unreadCount = notifications.filter(n => !n.isRead).length;
-
     return (
         <header className="fixed top-[10px] left-[10px] right-[10px] h-16 bg-white/80 dark:bg-gray-800/90 backdrop-blur-md border-theme z-40 px-6 flex items-center justify-between transition-colors duration-300 rounded-2xl shadow-floating">
             <div className="flex items-center gap-3">
@@ -122,6 +97,8 @@ const Header = () => {
                     )}
                     <input
                         type="text"
+                        name="global-search"
+                        autoComplete="off"
                         value={searchQuery}
                         onChange={(e) => {
                             setSearchQuery(e.target.value);
@@ -195,7 +172,11 @@ const Header = () => {
                 {/* Notification Icon */}
                 <button 
                     onClick={() => setIsNotificationsOpen(true)}
-                    className="relative p-2.5 rounded-xl bg-white/80 hover:bg-[#4CAF50] hover:text-white transition-all shadow-sm dark:bg-gray-700/50 dark:text-gray-200 dark:hover:bg-green-600"
+                    className={`relative p-2.5 rounded-xl transition-all shadow-sm ${
+                        unreadCount > 0 
+                            ? 'bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400' 
+                            : 'bg-white/80 dark:bg-gray-700/50 text-gray-500 dark:text-gray-200 hover:bg-green-500 hover:text-white'
+                    }`}
                 >
                     <Bell size={18} />
                     {unreadCount > 0 && (
@@ -207,26 +188,16 @@ const Header = () => {
 
                 {/* User Avatar & Profile */}
                 <div className="flex items-center gap-2 pl-2 border-l border-gray-200 dark:border-gray-700">
-                    <div className="text-right hidden md:block">
-                        <p className="text-sm font-semibold text-[#222222] dark:text-white">{user.name}</p>
-                        <p className="text-xs text-[#6B7280] dark:text-gray-400">{formatRole(user.role)}</p>
+                    <div onClick={() => navigate('/pm/settings')} className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 transition-colors">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-bold shadow-md hover:saturate-150 transition-all active:scale-95">
+                            {user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
+                        </div>
+                        <div className="text-left hidden md:block">
+                            <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{user.name.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())}</p>
+                            <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-0.5">{formatRole(user.role)}</p>
+                        </div>
+                        <ChevronDown size={14} className="text-gray-400 ml-1" />
                     </div>
-                    {/* Avatar — click to go to settings */}
-                    <button
-                        onClick={() => navigate('/pm/settings')}
-                        className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2E7D32] to-[#66BB6A] flex items-center justify-center text-white text-sm font-semibold shadow-md hover:saturate-150 transition-all active:scale-95"
-                        title="My Profile & Settings"
-                    >
-                        {user.name.charAt(0).toUpperCase()}
-                    </button>
-                    {/* Separate logout button */}
-                    <button
-                        onClick={handleLogout}
-                        title="Sign out"
-                        className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
-                    >
-                        <LogOut size={16} />
-                    </button>
                 </div>
             </div>
 

@@ -7,7 +7,7 @@ const exportBatchSchema = new mongoose.Schema({
     cropName:           { type: String, required: true },
     clientName:         { type: String, required: true },
     destination:        { type: String, required: true },
-    gradeLabel:         { type: String, default: 'Grade A' },
+    gradeLabel:         { type: String },
     allocatedWeightKg:  { type: Number, required: true },
     boxCount:           { type: Number, required: true },
     weightPerBoxKg:     { type: Number, required: true },

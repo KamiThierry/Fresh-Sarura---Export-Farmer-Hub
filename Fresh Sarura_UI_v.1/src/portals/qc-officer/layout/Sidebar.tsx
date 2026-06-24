@@ -1,14 +1,8 @@
-import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, Truck, FlaskConical, ClipboardList, Thermometer, Settings, LogOut } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
+import { Home, Truck, FlaskConical, Thermometer, Settings, LogOut } from 'lucide-react';
 
 const Sidebar = () => {
-    const navigate = useNavigate();
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        navigate('/login');
-    };
 
     const navGroups = [
         {
@@ -20,9 +14,8 @@ const Sidebar = () => {
         {
             title: 'Operations',
             items: [
-                { path: '/qc/intake', icon: Truck, label: 'Intake (Receiving)' },
+                { path: '/qc/intake', icon: Truck, label: 'Intake Log' },
                 { path: '/qc/processing', icon: FlaskConical, label: 'Processing' },
-                { path: '/qc/inspection', icon: ClipboardList, label: 'Inspection & Sorting' },
                 { path: '/qc/cold-room', icon: Thermometer, label: 'Cold Room (Stock)' },
             ]
         },
@@ -33,6 +26,12 @@ const Sidebar = () => {
             ]
         }
     ];
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+    };
 
     const bottomGroup = navGroups.find(g => g.title === 'System');
     const mainGroups = navGroups.filter(g => g.title !== 'System');
@@ -99,10 +98,10 @@ const Sidebar = () => {
                             ))}
                             <button 
                                 onClick={handleLogout}
-                                className="w-full flex items-center gap-3 px-3 py-2 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/10 rounded-lg transition-colors mt-1"
+                                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:text-gray-400 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                             >
-                                <LogOut size={18} />
-                                <span className="font-medium text-sm">Sign Out</span>
+                                <LogOut size={18} strokeWidth={2} />
+                                <span className="font-medium text-sm">Log Out</span>
                             </button>
                         </div>
                     </div>

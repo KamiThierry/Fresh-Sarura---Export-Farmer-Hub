@@ -3,26 +3,33 @@ import { useNavigate } from 'react-router-dom';
 import {
     Scale, Users, CloudSun, AlertTriangle,
     Activity, TrendingUp, Truck, Package,
-    Sprout, Leaf, Calendar, Loader2
+    Sprout, Leaf, Calendar, Loader2,
+    Clock, ArrowRight
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import HarvestReadyModal from '../components/HarvestReadyModal';
 import RequestSuppliesModal from '../components/RequestSuppliesModal';
 import { useFarmManager } from '../../../lib/useFarmManager';
+import { useToastContext } from '@/context/ToastContext';
 
 const FarmDashboard = () => {
     const navigate = useNavigate();
     const [isHarvestModalOpen, setIsHarvestModalOpen] = useState(false);
     const [isSuppliesModalOpen, setIsSuppliesModalOpen] = useState(false);
     const [timeRange, setTimeRange] = useState(30); // days
+    const { showToast } = useToastContext();
 
-    const { dashboard, cycles, loading, submitBudgetRequest, declareHarvest } = useFarmManager();
+    const { dashboard, cycles, activity, loading, submitBudgetRequest, declareHarvest } = useFarmManager();
 
     // Get farmer name from localStorage user object (set at login)
     const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const farmerName = dashboard?.farmer?.full_name || user?.name || 'Farm Manager';
+    const rawName = dashboard?.farmer?.full_name || user?.name || 'Farm Manager';
+    const farmerName = rawName.trim().split(' ')[0].charAt(0).toUpperCase() + rawName.trim().split(' ')[0].slice(1).toLowerCase();
 
-    const activeCycles = cycles.filter((c: any) => c.status?.toLowerCase() === 'active');
+    const activeCycles = cycles.filter((c: any) => {
+        const s = (c.status || '').toLowerCase();
+        return s === 'active' || s === 'in_progress' || s === 'harvesting';
+    });
 
     const stats = [
         {
@@ -138,7 +145,7 @@ const FarmDashboard = () => {
             <div className="p-4 md:p-6 space-y-6 pb-24">
 
                 {/* Hero */}
-                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-green-700 to-green-600 p-8 text-white shadow-lg">
+                <div className="relative overflow-hidden rounded-2xl bg-[#5cb85c] p-8 text-white shadow-lg">
                     <div className="relative z-10">
                         <div className="flex items-center gap-3 mb-2">
                             <Sprout className="h-8 w-8 text-green-100" />
@@ -297,11 +304,12 @@ const FarmDashboard = () => {
                                                 <p className="text-xs text-gray-500">{cycle.season}</p>
                                             </div>
                                         </div>
-                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${cycle.status === 'harvesting'
+                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                                            (cycle.status === 'in_progress' || cycle.status === 'harvesting')
                                             ? 'bg-amber-100 text-amber-700 animate-pulse'
                                             : 'bg-green-100 text-green-700'
                                             }`}>
-                                            {cycle.status?.charAt(0).toUpperCase() + cycle.status?.slice(1)}
+                                            {(cycle.status === 'in_progress' || cycle.status === 'harvesting') ? 'In Progress' : cycle.status?.charAt(0).toUpperCase() + cycle.status?.slice(1)}
                                         </span>
                                     </div>
                                 ))
@@ -317,6 +325,58 @@ const FarmDashboard = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* Recent Activity */}
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                        <div>
+                            <h2 className="text-base font-bold text-gray-900 dark:text-white">Recent Activity</h2>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Real-time update on your field tasks and reports</p>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
+                                <tr>
+                                    <th className="px-6 py-3 font-semibold">Time</th>
+                                    <th className="px-6 py-3 font-semibold">Event</th>
+                                    <th className="px-6 py-3 font-semibold text-right">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                {!activity || activity.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={3} className="px-6 py-8 text-center text-gray-400">No recent activity recorded</td>
+                                    </tr>
+                                ) : (
+                                    activity.map((item: any) => (
+                                        <tr key={item.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
+                                            <td className="px-6 py-4 text-gray-500">
+                                                {new Date(item.time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                            </td>
+                                            <td className="px-6 py-4 font-medium text-gray-800 dark:text-gray-200">
+                                                {item.event}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                                    item.status === 'Approved' || item.status === 'Verified' || item.status === 'Active' || item.status === 'Success'
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : item.status === 'Pending' || item.status === 'Submitted'
+                                                    ? 'bg-blue-100 text-blue-700'
+                                                    : item.status === 'Flagged' || item.status === 'Rejected'
+                                                    ? 'bg-red-100 text-red-700'
+                                                    : 'bg-gray-100 text-gray-700'
+                                                }`}>
+                                                    {item.status}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
             <HarvestReadyModal
@@ -324,7 +384,13 @@ const FarmDashboard = () => {
                 onClose={() => setIsHarvestModalOpen(false)}
                 cycles={activeCycles}
                 onSubmitConfirm={async (data) => {
-                    await declareHarvest(data);
+                    try {
+                        await declareHarvest(data);
+                        showToast('Harvest Declared', 'The logistics team has been notified for pickup.');
+                        setIsHarvestModalOpen(false);
+                    } catch (error) {
+                        console.error(error);
+                    }
                 }}
             />
             <RequestSuppliesModal
@@ -332,20 +398,26 @@ const FarmDashboard = () => {
                 onClose={() => setIsSuppliesModalOpen(false)}
                 cycles={cycles}
                 onSubmit={async (request) => {
-                    // Clean line items to match backend expected shape
-                    const cleanLineItems = request.lineItems.map(item => ({
-                        activityName: item.activityName,
-                        category: item.category,
-                        estimatedCostRwf: item.estimatedCostRwf
-                    }));
+                    try {
+                        // Clean line items to match backend expected shape
+                        const cleanLineItems = request.lineItems.map(item => ({
+                            activityName: item.activityName,
+                            category: item.category,
+                            estimatedCostRwf: item.estimatedCostRwf
+                        }));
 
-                    await submitBudgetRequest({
-                        cycleId: String(request.cycleId),
-                        cycleName: request.cycleName,
-                        startDate: request.startDate,
-                        endDate: request.endDate,
-                        lineItems: cleanLineItems,
-                    });
+                        await submitBudgetRequest({
+                            cycleId: String(request.cycleId),
+                            cycleName: request.cycleName,
+                            startDate: request.startDate,
+                            endDate: request.endDate,
+                            lineItems: cleanLineItems,
+                        });
+                        showToast('Supplies Requested', 'Your budget request has been sent to the Production Manager.');
+                        setIsSuppliesModalOpen(false);
+                    } catch (error) {
+                        console.error(error);
+                    }
                 }}
             />
         </>

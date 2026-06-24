@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, Search, Filter, Plus, Download, Printer, Eye, MoreVertical, CheckCircle, AlertCircle, Calendar, X, Loader2 } from 'lucide-react';
+import { FileText, Search, Filter, Plus, Download, Printer, Eye, MoreVertical, CheckCircle, AlertCircle, Calendar, X, Loader2, ChevronDown } from 'lucide-react';
 import DocumentUploadModal from '../components/DocumentUploadModal';
 import Pagination from '../../shared/component/Pagination';
 import { api } from '../../../lib/api';
@@ -14,7 +14,7 @@ const Documents = () => {
     const [filterShipment, setFilterShipment] = useState(initialShipmentId || '');
     const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-    const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable');
+    const [density] = useState<'comfortable' | 'compact'>('comfortable');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
@@ -82,14 +82,16 @@ const Documents = () => {
     };
 
     return (
-        <div className="space-y-6 pb-20 md:pb-0 relative">
+        <div className="p-6 space-y-6 pb-20 relative">
 
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap justify-between items-start gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Document Repository</h1>
                     <p className="text-gray-500 dark:text-gray-400">Manage all export documentation centrally.</p>
                 </div>
+                <div className="flex items-center gap-3 flex-wrap ml-auto justify-end">
                 <button
                     onClick={() => setIsUploadModalOpen(true)}
                     className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-900/20 transition-all hover:scale-105 active:scale-95"
@@ -97,47 +99,53 @@ const Documents = () => {
                     <Plus size={18} />
                     Upload New Document
                 </button>
+                </div>
             </div>
-
-            {/* Filters Bar */}
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col md:flex-row gap-4 items-center">
-                <div className="relative flex-1 w-full md:w-auto">
-                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                        type="text"
-                        placeholder="Search by filename, client, or PL#..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
-                    />
-                </div>
-
-                <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto">
-                    {/* Shipment Filter (Smart) */}
-                    {filterShipment && (
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-lg text-sm border border-indigo-200 dark:border-indigo-800 whitespace-nowrap">
-                            <Filter size={14} />
-                            Filter: <strong>{filterShipment}</strong>
-                            <button onClick={() => setFilterShipment('')} className="ml-1 hover:text-indigo-900 dark:hover:text-white"><X size={14} /></button>
-                        </div>
-                    )}
-
-                    <select
-                        value={filterType}
-                        onChange={(e) => setFilterType(e.target.value)}
-                        className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
-                    >
-                        <option value="All">All Types</option>
-                        <option value="Commercial Invoice">Invoices</option>
-                        <option value="Phytosanitary Cert">Phyto Certs</option>
-                        <option value="Airway Bill">AWBs</option>
-                        <option value="Packing List">Packing Lists</option>
-                    </select>
-                </div>
             </div>
 
             {/* Master Table */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+                {/* Unified Search & Filter Bar */}
+                <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-800/10 flex flex-wrap items-center gap-3">
+                    <div className="relative flex-1 max-w-md">
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Search by filename, client, or PL#..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-all"
+                        />
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        {/* Shipment Filter (Smart) */}
+                        {filterShipment && (
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs border border-indigo-200 dark:border-indigo-800 whitespace-nowrap">
+                                <Filter size={14} />
+                                PL: <strong>{filterShipment}</strong>
+                                <button onClick={() => setFilterShipment('')} className="ml-1 hover:text-indigo-900 dark:hover:text-white"><X size={14} /></button>
+                            </div>
+                        )}
+
+                        <div className="relative">
+                            <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                            <select
+                                value={filterType}
+                                onChange={(e) => setFilterType(e.target.value)}
+                                className="pl-8 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer shadow-sm"
+                            >
+                                <option value="All">All Types</option>
+                                <option value="Commercial Invoice">Invoices</option>
+                                <option value="Phytosanitary Cert">Phyto Certs</option>
+                                <option value="Airway Bill">AWBs</option>
+                                <option value="Packing List">Packing Lists</option>
+                            </select>
+                            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={12} />
+                        </div>
+                    </div>
+                </div>
+
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
                         <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-500 uppercase tracking-wider text-xs">

@@ -1,70 +1,92 @@
-import heroImg from "@/assets/farm.jpg";
-import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
+
+const stats = [
+  { value: "500+", label: "Verified Outgrowers" },
+  { value: "11", label: "Production Steps" },
+  { value: "100%", label: "Export Traceability" },
+  { value: "5+", label: "Years Operating" },
+];
 
 const HeroSection = () => {
-  const scrollTo = (id: string) => {
-    document.querySelector(id)?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const metrics = [
-    { label: "Verified Outgrowers", value: "500+" },
-    { label: "International Markets", value: "3" },
-    { label: "Digital Traceability", value: "100%" },
-  ];
+  const navigate = useNavigate();
 
   return (
-    <section id="top" className="relative min-h-[90vh] flex items-center overflow-hidden">
-      <img
-        src={heroImg}
-        alt="Rwandan avocado farm at sunrise with farmer tending crops"
-        className="absolute inset-0 w-full h-full object-cover"
-        width={1920}
-        height={1080}
-      />
-      {/* Sophisticated Gradient Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 via-slate-900/60 to-transparent" />
+    <section id="top" className="relative flex flex-col justify-between pt-16"
+      style={{ backgroundColor: "#f5f0e8", minHeight: "100vh" }}>
 
-      <div className="container relative z-10 py-24 md:py-32">
-        <div className="max-w-3xl">
-          {/* Eyebrow Tagline */}
-          <div className="space-y-2 mb-6">
-            <span className="text-sm font-semibold tracking-wider text-green-400 uppercase block">
-              RWANDA | PREMIUM HORTICULTURE
+      {/* Decorative blobs */}
+      <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full opacity-20 pointer-events-none"
+        style={{ background: "radial-gradient(circle, #bbf7d0 0%, transparent 70%)", transform: "translate(30%, -30%)" }} />
+      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full opacity-10 pointer-events-none"
+        style={{ background: "radial-gradient(circle, #86efac 0%, transparent 70%)", transform: "translate(-30%, 30%)" }} />
+
+      {/* Center content */}
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-6 md:px-10 py-20">
+        <div className="max-w-4xl mx-auto flex flex-col items-center">
+
+          {/* Pill badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-green-700/20 mb-8"
+            style={{ backgroundColor: "rgba(21, 128, 61, 0.08)" }}>
+            <span className="w-1.5 h-1.5 rounded-full bg-green-600 animate-pulse" />
+            <span className="text-green-700 text-xs font-semibold tracking-wider uppercase">
+              Presented by Garden Fresh Rwanda Ltd
             </span>
-            <h1 className="text-4xl md:text-5xl lg:text-7xl font-bold text-white leading-[1.1] tracking-tight">
-              Bridging Rwanda's Best Farms with Global Markets.
-            </h1>
           </div>
 
-          <p className="text-slate-200 text-lg md:text-xl leading-relaxed max-w-xl mb-10 opacity-90">
-            We combine world-class agronomy with digital traceability to empower local outgrowers and deliver premium produce to international buyers.
+          {/* Headline */}
+          <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.05] tracking-tight mb-6"
+            style={{ color: "#14532d" }}>
+            From Farm to Flight,{" "}
+            <span style={{ color: "#ca8a04" }}>Every Step Tracked.</span>
+          </h1>
+
+          {/* Subtext */}
+          <p className="text-slate-600 text-lg md:text-xl leading-relaxed mb-10 max-w-2xl">
+            Fresh Sarura connects farmers, production managers, quality control,
+            and logistics in one unified platform — built for Rwanda's premium
+            horticulture export chain.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 mb-20">
-            <Button size="lg" className="px-8 h-12 text-base font-semibold" onClick={() => scrollTo("#buyers")}>
-              Request Premium Produce
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="px-8 h-12 text-base font-semibold bg-white/10 backdrop-blur-sm border-white text-white hover:bg-white hover:text-slate-900 transition-all font-medium"
-              onClick={() => scrollTo("#approach")}
-            >
-              Explore Our Approach
-            </Button>
-          </div>
-
-          {/* Social Proof / Metrics Bar */}
-          <div className="flex flex-wrap gap-12 pt-8 border-t border-white/10">
-            {metrics.map((m) => (
-              <div key={m.label} className="space-y-1">
-                <div className="text-3xl font-bold text-white">{m.value}</div>
-                <div className="text-sm font-medium text-slate-400 uppercase tracking-wide">{m.label}</div>
-              </div>
-            ))}
+          {/* CTAs */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <button
+              onClick={() => navigate("/login")}
+              className="inline-flex items-center justify-center px-10 h-14 rounded-xl font-bold text-lg text-white transition-all shadow-lg hover:shadow-xl hover:scale-105 active:scale-100"
+              style={{ backgroundColor: "#15803d" }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = "#166534")}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = "#15803d")}>
+              Get Started →
+            </button>
+            <button
+              onClick={() => document.querySelector("#how-it-works")?.scrollIntoView({ behavior: "smooth" })}
+              className="inline-flex items-center justify-center gap-2 px-10 h-14 rounded-xl font-bold text-lg transition-all border-2 hover:scale-105 active:scale-100"
+              style={{ borderColor: "#15803d", color: "#15803d", backgroundColor: "transparent" }}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(21,128,61,0.06)"; }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent"; }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/>
+              </svg>
+              See How It Works
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Stats pinned to bottom — Basecom style */}
+      <div className="relative z-10 w-full px-6 md:px-10 pb-10">
+        <div className="w-full h-px bg-green-900/10 mb-8" />
+        <div className="flex flex-wrap items-center gap-x-10 gap-y-4">
+          {stats.map((s) => (
+            <div key={s.label} className="flex flex-col gap-0.5">
+              <span className="text-2xl font-extrabold leading-none"
+                style={{ color: "#15803d" }}>{s.value}</span>
+              <span className="text-xs font-medium text-slate-500 tracking-wide">{s.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
     </section>
   );
 };

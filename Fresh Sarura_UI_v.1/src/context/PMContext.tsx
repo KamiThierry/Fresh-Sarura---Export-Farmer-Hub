@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { CropCycle, Farmer, BudgetRequest } from '@/types';
 
@@ -7,20 +7,28 @@ interface PMContextType {
   farmers: Farmer[];
   shipments: any[];
   stock: any[];
+  intakeLogs: any[];
   pendingRequests: BudgetRequest[];
   pendingForecasts: any[];
   pendingReports: any[];
   pendingRoomRequests: any[];
+  exportBatches: any[];
+  processingBatches: any[];
+  qcDoneBatches: any[];
   loading: boolean;
   error: string | null;
   refreshCycles: () => Promise<void>;
   refreshFarmers: () => Promise<void>;
   refreshShipments: () => Promise<void>;
   refreshStock: () => Promise<void>;
+  refreshIntakeLogs: () => Promise<void>;
   refreshPendingRequests: () => Promise<void>;
   refreshPendingForecasts: () => Promise<void>;
   refreshPendingReports: () => Promise<void>;
   refreshPendingRoomRequests: () => Promise<void>;
+  refreshExportBatches: () => Promise<void>;
+  refreshProcessingBatches: () => Promise<void>;
+  inventoryItems: any[];
   refreshAll: () => Promise<void>;
 }
 
@@ -31,12 +39,59 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [farmers, setFarmers] = useState<Farmer[]>([]);
   const [shipments, setShipments] = useState<any[]>([]);
   const [stock, setStock] = useState<any[]>([]);
+  const [intakeLogs, setIntakeLogs] = useState<any[]>([]);
   const [pendingRequests, setPendingRequests] = useState<BudgetRequest[]>([]);
   const [pendingForecasts, setPendingForecasts] = useState<any[]>([]);
   const [pendingReports, setPendingReports] = useState<any[]>([]);
   const [pendingRoomRequests, setPendingRoomRequests] = useState<any[]>([]);
+  const [exportBatches, setExportBatches] = useState<any[]>([]);
+  const [processingBatches, setProcessingBatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Compute inventoryItems with availableKg
+  const inventoryItems = useMemo(() => {
+    // 1. Map allocations
+    const allocationMap: Record<string, number> = {};
+    exportBatches.forEach(b => {
+      const id = b.processingBatchId?._id || b.processingBatchId;
+      if (!id) return;
+      allocationMap[id] = (allocationMap[id] || 0) + (b.allocatedWeightKg || 0);
+    });
+
+    // 2. Map stock to inventoryItems
+    return stock
+      .filter(s => s.stockId && s.stockId.startsWith('STK-'))
+      .map(s => {
+        const allocated = allocationMap[s._id] || 0;
+        const available = Math.max(0, (s.processedWeightKg || 0) - allocated);
+        const processed = s.processedWeightKg || 0;
+
+        const statusLabel = allocated === 0 ? 'Available'
+          : available === 0 ? 'Fully Allocated'
+          : 'Partially Allocated';
+
+        return {
+          ...s,
+          rawId: s._id,
+          id: s.stockId,
+          produce: s.cropName,
+          processedKg: processed,
+          rejectedKg: s.rejectedWeightKg ?? 0,
+          primaryDefectType: s.primaryDefectType || null,
+          availableKg: available,
+          totalAllocated: allocated,
+          storageLocation: s.assignedRoom,
+          status: statusLabel,
+          grade: s.gradeLabel,
+          dateInStock: new Date(s.updatedAt || s.createdAt)
+        };
+      });
+  }, [stock, exportBatches]);
+
+  const qcDoneBatches = useMemo(() => {
+    return processingBatches.filter((b: any) => b.status === 'QCDone');
+  }, [processingBatches]);
 
   const refreshCycles = useCallback(async () => {
     try {
@@ -122,6 +177,36 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   }, []);
 
+  const refreshIntakeLogs = useCallback(async () => {
+    try {
+      const res = await api.get('/harvest-declarations/intake-logs');
+      const data = res.data?.data ?? res?.data ?? res ?? [];
+      setIntakeLogs(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error('PMContext: Failed to fetch intake logs', err);
+    }
+  }, []);
+
+  const refreshExportBatches = useCallback(async () => {
+    try {
+      const res = await api.get('/export-batches');
+      const data = res.data?.data ?? res?.data ?? res ?? [];
+      setExportBatches(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error('PMContext: Failed to fetch export batches', err);
+    }
+  }, []);
+
+  const refreshProcessingBatches = useCallback(async () => {
+    try {
+      const res = await api.get('/processing-batches');
+      const data = res.data?.data ?? res?.data ?? res ?? [];
+      setProcessingBatches(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error('PMContext: Failed to fetch processing batches', err);
+    }
+  }, []);
+
   const refreshAll = useCallback(async () => {
     setLoading(true);
     await Promise.all([
@@ -133,9 +218,12 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       refreshPendingRoomRequests(),
       refreshShipments(),
       refreshStock(),
+      refreshIntakeLogs(),
+      refreshExportBatches(),
+      refreshProcessingBatches(),
     ]);
     setLoading(false);
-  }, [refreshCycles, refreshFarmers, refreshPendingRequests, refreshPendingForecasts, refreshPendingReports, refreshPendingRoomRequests, refreshShipments, refreshStock]);
+  }, [refreshCycles, refreshFarmers, refreshPendingRequests, refreshPendingForecasts, refreshPendingReports, refreshPendingRoomRequests, refreshShipments, refreshStock, refreshIntakeLogs, refreshExportBatches, refreshProcessingBatches]);
 
   useEffect(() => {
     refreshAll();
@@ -147,20 +235,28 @@ export const PMProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       farmers,
       shipments,
       stock,
+      intakeLogs,
       pendingRequests,
       pendingForecasts,
       pendingReports,
       pendingRoomRequests,
+      exportBatches,
+      processingBatches,
+      qcDoneBatches,
+      inventoryItems,
       loading,
       error,
       refreshCycles,
       refreshFarmers,
       refreshShipments,
       refreshStock,
+      refreshIntakeLogs,
       refreshPendingRequests,
       refreshPendingForecasts,
       refreshPendingReports,
       refreshPendingRoomRequests,
+      refreshExportBatches,
+      refreshProcessingBatches,
       refreshAll
     }}>
       {children}

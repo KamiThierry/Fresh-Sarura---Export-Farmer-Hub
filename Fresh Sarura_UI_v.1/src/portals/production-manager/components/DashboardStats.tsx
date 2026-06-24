@@ -1,25 +1,38 @@
 
-import { Scale, Thermometer, Plane, Sprout } from 'lucide-react';
+import { Scale, Package, Plane, Sprout } from 'lucide-react';
 
 interface DashboardStatsProps {
   todaysIntake?: string;
-  coldRoomStock?: string;
+  totalStock?: string;
   activeCyclesCount?: number;
   scheduledExports?: string;
   pendingRoomRequestsCount?: number;
   userName?: string;
   scheduledShipments?: any[];
+  inventoryItems?: any[];
 }
 
 const DashboardStats = ({
   todaysIntake = "0 kg",
-  coldRoomStock = "0 Tons",
+  totalStock = "0 Tons",
   activeCyclesCount = 0,
   scheduledExports = "0 Tons",
   pendingRoomRequestsCount = 0,
   userName = "Manager",
   scheduledShipments = [],
+  inventoryItems = [],
 }: DashboardStatsProps) => {
+  const nearlyEmptyCount = inventoryItems.filter(i => 
+    i.availableKg > 0 && i.availableKg < i.processedKg * 0.2
+  ).length;
+
+  const fullyDepletedCount = inventoryItems.filter(i => 
+    i.availableKg === 0 && i.status !== 'Spoiled'
+  ).length;
+
+  const totalStockKg = inventoryItems.reduce((sum, i) => sum + (i.availableKg || 0), 0);
+  const totalStockDisplay = `${(totalStockKg / 1000).toFixed(1)} Tons`;
+
   const stats = [
     {
       icon: Scale,
@@ -30,15 +43,17 @@ const DashboardStats = ({
       bg: 'bg-green-50 dark:bg-green-900/20',
     },
     {
-      icon: Thermometer,
-      label: 'Cold Room Stock',
-      value: coldRoomStock,
-      sub: pendingRoomRequestsCount > 0
-        ? `${pendingRoomRequestsCount} Room Requests Pending`
-        : '4 Tons expiring soon',
-      color: pendingRoomRequestsCount > 0 ? 'text-red-600 font-bold' : 'text-blue-600',
-      bg: pendingRoomRequestsCount > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-blue-50 dark:bg-blue-900/20',
-      badge: pendingRoomRequestsCount > 0 ? pendingRoomRequestsCount : null
+      icon: Package,
+      label: 'Total Stock',
+      value: totalStockDisplay,
+      sub: fullyDepletedCount > 0 
+        ? `${fullyDepletedCount} items depleted`
+        : nearlyEmptyCount > 0
+        ? `${nearlyEmptyCount} items nearly empty`
+        : 'Available stock only',
+      color: fullyDepletedCount > 0 ? 'text-red-600 font-bold' : nearlyEmptyCount > 0 ? 'text-amber-600' : 'text-blue-600',
+      bg: fullyDepletedCount > 0 ? 'bg-red-50 dark:bg-red-900/20' : nearlyEmptyCount > 0 ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-blue-50 dark:bg-blue-900/20',
+      badge: (fullyDepletedCount + nearlyEmptyCount) > 0 ? (fullyDepletedCount + nearlyEmptyCount) : null
     },
     {
       icon: Sprout,
@@ -65,7 +80,7 @@ const DashboardStats = ({
   return (
     <div className="space-y-6">
       {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-green-700 to-green-600 p-8 text-white shadow-lg">
+      <div className="relative overflow-hidden rounded-2xl bg-[#5cb85c] p-8 text-white shadow-lg">
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-2">
             <Sprout className="h-8 w-8" />

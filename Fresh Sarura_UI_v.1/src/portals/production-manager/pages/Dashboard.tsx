@@ -20,6 +20,7 @@ interface DashboardProps {
     onLogIntake: () => void;
     onRegisterFarmer: () => void;
     onCreateCycle: () => void;
+    onCreateBatch: () => void;
     onFindBatch: () => void;
     onCloseIntake: () => void;
     onIntakeSubmit: (weight: number) => void;
@@ -33,20 +34,16 @@ const Dashboard = ({
     onLogIntake,
     onRegisterFarmer,
     onCreateCycle,
+    onCreateBatch,
     onFindBatch,
     onCloseIntake,
     onIntakeSubmit,
     onCloseTraceability
 }: DashboardProps) => {
-    const { cycles, pendingRoomRequests, shipments, stock } = usePMContext();
+    const { cycles, pendingRoomRequests, shipments, inventoryItems } = usePMContext();
     const activeCyclesCount = cycles.filter(c => c.status !== 'completed').length;
     const pendingRoomRequestsCount = (pendingRoomRequests || []).length;
     const [userName, setUserName] = useState<string>('Production Manager');
-
-    const coldRoomStockKg = (stock || []).reduce(
-        (sum: number, b: any) => sum + ((b.processedWeightKg || 0) - (b.rejectedWeightKg || 0)), 0
-    );
-    const coldRoomStockDisplay = `${(coldRoomStockKg / 1000).toFixed(1)} Tons`;
 
     const scheduledShipments = (shipments || []).filter(s =>
         s.status === 'PackingListGenerated'
@@ -63,15 +60,17 @@ const Dashboard = ({
                 const userStr = localStorage.getItem('user');
                 if (userStr) {
                     const user = JSON.parse(userStr);
-                    if (user.name) setUserName(user.name);
+                    if (user.name) setUserName(user.name.trim().split(' ')[0].charAt(0).toUpperCase() + user.name.trim().split(' ')[0].slice(1).toLowerCase());
                 }
 
                 // But also fetch from API to be 100% sure it's correct from DB
                 const res = await api.get('/auth/me');
-                if (res.user && res.user.name) {
-                    setUserName(res.user.name);
+                if (res.user?.name) {
+                    const fn = res.user.name.trim().split(' ')[0];
+                    setUserName(fn.charAt(0).toUpperCase() + fn.slice(1).toLowerCase());
                 } else if (res.name) {
-                    setUserName(res.name);
+                    const fn = res.name.trim().split(' ')[0];
+                    setUserName(fn.charAt(0).toUpperCase() + fn.slice(1).toLowerCase());
                 }
             } catch (err) {
                 console.error('Failed to fetch user name:', err);
@@ -81,25 +80,25 @@ const Dashboard = ({
     }, []);
 
     return (
-        <div className="p-6">
+        <div className="p-6 min-h-[calc(100vh-70px)] flex flex-col">
             {/* Summary Cards */}
             <div className="mb-6">
                 <DashboardStats
                     todaysIntake={`${currentIntake.toLocaleString()} kg`}
-                    coldRoomStock={coldRoomStockDisplay}
                     activeCyclesCount={activeCyclesCount}
                     scheduledExports={`${(scheduledShipmentsWeightKg / 1000).toFixed(1)} Tons`}
                     pendingRoomRequestsCount={pendingRoomRequestsCount}
                     userName={userName}
                     scheduledShipments={scheduledShipments}
+                    inventoryItems={inventoryItems}
                 />
             </div>
 
             {/* Quick Actions Grid */}
             <QuickActionsGrid
-                onLogIntake={onLogIntake}
                 onRegisterFarmer={onRegisterFarmer}
                 onCreateCycle={onCreateCycle}
+                onCreateBatch={onCreateBatch}
                 onFindBatch={onFindBatch}
             />
 
@@ -127,7 +126,7 @@ const Dashboard = ({
             </div>
 
             {/* Loss Analytics and Recent Activity */}
-            <div className="grid grid-cols-3 gap-6 mt-6">
+            <div className="grid grid-cols-3 gap-6 mt-6 flex-1">
                 <div className="col-span-1">
                     <LossAnalyticsChart />
                 </div>

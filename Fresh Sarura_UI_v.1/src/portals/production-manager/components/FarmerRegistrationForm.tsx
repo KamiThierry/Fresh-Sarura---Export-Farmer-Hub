@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Upload, User } from 'lucide-react';
 import { getProvinces, getDistricts, getSectors } from '@/lib/rwandaLocations';
 import { createClient } from '@supabase/supabase-js';
+import { useToastContext } from '@/context/ToastContext';
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -35,7 +36,7 @@ const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) 
   const districtOptions = province ? getDistricts(province) : [];
   const sectorOptions = province && district ? getSectors(province, district) : [];
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState('');
+  const { showToast } = useToastContext();
 
 
   const produceOptions = [
@@ -50,8 +51,6 @@ const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    setMessage('');
-
     try {
       const { error } = await supabase.from('farmers').insert([
         {
@@ -72,11 +71,11 @@ const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) 
 
       if (error) throw error;
 
-      setMessage('Farmer registered successfully!');
+      showToast('Farmer Registered', `${formData.full_name} has been added successfully.`);
       handleReset();
       onFarmerAdded();
     } catch (error: any) {
-      setMessage('Error: ' + error.message);
+      showToast('Registration Failed', error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -295,11 +294,11 @@ const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) 
                       });
                     },
                     (_error) => {
-                      alert("Unable to retrieve your location");
+                      showToast('Location Error', 'Unable to retrieve your location');
                     }
                   );
                 } else {
-                  alert("Geolocation is not supported by your browser");
+                  showToast('Not Supported', 'Geolocation is not supported by your browser');
                 }
               }}
               className="text-xs text-[#2E7D32] hover:text-[#1B5E20] font-medium flex items-center gap-1"
@@ -366,12 +365,7 @@ const FarmerRegistrationForm = ({ onFarmerAdded }: FarmerRegistrationFormProps) 
           Upload ID / Certificate
         </button>
 
-        {/* Message */}
-        {message && (
-          <div className={`p-3 rounded-lg text-sm ${message.includes('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-            {message}
-          </div>
-        )}
+
 
         {/* Action Buttons */}
         <div className="flex gap-3 pt-2">

@@ -27,8 +27,6 @@
     }
   },
   "include": [
-    "src",
-    "portals/production-manager/components",
-    "portals/production-manager/pages"
+    "src"
   ]
 }

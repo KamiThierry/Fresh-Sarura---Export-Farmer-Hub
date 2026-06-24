@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Users, Package, ShieldCheck, Truck, MessageSquare, BarChart3, FileCheck, Settings, LogOut, Sprout } from 'lucide-react';
+import { Home, Users, Package, ShieldCheck, Truck, MessageSquare, BarChart3, FileCheck, Settings, Sprout } from 'lucide-react';
 
 const Sidebar = () => {
     const navGroups = [
@@ -31,7 +31,6 @@ const Sidebar = () => {
             title: 'System',
             items: [
                 { path: '/settings', icon: Settings, label: 'Settings' },
-                { path: '/logout', icon: LogOut, label: 'Sign Out' },
             ]
         }
     ];

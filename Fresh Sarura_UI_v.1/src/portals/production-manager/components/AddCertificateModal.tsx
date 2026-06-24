@@ -25,6 +25,16 @@ const AddCertificateModal = ({ isOpen, onClose, onSubmit, defaultFarmer }: AddCe
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const expiry = new Date(formData.expiryDate);
+
+        if (expiry < today) {
+            alert('Certificate expiry date cannot be in the past.');
+            return;
+        }
+
         setIsSubmitting(true);
 
         // Simulate API call
@@ -168,6 +178,7 @@ const AddCertificateModal = ({ isOpen, onClose, onSubmit, defaultFarmer }: AddCe
                                         type="date"
                                         className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white"
                                         required
+                                        min={formData.validFrom || new Date().toISOString().split('T')[0]}
                                         value={formData.expiryDate}
                                         onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
                                     />

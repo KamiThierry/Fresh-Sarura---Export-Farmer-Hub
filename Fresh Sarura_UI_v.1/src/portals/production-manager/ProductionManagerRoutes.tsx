@@ -1,24 +1,25 @@
 import { useState, useMemo } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Layout from './layout/Layout';
 import Dashboard from './pages/Dashboard';
 
 import FarmerManagement from './pages/FarmerManagement';
 import InventoryManagement from './pages/InventoryManagement';
-import QualityControl from './pages/QualityControl';
+import QCInsights from './pages/QCInsights';
 import Logistics from './pages/Logistics';
 import CreatePackingListModal from './components/CreatePackingListModal';
 import CropPlanning from './pages/CropPlanning';
 import Traceability from './pages/Traceability';
 import AnalyticsReporting from './pages/AnalyticsReporting';
 import SettingsPage from './pages/Settings';
-import ClientRequests from './pages/ClientRequests';
+// import ClientRequests from './pages/ClientRequests';
 import RoomManagement from './pages/RoomManagement';
 
-import QCInspectionModal from './components/QCInspectionModal';
 import FarmerRegistrationModal from './components/FarmerRegistrationModal';
 import CreateCropCycleModal from './components/CreateCropCycleModal';
+import CreateExportBatchModal from './components/CreateExportBatchModal';
 import { PMProvider, usePMContext } from '@/context/PMContext';
+import { useToastContext } from '@/context/ToastContext';
 
 const ProductionManagerRoutes = () => {
     return (
@@ -27,30 +28,27 @@ const ProductionManagerRoutes = () => {
         </PMProvider>
     );
 };
-
 const ProductionManagerApp = () => {
+    const { showToast } = useToastContext();
+    const navigate = useNavigate();
     const [isIntakeOpen, setIsIntakeOpen] = useState(false);
-    const [isQCOpen, setIsQCOpen] = useState(false);
+    // const [isQCOpen, setIsQCOpen] = useState(false);
     const [isTraceabilityOpen, setIsTraceabilityOpen] = useState(false);
     const [isPackingListOpen, setIsPackingListOpen] = useState(false);
     const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
     const [isCreateCycleOpen, setIsCreateCycleOpen] = useState(false);
-
-    const { stock } = usePMContext();
+    const [isCreateBatchOpen, setIsCreateBatchOpen] = useState(false);
+    const { intakeLogs, inventoryItems, refreshAll } = usePMContext();
 
     const todayStr = new Date().toISOString().split('T')[0];
 
     const currentIntake = useMemo(() =>
-        stock
-            .filter(b => b.createdAt?.startsWith(todayStr))
-            .reduce((sum, b) => sum + (b.receivedWeightKg || 0), 0)
-    , [stock, todayStr]);
+        intakeLogs
+            .filter(log => log.createdAt?.startsWith(todayStr))
+            .reduce((sum, log) => sum + (log.pickedUpWeightKg || 0), 0)
+    , [intakeLogs, todayStr]);
 
-    const _coldRoomStock = useMemo(() =>
-        stock.reduce((sum, b) => sum + ((b.processedWeightKg || 0) - (b.rejectedWeightKg || 0)), 0)
-    , [stock]);
-
-    const [qualityGrade, setQualityGrade] = useState("96% Class A");
+    const [qualityGrade] = useState("96% Class A");
     const scheduledExports = 8000;
 
     const handleLogIntake = () => {
@@ -61,6 +59,7 @@ const ProductionManagerApp = () => {
         setIsIntakeOpen(false);
     };
 
+    /*
     const handleQCInspection = () => {
         setIsQCOpen(true);
     };
@@ -68,8 +67,9 @@ const ProductionManagerApp = () => {
     const handleQCSubmit = (result: string) => {
         setQualityGrade(result);
         setIsQCOpen(false);
-        alert(`QC Inspection Submitted! New Grade: ${result}`);
+        showToast('Inspection Submitted', `QC Inspection Submitted! New Grade: ${result}`);
     };
+    */
 
     const handleFindBatch = () => {
         setIsTraceabilityOpen(true);
@@ -80,11 +80,18 @@ const ProductionManagerApp = () => {
     };
 
     const handleRegisterFarmer = () => {
-        setIsRegistrationOpen(true);
+        navigate('/pm/farmers');
+        setTimeout(() => setIsRegistrationOpen(true), 100);
     };
 
     const handleCreateCycle = () => {
-        setIsCreateCycleOpen(true);
+        navigate('/pm/crop-planning');
+        setTimeout(() => setIsCreateCycleOpen(true), 100);
+    };
+
+    const handleCreateBatch = () => {
+        navigate('/pm/inventory');
+        setTimeout(() => setIsCreateBatchOpen(true), 100);
     };
 
     const handlePackingListSubmit = (data: any) => {
@@ -111,6 +118,7 @@ const ProductionManagerApp = () => {
                                 onLogIntake={handleLogIntake}
                                 onRegisterFarmer={handleRegisterFarmer}
                                 onCreateCycle={handleCreateCycle}
+                                onCreateBatch={handleCreateBatch}
                                 onFindBatch={handleFindBatch}
                                 onCloseIntake={() => setIsIntakeOpen(false)}
                                 onIntakeSubmit={handleIntakeSubmit}
@@ -123,28 +131,30 @@ const ProductionManagerApp = () => {
                     <Route path="/farmers" element={<FarmerManagement />} />
                     <Route path="/crop-planning" element={<CropPlanning />} />
                     <Route path="/inventory" element={<InventoryManagement />} />
-                    <Route path="/quality-control" element={<QualityControl onPerformInspection={handleQCInspection} />} />
+                    <Route path="/quality-control" element={<QCInsights />} />
                     <Route path="/logistics" element={<Logistics onCreatePackingList={handleCreatePackingList} />} />
                     <Route path="/traceability" element={<Traceability />} />
                     <Route path="/analytics" element={<AnalyticsReporting />} />
                     <Route path="/settings" element={<SettingsPage />} />
 
                     {/* Client Orders & Requests */}
-                    <Route path="/communication" element={<ClientRequests />} />
+                    {/* <Route path="/communication" element={<ClientRequests />} /> */}
                     <Route path="/rooms" element={<RoomManagement />} />
 
-                    {/* Catch all - redirect to home */}
-                    <Route path="*" element={<Navigate to="/" replace />} />
+                    {/* Catch all - redirect to dashboard */}
+                    <Route path="*" element={<Navigate to="/pm" replace />} />
                 </Route>
             </Routes>
 
             {/* Global Modals */}
+            {/* 
             <QCInspectionModal
                 isOpen={isQCOpen}
                 onClose={() => setIsQCOpen(false)}
                 onSubmit={handleQCSubmit}
                 onConfirm={() => { }}
             />
+            */}
 
             <CreatePackingListModal
                 isOpen={isPackingListOpen}
@@ -155,13 +165,23 @@ const ProductionManagerApp = () => {
             <FarmerRegistrationModal
                 isOpen={isRegistrationOpen}
                 onClose={() => setIsRegistrationOpen(false)}
-                onFarmerAdded={() => setIsRegistrationOpen(false)}
+                onFarmerAdded={(name: string) => {
+                    setIsRegistrationOpen(false);
+                    showToast('Farmer Registered', `${name} has been successfully registered.`);
+                }}
             />
 
             <CreateCropCycleModal
                 isOpen={isCreateCycleOpen}
                 onClose={() => setIsCreateCycleOpen(false)}
                 onSubmit={() => setIsCreateCycleOpen(false)}
+            />
+
+            <CreateExportBatchModal 
+                isOpen={isCreateBatchOpen}
+                onClose={() => setIsCreateBatchOpen(false)}
+                inventoryItems={inventoryItems}
+                onSuccess={refreshAll}
             />
         </>
     );
