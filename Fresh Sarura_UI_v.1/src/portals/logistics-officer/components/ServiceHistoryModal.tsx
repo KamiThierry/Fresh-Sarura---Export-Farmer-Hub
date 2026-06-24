@@ -176,29 +176,11 @@ const ServiceHistoryModal = ({ isOpen, onClose, vehicle, logs, loading, onLogNew
                     <div className="flex items-center gap-3">
                         {/* Export Dropdown */}
                         <div className="relative">
-                            {/* <button
-                                onClick={onClose}
-                                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-sm relative"
+                            <button
+                                onClick={handleExportPDF}
+                                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium transition-colors"
                             >
                                 <Download size={14} /> Export
-                                
-                                
-                                
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleExportPDF(); }}
-                                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"
-                                            >
-                                                <div className="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-900/20 flex items-center justify-center shrink-0">
-                                                    <FileText size={15} className="text-red-600" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs font-bold text-gray-800 dark:text-gray-200">Export PDF</p>
-                                                    <p className="text-[10px] text-gray-400">Print Ready Report</p>
-                                                </div>
-                                            </button>
-                                        </div>
-                                    </>
-                                )}
                             </button>
                         </div>
 
