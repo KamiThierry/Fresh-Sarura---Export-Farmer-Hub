@@ -121,25 +121,27 @@ const Logistics = ({ onCreatePackingList }: LogisticsProps) => {
     ];
 
     return (
-        <div className="space-y-6 pb-20">
+        <div className="p-6 space-y-6 pb-20">
             {/* Header */}
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Logistics & Documentation</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage shipments, flight schedules, and export compliance</p>
-                </div>
-                <div className="flex gap-3">
-                    <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                        <Plane size={18} />
-                        Export Schedule
-                    </button>
-                    <button
-                        onClick={onCreatePackingList}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
-                    >
-                        <Plus size={18} />
-                        Create Packing List
-                    </button>
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap justify-between items-start gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Logistics & Documentation</h1>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage shipments, flight schedules, and export compliance</p>
+                    </div>
+                    <div className="flex gap-3 items-center flex-wrap ml-auto justify-end">
+                        <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <Plane size={18} />
+                            Export Schedule
+                        </button>
+                        <button
+                            onClick={onCreatePackingList}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+                        >
+                            <Plus size={18} />
+                            Create Packing List
+                        </button>
+                    </div>
                 </div>
             </div>
 

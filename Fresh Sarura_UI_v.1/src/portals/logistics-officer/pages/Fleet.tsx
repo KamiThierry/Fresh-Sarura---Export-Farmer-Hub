@@ -327,15 +327,16 @@ const Fleet = () => {
     };
 
     return (
-        <div className="space-y-6 pb-20 md:pb-0 relative animate-fade-in">
+        <div className="p-6 space-y-6 pb-20 relative animate-fade-in">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap justify-between items-start gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Fleet & Drivers</h1>
                     <p className="text-gray-500 dark:text-gray-400">Manage vehicle assets, driver profiles, and assignments.</p>
                 </div>
                 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap ml-auto justify-end">
                     {loading && (
                         <div className="flex items-center gap-2 text-indigo-600 font-medium bg-indigo-50 dark:bg-indigo-900/20 px-4 py-2 rounded-xl">
                             <Loader2 className="animate-spin" size={18} />
@@ -384,6 +385,7 @@ const Fleet = () => {
                         Add {activeTab === 'vehicles' ? 'Vehicle' : 'Driver'}
                     </button>
                 </div>
+            </div>
             </div>
 
             {/* Top Stats Cards */}

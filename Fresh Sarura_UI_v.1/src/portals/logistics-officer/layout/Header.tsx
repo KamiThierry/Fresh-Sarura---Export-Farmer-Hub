@@ -4,8 +4,8 @@ import logo from '../../../assets/sarura_logo_nav.png';
 import ThemeToggle from '../../shared/component/ThemeToggle';
 import NotificationsModal from '../../shared/component/NotificationsModal';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../../../lib/api';
 import { useUniversalSearch } from '@/lib/useGlobalSearch';
+import { useNotifications } from '@/context/NotificationContext';
 
 const TYPE_COLOURS: Record<string, string> = {
     'Farmer': 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400',
@@ -17,32 +17,18 @@ const TYPE_COLOURS: Record<string, string> = {
 
 const Header = () => {
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-    const [notifications, setNotifications] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
+
+    const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
 
     // Real user from localStorage
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : { name: 'User', role: 'Staff' };
 
     const { results: searchResults, loading: searchLoading } = useUniversalSearch(searchQuery, user.role);
-
-    const fetchNotifications = async () => {
-        try {
-            const res = await api.get('/notifications');
-            setNotifications(res.data?.data || res.data || []);
-        } catch (err) {
-            console.error('Failed to fetch notifications:', err);
-        }
-    };
-
-    useEffect(() => {
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
-        return () => clearInterval(interval);
-    }, []);
 
     // Close dropdown on click outside
     useEffect(() => {
@@ -56,32 +42,21 @@ const Header = () => {
     }, []);
 
     const handleMarkAsRead = async (id: string) => {
-        try {
-            await api.patch(`/notifications/${id}/read`, {});
-            fetchNotifications();
-        } catch (err) { console.error(err); }
+        await markAsRead(id);
     };
 
     const handleMarkAllAsRead = async () => {
-        try {
-            await api.patch('/notifications/read-all', {});
-            fetchNotifications();
-        } catch (err) { console.error(err); }
+        await markAllAsRead();
     };
 
     const handleClearAll = async () => {
-        try {
-            await api.delete('/notifications');
-            fetchNotifications();
-        } catch (err) { console.error(err); }
+        await clearAll();
     };
 
     const formatRole = (role: string) => {
         return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     };
 
-
-    const unreadCount = notifications.filter(n => !n.isRead).length;
 
     return (
         <>

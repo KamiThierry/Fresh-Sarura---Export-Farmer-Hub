@@ -229,9 +229,10 @@ const PendingPickups = () => {
 
   return (
     <>
-      <div className="p-6 space-y-6">
+      <div className="p-6 space-y-6 pb-20">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap justify-between items-start gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
               Pending Pickups
@@ -245,7 +246,7 @@ const PendingPickups = () => {
               Harvest declarations awaiting truck dispatch and pickup logging.
             </p>
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap ml-auto justify-end">
             <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 shadow-sm">
               <Calendar size={15} className="text-blue-500 flex-shrink-0" />
               <span className="text-xs text-gray-400 font-medium">From:</span>
@@ -264,25 +265,12 @@ const PendingPickups = () => {
               />
             </div>
             <div className="relative">
-              <button onClick={() => setIsExportOpen(!isExportOpen)}
+              {/* <button onClick={handleExportPDF}
                 className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-all shadow-sm relative">
                 <Download size={16} /> Export Data
-                <ChevronDown size={14} className={`transition-transform ${isExportOpen ? 'rotate-180' : ''}`} />
                 
-                {isExportOpen && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setIsExportOpen(false); }} />
-                    <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                      <button onClick={(e) => { e.stopPropagation(); handleExportXLSX(); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left border-b border-gray-50 dark:border-gray-700/50">
-                        <div className="w-8 h-8 rounded-lg bg-green-50 dark:bg-green-900/20 flex items-center justify-center shrink-0">
-                          <FileSpreadsheet size={15} className="text-green-600" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-gray-800 dark:text-gray-200">Export Excel</p>
-                          <p className="text-[10px] text-gray-400">Microsoft Excel Format</p>
-                        </div>
-                      </button>
+                
+                
                       <button onClick={(e) => { e.stopPropagation(); handleExportPDF(); }}
                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left">
                         <div className="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-900/20 flex items-center justify-center shrink-0">
@@ -305,6 +293,7 @@ const PendingPickups = () => {
               <RefreshCw size={15} /> Refresh
             </button>
           </div>
+        </div>
         </div>
 
         {/* Stats */}

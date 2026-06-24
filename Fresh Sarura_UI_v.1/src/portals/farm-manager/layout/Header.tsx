@@ -3,10 +3,10 @@ import { Search, Bell, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../../shared/component/ThemeToggle';
 import NotificationsModal from '../../shared/component/NotificationsModal';
-import { api } from '@/lib/api';
 import { useFarmManager } from '../../../lib/useFarmManager';
 import { useFMSearch } from '@/lib/useGlobalSearch';
 import logo from '@/assets/sarura_logo_nav.png';
+import { useNotifications } from '@/context/NotificationContext';
 
 // --- Type badge colours ---
 const TYPE_COLOURS: Record<string, string> = {
@@ -19,43 +19,26 @@ const FarmManagerHeader = () => {
     const navigate = useNavigate();
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-    const [notifications, setNotifications] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+
+    const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
 
     // Pull live data from context for search
     const { cycles, forecasts } = useFarmManager();
     const searchResults = useFMSearch(searchQuery, cycles, forecasts);
 
-    const fetchNotifications = async () => {
-        try {
-            const res = await api.get('/notifications');
-            setNotifications(res.data?.data || res.data || []);
-        } catch (err) {
-            console.error('Failed to fetch notifications:', err);
-        }
-    };
-
     const handleMarkAsRead = async (id: string) => {
-        try {
-            await api.patch(`/notifications/${id}/read`, {});
-            fetchNotifications();
-        } catch (err) { console.error(err); }
+        await markAsRead(id);
     };
 
     const handleMarkAllAsRead = async () => {
-        try {
-            await api.patch('/notifications/read-all', {});
-            fetchNotifications();
-        } catch (err) { console.error(err); }
+        await markAllAsRead();
     };
 
     const handleClearAll = async () => {
-        try {
-            await api.delete('/notifications');
-            fetchNotifications();
-        } catch (err) { console.error(err); }
+        await clearAll();
     };
 
     useEffect(() => {
@@ -63,9 +46,6 @@ const FarmManagerHeader = () => {
         if (userStr) {
             try { setCurrentUser(JSON.parse(userStr)); } catch (e) { console.error(e); }
         }
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 30000);
-        return () => clearInterval(interval);
     }, []);
 
     // Close dropdown on outside click
@@ -80,7 +60,6 @@ const FarmManagerHeader = () => {
     }, []);
 
 
-    const unreadCount = notifications.filter(n => !n.isRead).length;
     const initials = currentUser?.name
         ? currentUser.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
         : 'FM';

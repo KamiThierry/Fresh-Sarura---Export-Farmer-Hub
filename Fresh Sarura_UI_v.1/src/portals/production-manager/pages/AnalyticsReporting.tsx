@@ -459,16 +459,17 @@ const AnalyticsReporting = () => {
     };
 
     return (
-        <div className="space-y-6 pb-20">
+        <div className="p-6 space-y-6 pb-20">
 
             {/* ── Header ── */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Analytics & Reporting</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Business health monitor — your operations at a glance</p>
-                </div>
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap justify-between items-start gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Analytics & Reporting</h1>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Business health monitor — your operations at a glance</p>
+                    </div>
 
-                <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-3 flex-wrap ml-auto justify-end">
                     {/* Date Range */}
                     <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 shadow-sm">
                         <Calendar size={15} className="text-green-500 flex-shrink-0" />
@@ -494,41 +495,17 @@ const AnalyticsReporting = () => {
 
                     {/* Export dropdown */}
                     <div className="relative">
-                        <button onClick={() => setIsExportOpen(!isExportOpen)}
+                        <button onClick={() => onPage(page - 1)}
                             className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-colors shadow-sm">
                             <Download size={15} /> Export Data
-                            <ChevronDown size={13} className={`transition-transform ${isExportOpen ? 'rotate-180' : ''}`} />
+                            
                         </button>
-                        {isExportOpen && (
-                            <>
-                                <div className="fixed inset-0 z-10" onClick={() => setIsExportOpen(false)} />
-                                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden">
-                                    <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Select Format</p>
-                                    <button onClick={handleExportXLSX}
-                                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left">
-                                        <div className="p-1.5 bg-green-50 rounded-lg flex-shrink-0"><FileSpreadsheet size={16} className="text-green-600" /></div>
-                                        <div>
-                                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Export Excel</p>
-                                            <p className="text-[11px] text-gray-400">Spreadsheet (.xlsx)</p>
-                                        </div>
-                                    </button>
-                                    <div className="mx-4 border-t border-gray-100 dark:border-gray-700" />
-                                    <button onClick={handleExportPDF}
-                                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left">
-                                        <div className="p-1.5 bg-blue-50 rounded-lg flex-shrink-0"><FileText size={16} className="text-blue-600" /></div>
-                                        <div>
-                                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Export PDF</p>
-                                            <p className="text-[11px] text-gray-400">Printable report (.pdf)</p>
-                                        </div>
-                                    </button>
-                                    <div className="pb-2" />
-                                </div>
-                            </>
-                        )}
+                        
                     </div>
                 </div>
             </div>
-
+            </div>
+            
             {/* ── Tab Navigation ── */}
             <div className="border-b border-gray-200 dark:border-gray-700">
                 <div className="flex gap-0 overflow-x-auto">

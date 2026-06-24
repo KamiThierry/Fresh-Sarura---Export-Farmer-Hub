@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
-import { X, Sprout, Plus, AlertTriangle, ChevronRight, AlertCircle, Download, Wallet, CheckCircle2, Calculator } from 'lucide-react';
+import { X, Sprout, Plus, AlertTriangle, ChevronRight, AlertCircle, Download, Wallet, CheckCircle2, Calculator, RefreshCw } from 'lucide-react';
 import CreateCropCycleModal from '../components/CreateCropCycleModal';
 import CropCycleDetailModal from '../components/CropCycleDetailModal';
 import BudgetRejectionModal from '../components/BudgetRejectionModal';
@@ -42,7 +42,8 @@ const CropPlanning = () => {
         refreshCycles, 
         refreshPendingRequests,
         refreshPendingForecasts,
-        refreshPendingReports
+        refreshPendingReports,
+        refreshAll
     } = usePMContext();
 
     // Unique values for dropdowns — derived from the cycles array
@@ -280,29 +281,37 @@ const CropPlanning = () => {
     ];
 
     return (
-        <div className="space-y-8 pb-20">
+        <div className="p-6 space-y-8 pb-20">
 
             {/* Page Header */}
-            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Crop Planning & Budget Oversight</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Allocate farm budgets and monitor spending variances.</p>
-                </div>
-                <div className="flex gap-3">
-                    <button
-                        onClick={handleExportPDF}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm font-medium"
-                    >
-                        <Download size={17} />
-                        Export Data
-                    </button>
-                    <button
-                        onClick={() => setIsCreateModalOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm font-medium"
-                    >
-                        <Plus size={18} />
-                        Start New Crop Cycle
-                    </button>
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap justify-between items-start gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Crop Planning & Budget Oversight</h1>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Allocate farm budgets and monitor spending variances.</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap ml-auto justify-end">
+                        <button
+                            onClick={refreshAll}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        >
+                            <RefreshCw size={15} /> Refresh
+                        </button>
+                        <button
+                            onClick={handleExportPDF}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm font-medium text-sm"
+                        >
+                            <Download size={17} />
+                            Export Data
+                        </button>
+                        <button
+                            onClick={() => setIsCreateModalOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm font-medium text-sm"
+                        >
+                            <Plus size={18} />
+                            Start New Crop Cycle
+                        </button>
+                    </div>
                 </div>
             </div>
 

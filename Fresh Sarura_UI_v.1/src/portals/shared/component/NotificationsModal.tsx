@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { X, FileWarning, Clock, Truck, Eye, Upload, ArrowRight, Bell, CheckCircle2, AlertCircle, TrendingUp, Leaf, Package, Plane, UserPlus } from 'lucide-react';
 import { formatDate } from '@/lib/dateUtils';
 
-interface Notification {
+export interface Notification {
     _id: string;
-    type: 'BUDGET_REQUEST' | 'BUDGET_APPROVED' | 'BUDGET_REJECTED' | 'REPORT_FLAGGED' | 'FORECAST_VERIFIED' | 'NEW_CYCLE' | 'YIELD_FORECAST' | 'FIELD_REPORT' | 'HARVEST_DECLARED' | 'HARVEST_PICKED_UP' | 'ROOM_REQUESTED' | 'ROOM_ASSIGNED' | 'QC_COMPLETED' | 'EXPORT_READY' | 'SHIPMENT_SCHEDULED' | 'SHIPMENT_DISPATCHED';
+    type: string;
     title: string;
     message: string;
     link?: string;
     isRead: boolean;
     createdAt: string;
+    isLog?: boolean;
 }
 
 interface NotificationsModalProps {
@@ -236,7 +237,7 @@ const NotificationsModal = ({ isOpen, onClose, notifications, onMarkAsRead, onMa
                         </div>
                     ) : (
                         notifications.map((n) => {
-                            const config = typeConfig[n.type] || typeConfig.BUDGET_REQUEST;
+                            const config = (typeConfig as Record<string, any>)[n.type] || typeConfig.BUDGET_REQUEST;
                             const Icon = config.icon;
                             const ActionIcon = config.actionIcon;
 

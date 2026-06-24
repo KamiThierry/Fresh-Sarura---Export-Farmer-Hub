@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plane, Package, Plus, Trash2, ArrowRight, AlertCircle } from 'lucide-react';
+import { X, Plane, Package, Package2, Plus, Trash2, ArrowRight, AlertCircle } from 'lucide-react';
 import { api } from '../../../lib/api';
 import { useToastContext } from '@/context/ToastContext';
 
@@ -15,9 +15,9 @@ interface StockItem {
 
 interface SelectedLine {
     stockItem: StockItem;
-    allocateKg: number;
-    boxCount: number;
-    weightPerBoxKg: number;
+    allocateKg: number | '';
+    boxCount: number | '';
+    weightPerBoxKg: number | '';
     error?: string;
 }
 
@@ -38,6 +38,22 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
     const [isPastDate, setIsPastDate] = useState(false);
     const { showToast } = useToastContext();
 
+    const [packagingLots, setPackagingLots] = useState<any[]>([]);
+    const [selectedLotId, setSelectedLotId] = useState<string>('');
+    const [packagingLoading, setPackagingLoading] = useState(false);
+    const [itemError, setItemError] = useState<{ id: string, message: string } | null>(null);
+    const itemErrorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const showItemError = (stockId: string, message: string) => {
+        setItemError({ id: stockId, message });
+        if (itemErrorTimeoutRef.current) {
+            clearTimeout(itemErrorTimeoutRef.current);
+        }
+        itemErrorTimeoutRef.current = setTimeout(() => {
+            setItemError(null);
+        }, 4000);
+    };
+
     // Reset form when modal opens
     useEffect(() => {
         if (isOpen) {
@@ -48,6 +64,24 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
             setSubmitError('');
             setIsPastDate(false);
         }
+    }, [isOpen]);
+
+    // Fetch packaging stock when modal opens
+    useEffect(() => {
+        if (!isOpen) return;
+        setPackagingLoading(true);
+        setSelectedLotId('');
+        api.get('/packaging')
+            .then(res => {
+                const lots = (res.data || []).filter((l: any) => 
+                    l.status === 'active' && l.quantityAvailable > 0
+                );
+                setPackagingLots(lots);
+                // Auto-select if only one lot exists
+                if (lots.length === 1) setSelectedLotId(lots[0]._id);
+            })
+            .catch(() => setPackagingLots([]))
+            .finally(() => setPackagingLoading(false));
     }, [isOpen]);
 
     useEffect(() => {
@@ -82,12 +116,24 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
         selectedLines.some(l => l.stockItem.stockId === stockId);
 
     const handleAddLine = (item: StockItem) => {
+        if (packagingLots.length === 0) {
+            showItemError(item.stockId, 'Please add packaging stock in the Inventory module first.');
+            return;
+        }
+        if (!selectedLotId) {
+            showItemError(item.stockId, 'Please select a packaging vendor lot before adding stock items.');
+            return;
+        }
+
         if (isSelected(item.stockId)) return;
+        
+        setItemError(null);
+        setSubmitError('');
         setSelectedLines(prev => [...prev, {
             stockItem: item,
             allocateKg: item.processedWeightKg, // default to full, PM can reduce
-            boxCount: 1,
-            weightPerBoxKg: item.processedWeightKg,
+            boxCount: '',
+            weightPerBoxKg: '',
         }]);
     };
 
@@ -95,36 +141,50 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
         setSelectedLines(prev => prev.filter(l => l.stockItem.stockId !== stockId));
     };
 
-    const handleLineChange = (stockId: string, field: keyof SelectedLine, value: number) => {
+    const handleLineChange = (stockId: string, field: keyof SelectedLine, value: any) => {
         setSelectedLines(prev => prev.map(l => {
             if (l.stockItem.stockId !== stockId) return l;
             const updated = { ...l, [field]: value };
+            
+            const allocKg = typeof updated.allocateKg === 'number' ? updated.allocateKg : 0;
+            const bCount = typeof updated.boxCount === 'number' ? updated.boxCount : 0;
+
             // Validate allocateKg
             if (field === 'allocateKg') {
-                if (value <= 0) {
+                if (allocKg <= 0) {
                     updated.error = 'Must be greater than 0';
-                } else if (value > l.stockItem.processedWeightKg) {
+                } else if (allocKg > l.stockItem.processedWeightKg) {
                     updated.error = `Max available: ${l.stockItem.processedWeightKg} kg`;
                 } else {
                     updated.error = undefined;
                 }
-                // Auto-update weightPerBoxKg if boxCount is set
-                if (updated.boxCount > 0) {
-                    updated.weightPerBoxKg = parseFloat((value / updated.boxCount).toFixed(2));
-                }
             }
-            if (field === 'boxCount') {
-                if (updated.allocateKg > 0 && value > 0) {
-                    updated.weightPerBoxKg = parseFloat((updated.allocateKg / value).toFixed(2));
-                }
+            
+            if (allocKg > 0 && bCount > 0) {
+                updated.weightPerBoxKg = parseFloat((allocKg / bCount).toFixed(2));
+            } else {
+                updated.weightPerBoxKg = '';
             }
+
             return updated;
         }));
     };
 
     const totalAllocatedKg = selectedLines.reduce((sum, l) => sum + (l.allocateKg || 0), 0);
     const hasErrors = selectedLines.some(l => l.error);
-    const canSubmit = clientName && destination && targetShipmentDate && selectedLines.length > 0 && !hasErrors && !isSubmitting && !isPastDate;
+
+    // Derived packaging calculations
+    const selectedLot = packagingLots.find(l => l._id === selectedLotId) ?? null;
+    const totalBoxesRequested = selectedLines.reduce((sum, l) => sum + (typeof l.boxCount === 'number' ? l.boxCount : 0), 0);
+    const packagingCost = selectedLot ? totalBoxesRequested * selectedLot.pricePerBox : 0;
+    const boxesAfterBatch = selectedLot ? selectedLot.quantityAvailable - totalBoxesRequested : null;
+    const insufficientBoxes = boxesAfterBatch !== null && boxesAfterBatch < 0;
+
+    const canSubmit = clientName && destination && targetShipmentDate && 
+        selectedLines.length > 0 && !hasErrors && !isSubmitting && 
+        !isPastDate && !insufficientBoxes &&
+        selectedLines.every(l => typeof l.boxCount === 'number' && l.boxCount > 0) &&
+        !!selectedLotId;
 
     const handleSubmit = async () => {
         if (!canSubmit || isPastDate) return;
@@ -146,11 +206,26 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
                     targetShipmentDate,
                 })
             ));
+
+            // Consume packaging stock after batches are created
+            if (totalBoxesRequested > 0 && selectedLotId) {
+                await api.patch('/packaging/consume', {
+                    boxesNeeded: totalBoxesRequested,
+                    lotId: selectedLotId,
+                    exportBatchRef: `${clientName} — ${destination}`,
+                });
+            }
+
             showToast("Export Batch Created", `Successfully created ${selectedLines.length} export batch${selectedLines.length !== 1 ? 'es' : ''}`);
             onSuccess();
             onClose();
         } catch (err: any) {
-            setSubmitError(err?.message || 'Failed to create export batch. Please try again.');
+            if (err?.code === 'INSUFFICIENT_BOXES' || err?.response?.data?.code === 'INSUFFICIENT_BOXES') {
+                const avail = err?.available || err?.response?.data?.available || 0;
+                setSubmitError(`Not enough boxes in stock. Available: ${avail}. Reduce box count to proceed.`);
+            } else {
+                setSubmitError(err?.message || err?.response?.data?.message || 'Failed to create export batch. Please try again.');
+            }
         } finally {
             setIsSubmitting(false);
         }
@@ -243,6 +318,117 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
 
                     <hr className="border-gray-100 dark:border-gray-700" />
 
+                    {/* Packaging Stock Summary */}
+                    {packagingLots.length > 0 && (
+                        <div className="space-y-3">
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">
+                                    Packaging Vendor (Box Source) *
+                                </label>
+                                {packagingLoading ? (
+                                    <p className="text-xs text-gray-400">Loading packaging stock...</p>
+                                ) : (
+                                    <select
+                                        value={selectedLotId}
+                                        onChange={e => setSelectedLotId(e.target.value)}
+                                        className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                                    >
+                                        <option value="">Select vendor lot...</option>
+                                        {packagingLots.map((lot: any) => (
+                                            <option key={lot._id} value={lot._id}>
+                                                {lot.vendor} — {lot.quantityAvailable.toLocaleString()} boxes available @ {lot.pricePerBox.toLocaleString()} Rwf/box
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+                            </div>
+
+                            {/* Packaging summary — only shown when lot selected and boxes requested */}
+                            {selectedLot && totalBoxesRequested > 0 && (
+                                <div className={`rounded-xl border p-4 ${
+                                    insufficientBoxes
+                                        ? 'bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-800/40'
+                                        : 'bg-purple-50 border-purple-200 dark:bg-purple-900/10 dark:border-purple-800/40'
+                                }`}>
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <Package2 size={15} className={insufficientBoxes ? 'text-red-500' : 'text-purple-600'} />
+                                        <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                                            Packaging Summary — {selectedLot.vendor}
+                                        </p>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 text-xs">
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-500">Boxes requested</span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-100">
+                                                    {totalBoxesRequested.toLocaleString()}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-500">Price per box</span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-100">
+                                                    {selectedLot.pricePerBox.toLocaleString()} Rwf
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between border-t border-purple-200 dark:border-purple-800 pt-2">
+                                                <span className="font-semibold text-gray-700 dark:text-gray-200">Total packaging cost</span>
+                                                <span className="font-bold text-purple-700 dark:text-purple-300">
+                                                    {packagingCost.toLocaleString()} Rwf
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-500">In stock ({selectedLot.vendor})</span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-100">
+                                                    {selectedLot.quantityAvailable.toLocaleString()} boxes
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-500">After this batch</span>
+                                                <span className={`font-bold ${insufficientBoxes ? 'text-red-600' : 'text-green-600'}`}>
+                                                    {boxesAfterBatch !== null ? boxesAfterBatch.toLocaleString() : '—'} boxes
+                                                </span>
+                                            </div>
+                                            {insufficientBoxes && (
+                                                <p className="text-xs text-red-600 font-medium flex items-center gap-1 pt-1">
+                                                    <AlertCircle size={11} />
+                                                    {selectedLot.vendor} only has {selectedLot.quantityAvailable.toLocaleString()} boxes.
+                                                    {packagingLots.length > 1 ? ' Switch vendor or restock.' : ' Restock before proceeding.'}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {selectedLot && totalBoxesRequested === 0 && (
+                                <p className="text-xs text-gray-400">
+                                    Select stock items and enter box counts above to see packaging cost.
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* No packaging stock at all */}
+                    {!packagingLoading && packagingLots.length === 0 && (
+                        <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/40 rounded-xl">
+                            <span className="relative flex h-2.5 w-2.5 mt-0.5 flex-shrink-0">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+                            </span>
+                            <div>
+                                <p className="text-sm font-bold text-red-700 dark:text-red-400">
+                                    No packaging stock available
+                                </p>
+                                <p className="text-xs text-red-600 dark:text-red-300 mt-0.5">
+                                    Export batches cannot be created until boxes are restocked. 
+                                    Go to Inventory → Packaging to add stock.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Stock selector */}
                     <div>
                         <div className="flex justify-between items-center mb-3">
@@ -320,7 +506,7 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
                                                             min={1}
                                                             max={item.processedWeightKg}
                                                             value={line.allocateKg}
-                                                            onChange={e => handleLineChange(item.stockId, 'allocateKg', parseFloat(e.target.value) || 0)}
+                                                            onChange={e => handleLineChange(item.stockId, 'allocateKg', e.target.value === '' ? '' : parseFloat(e.target.value))}
                                                             className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-gray-900 ${
                                                                 line.error
                                                                     ? 'border-red-400 bg-red-50 dark:bg-red-900/10'
@@ -345,7 +531,7 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
                                                             type="number"
                                                             min={1}
                                                             value={line.boxCount}
-                                                            onChange={e => handleLineChange(item.stockId, 'boxCount', parseInt(e.target.value) || 1)}
+                                                            onChange={e => handleLineChange(item.stockId, 'boxCount', e.target.value === '' ? '' : parseInt(e.target.value))}
                                                             className="w-full px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-gray-900"
                                                         />
                                                     </div>
@@ -364,6 +550,13 @@ const CreateExportBatchModal = ({ isOpen, onClose, inventoryItems, onSuccess }: 
                                                 </div>
                                             );
                                         })()}
+
+                                        {itemError?.id === item.stockId && (
+                                            <div className="mt-3 text-xs text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 p-2 rounded-lg flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-200">
+                                                <AlertCircle size={14} className="flex-shrink-0" />
+                                                {itemError.message}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}

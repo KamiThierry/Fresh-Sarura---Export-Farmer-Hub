@@ -6,6 +6,7 @@ import { useRef, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUniversalSearch } from '@/lib/useGlobalSearch';
 import { api } from '@/lib/api';
+import { useNotifications } from '@/context/NotificationContext';
 
 const TYPE_COLOURS: Record<string, string> = {
     'User': 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400',
@@ -17,116 +18,106 @@ const TYPE_COLOURS: Record<string, string> = {
 
 const Header = () => {
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-    const [notifications, setNotifications] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [unreadContactMessages, setUnreadContactMessages] = useState(0);
+    const [logs, setLogs] = useState<any[]>([]);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
 
-    const fetchNotifications = async () => {
+    const { notifications: apiNotifs, markAsRead: apiMarkAsRead, markAllAsRead: apiMarkAllAsRead, clearAll: apiClearAll } = useNotifications();
+
+    const fetchLogsAndContact = async () => {
         try {
-            const [notifRes, logsRes, contactRes] = await Promise.all([
-                api.get('/notifications'),
+            const [logsRes, contactRes] = await Promise.all([
                 api.get('/event-logs?limit=15'),
                 api.get('/contact')
             ]);
-            
-            const notifs = notifRes.data?.data ?? notifRes.data ?? [];
-            const logs = logsRes.data?.data ?? logsRes.data ?? [];
-            
-            // Get read logs from localStorage
-            const readLogIds = JSON.parse(localStorage.getItem('readLogIds') || '[]');
-            const clearedLogIds = JSON.parse(localStorage.getItem('clearedLogIds') || '[]');
-            
-            const logNotifs = logs
-                .filter((log: any) => !clearedLogIds.includes(log._id))
-                .map((log: any) => {
-                    const isRecent = (new Date().getTime() - new Date(log.timestamp || log.createdAt).getTime()) < 5 * 60 * 1000; // 5 mins
-                    const hasBeenRead = readLogIds.includes(log._id);
-                    
-                    let type = 'INFO';
-                    if (log.severity === 'CRITICAL') type = 'CRITICAL';
-                    else if (log.severity === 'WARNING') type = 'WARNING';
-                    else if (log.action?.toLowerCase().includes('registration') || log.action?.toLowerCase().includes('user created')) type = 'REGISTRATION';
-
-                    return {
-                        _id: log._id,
-                        title: log.action || 'System Activity',
-                        message: log.description || log.detail || 'New activity logged',
-                        type: type,
-                        createdAt: log.timestamp || log.createdAt,
-                        isRead: hasBeenRead || !isRecent, 
-                        isLog: true
-                    };
-                });
-
-            // Handle contact messages unread count
+            setLogs(logsRes.data?.data ?? logsRes.data ?? []);
             const contactMessages = contactRes.data?.data ?? contactRes.data ?? [];
-            const unreadContactCount = contactMessages.filter((m: any) => m.status === 'Unread').length;
-            setUnreadContactMessages(unreadContactCount);
-
-            // Combine and sort by date
-            const combined = [...(Array.isArray(notifs) ? notifs : []), ...logNotifs]
-                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-                
-            setNotifications(combined.slice(0, 20));
+            setUnreadContactMessages(contactMessages.filter((m: any) => m.status === 'Unread').length);
         } catch (err) {
-            console.error('Failed to fetch notifications:', err);
+            console.error('Failed to fetch logs/contact messages:', err);
         }
     };
 
     useEffect(() => {
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 5000); // 5s for "instant" feel
+        fetchLogsAndContact();
+        const interval = setInterval(fetchLogsAndContact, 30000); // Poll logs/contact messages every 30s
         return () => clearInterval(interval);
     }, []);
 
+    // Get read logs from localStorage
+    const readLogIds = JSON.parse(localStorage.getItem('readLogIds') || '[]');
+    const clearedLogIds = JSON.parse(localStorage.getItem('clearedLogIds') || '[]');
+    
+    const logNotifs = logs
+        .filter((log: any) => !clearedLogIds.includes(log._id))
+        .map((log: any) => {
+            const isRecent = (new Date().getTime() - new Date(log.timestamp || log.createdAt).getTime()) < 5 * 60 * 1000; // 5 mins
+            const hasBeenRead = readLogIds.includes(log._id);
+            
+            let type = 'INFO';
+            if (log.severity === 'CRITICAL') type = 'CRITICAL';
+            else if (log.severity === 'WARNING') type = 'WARNING';
+            else if (log.action?.toLowerCase().includes('registration') || log.action?.toLowerCase().includes('user created')) type = 'REGISTRATION';
+
+            return {
+                _id: log._id,
+                title: log.action || 'System Activity',
+                message: log.description || log.detail || 'New activity logged',
+                type: type,
+                createdAt: log.timestamp || log.createdAt,
+                isRead: hasBeenRead || !isRecent, 
+                isLog: true
+            };
+        });
+
+    const combinedNotifications = [...(Array.isArray(apiNotifs) ? apiNotifs : []), ...logNotifs]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 20);
+
+    const unreadCount = combinedNotifications.filter(n => !n.isRead).length;
+
     const handleMarkAsRead = async (id: string) => {
         try {
-            const notification = notifications.find(n => n._id === id);
+            const notification = combinedNotifications.find(n => n._id === id);
             if (notification?.isLog) {
                 const readLogIds = JSON.parse(localStorage.getItem('readLogIds') || '[]');
                 if (!readLogIds.includes(id)) {
                     localStorage.setItem('readLogIds', JSON.stringify([...readLogIds, id]));
                 }
+                fetchLogsAndContact();
             } else {
-                await api.patch(`/notifications/${id}/read`, {});
+                await apiMarkAsRead(id);
             }
-            fetchNotifications();
         } catch (err) { console.error(err); }
     };
 
     const handleMarkAllAsRead = async () => {
         try {
-            // Mark real notifications as read
-            await api.patch('/notifications/read-all', {});
+            await apiMarkAllAsRead();
             
-            // Mark all current logs as read
-            const currentLogIds = notifications.filter(n => n.isLog).map(n => n._id);
+            const currentLogIds = combinedNotifications.filter(n => n.isLog).map(n => n._id);
             const existingReadLogIds = JSON.parse(localStorage.getItem('readLogIds') || '[]');
             const newReadLogIds = Array.from(new Set([...existingReadLogIds, ...currentLogIds]));
             localStorage.setItem('readLogIds', JSON.stringify(newReadLogIds));
             
-            fetchNotifications();
+            fetchLogsAndContact();
         } catch (err) { console.error(err); }
     };
 
     const handleClearAll = async () => {
         try {
-            // Clear notifications on backend
-            await api.delete('/notifications');
+            await apiClearAll();
             
-            // Mark all current logs as 'cleared' locally
-            const currentLogIds = notifications.filter(n => n.isLog).map(n => n._id);
+            const currentLogIds = combinedNotifications.filter(n => n.isLog).map(n => n._id);
             const existingClearedIds = JSON.parse(localStorage.getItem('clearedLogIds') || '[]');
             localStorage.setItem('clearedLogIds', JSON.stringify(Array.from(new Set([...existingClearedIds, ...currentLogIds]))));
             
-            fetchNotifications();
+            fetchLogsAndContact();
         } catch (err) { console.error(err); }
     };
-
-    const unreadCount = notifications.filter(n => !n.isRead).length;
 
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : { name: 'Super Admin', role: 'admin' };
@@ -271,7 +262,7 @@ const Header = () => {
             <NotificationsModal
                 isOpen={isNotificationsOpen}
                 onClose={() => setIsNotificationsOpen(false)}
-                notifications={notifications}
+                notifications={combinedNotifications}
                 onMarkAsRead={handleMarkAsRead}
                 onMarkAllAsRead={handleMarkAllAsRead}
                 onClearAll={handleClearAll}

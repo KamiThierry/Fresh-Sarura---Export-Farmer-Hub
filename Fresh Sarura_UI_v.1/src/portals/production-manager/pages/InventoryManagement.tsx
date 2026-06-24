@@ -10,6 +10,7 @@ import BatchDetailModal from '../components/BatchDetailModal';
 import StockDetailModal from '../components/StockDetailModal';
 import AssignRoomModal from '../components/AssignRoomModal';
 import Pagination from '../../shared/component/Pagination';
+import PackagingStockPage from './PackagingStock';
 
 import { api } from '../../../lib/api';
 import { usePMContext } from '@/context/PMContext';
@@ -90,6 +91,22 @@ const InventoryManagement = () => {
 
 
 
+
+    // Fetch packaging status for the banner — lightweight summary call
+    const [packagingAlert, setPackagingAlert] = useState<'empty' | 'critical' | 'low' | null>(null);
+
+    useEffect(() => {
+        api.get('/packaging/summary')
+            .then(res => {
+                const total = res.data?.data?.totalAvailableBoxes ?? null;
+                if (total === null) return;
+                if (total === 0) setPackagingAlert('empty');
+                else if (total < 50) setPackagingAlert('critical');
+                else if (total < 500) setPackagingAlert('low');
+                else setPackagingAlert(null);
+            })
+            .catch(() => {});
+    }, []);
 
     const fetchActivityFeed = async () => {
         setActivityLoading(true);
@@ -668,91 +685,60 @@ const InventoryManagement = () => {
     };
 
     return (
-        <div className="space-y-6 pb-20">
+        <div className="p-6 space-y-6 pb-20">
 
             {/* Header */}
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Inventory & Batch Management</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track intake, stock, and export allocation.</p>
-                </div>
-                <div className="flex gap-3 items-center flex-wrap">
-                    {/* Date Range */}
-                    <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 shadow-sm">
-                        <Calendar size={15} className="text-green-500 flex-shrink-0" />
-                        <span className="text-xs text-gray-400 font-medium">From:</span>
-                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                            className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer" />
-                        <span className="text-xs text-gray-400 font-medium ml-2">To:</span>
-                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-                            className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer" />
-                        
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap justify-between items-start gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Inventory & Batch Management</h1>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track intake, stock, and export allocation.</p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap ml-auto justify-end">
+                        {/* Date Range */}
+                        <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 shadow-sm">
+                            <Calendar size={15} className="text-green-500 flex-shrink-0" />
+                            <span className="text-xs text-gray-400 font-medium">From:</span>
+                            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                                className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer w-[120px]" />
+                            <span className="text-xs text-gray-400 font-medium">To:</span>
+                            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+                                className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer w-[120px]" />
+                            
+                            <button
+                                onClick={() => {
+                                    const d = new Date(); d.setMonth(d.getMonth() - 3);
+                                    setStartDate(d.toISOString().split('T')[0]);
+                                    setEndDate(new Date().toISOString().split('T')[0]);
+                                }}
+                                className="ml-1 text-xs text-green-600 hover:text-green-700 font-bold transition-colors whitespace-nowrap"
+                            >
+                                Clear
+                            </button>
+                        </div>
+
+                        {/* Export Dropdown */}
+                        <div className="relative">
+                            <button
+                                onClick={handleExportPDF}
+                                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
+                            >
+                                <Download size={15} />
+                                Export Data
+                                
+                            </button>
+
+                            
+                        </div>
+
                         <button
-                            onClick={() => {
-                                const d = new Date(); d.setMonth(d.getMonth() - 3);
-                                setStartDate(d.toISOString().split('T')[0]);
-                                setEndDate(new Date().toISOString().split('T')[0]);
-                            }}
-                            className="ml-2 text-xs text-green-600 hover:text-green-700 font-bold transition-colors whitespace-nowrap"
+                            onClick={() => setIsExportBatchOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors shadow-sm font-bold text-sm"
                         >
-                            Clear
+                            <Plus size={16} />
+                            Create Export Batch
                         </button>
                     </div>
-
-                    {/* Export Dropdown */}
-                    <div className="relative">
-                        <button
-                            onClick={() => setIsExportOpen(prev => !prev)}
-                            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
-                        >
-                            <Download size={15} />
-                            Export Data
-                            <ChevronDown size={13} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
-                        </button>
-
-                        {isExportOpen && (
-                            <>
-                                <div className="fixed inset-0 z-10" onClick={() => setIsExportOpen(false)} />
-                                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden">
-                                    <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Select Format</p>
-                                    <button
-                                        onClick={handleExportXLSX}
-                                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
-                                    >
-                                        <div className="p-1.5 bg-green-50 dark:bg-green-900/20 rounded-lg flex-shrink-0">
-                                            <FileSpreadsheet size={16} className="text-green-600 dark:text-green-400" />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export Excel</p>
-                                            <p className="text-[11px] text-gray-400 mt-0.5">Spreadsheet (.xlsx)</p>
-                                        </div>
-                                    </button>
-                                    <div className="mx-4 border-t border-gray-100 dark:border-gray-700" />
-                                    <button
-                                        onClick={handleExportPDF}
-                                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
-                                    >
-                                        <div className="p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex-shrink-0">
-                                            <FileText size={16} className="text-blue-600 dark:text-blue-400" />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export PDF</p>
-                                            <p className="text-[11px] text-gray-400 mt-0.5">Printable report (.pdf)</p>
-                                        </div>
-                                    </button>
-                                    <div className="pb-2" />
-                                </div>
-                            </>
-                        )}
-                    </div>
-
-                    <button
-                        onClick={() => setIsExportBatchOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
-                    >
-                        <Plus size={18} />
-                        Create Export Batch
-                    </button>
                 </div>
             </div>
 
@@ -824,6 +810,38 @@ const InventoryManagement = () => {
                 ))}
             </div>
 
+            {packagingAlert && (
+                <div className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium ${
+                    packagingAlert === 'empty' || packagingAlert === 'critical'
+                        ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-900/10 dark:border-red-800/40 dark:text-red-400'
+                        : 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/10 dark:border-amber-800/40 dark:text-amber-400'
+                }`}>
+                    <div className="flex items-center gap-2.5">
+                        <span className={`relative flex h-2 w-2`}>
+                            {(packagingAlert === 'empty' || packagingAlert === 'critical') && (
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                            )}
+                            <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                                packagingAlert === 'low' ? 'bg-amber-500' : 'bg-red-500'
+                            }`} />
+                        </span>
+                        <span>
+                            {packagingAlert === 'empty'
+                                ? 'Packaging stock is empty — export batch creation is blocked until boxes are restocked.'
+                                : packagingAlert === 'critical'
+                                ? 'Packaging stock is critically low — reorder immediately to avoid blocking shipments.'
+                                : 'Packaging stock is running low — consider restocking soon.'}
+                        </span>
+                    </div>
+                    <button
+                        onClick={() => setActiveTab('packaging')}
+                        className="text-xs font-bold underline underline-offset-2 ml-4 whitespace-nowrap"
+                    >
+                        Go to Packaging →
+                    </button>
+                </div>
+            )}
+
             {/* Main Content Card */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden min-h-[400px]">
 
@@ -860,12 +878,22 @@ const InventoryManagement = () => {
                             >
                                 Export Batches
                             </button>
+                            <button
+                                onClick={() => setActiveTab('packaging')}
+                                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'packaging'
+                                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                    }`}
+                            >
+                                Packaging
+                            </button>
                         </div>
                     </div>
                 </div>
 
                 {/* Unified Search & Filter Bar (below tabs) */}
-                <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/10 flex flex-wrap items-center gap-3">
+                {activeTab !== 'packaging' && (
+                    <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/10 flex flex-wrap items-center gap-3">
                     <div className="relative flex-1 max-w-md">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                         <input
@@ -1058,6 +1086,7 @@ const InventoryManagement = () => {
                         </button>
                     )}
                 </div>
+            )}
 
 
                 {/* --- TAB 2: INVENTORY VIEW --- */}
@@ -1542,6 +1571,12 @@ const InventoryManagement = () => {
                                 />
                             </div>
                         )}
+                    </div>
+                )}
+
+                {activeTab === 'packaging' && (
+                    <div className="p-6">
+                        <PackagingStockPage />
                     </div>
                 )}
             </div>

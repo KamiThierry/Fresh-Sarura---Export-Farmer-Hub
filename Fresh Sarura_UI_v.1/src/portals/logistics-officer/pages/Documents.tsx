@@ -82,14 +82,16 @@ const Documents = () => {
     };
 
     return (
-        <div className="space-y-6 pb-20 md:pb-0 relative">
+        <div className="p-6 space-y-6 pb-20 relative">
 
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap justify-between items-start gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Document Repository</h1>
                     <p className="text-gray-500 dark:text-gray-400">Manage all export documentation centrally.</p>
                 </div>
+                <div className="flex items-center gap-3 flex-wrap ml-auto justify-end">
                 <button
                     onClick={() => setIsUploadModalOpen(true)}
                     className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-900/20 transition-all hover:scale-105 active:scale-95"
@@ -97,6 +99,8 @@ const Documents = () => {
                     <Plus size={18} />
                     Upload New Document
                 </button>
+                </div>
+            </div>
             </div>
 
             {/* Master Table */}

@@ -779,47 +779,14 @@ const Reports = () => {
                     )}
                     
                     <div className="relative">
-                        <button onClick={() => setIsExportOpen(!isExportOpen)}
+                        <button onClick={() => onChange(page - 1)}
                             className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-colors shadow-sm">
                             <Download size={15} /> 
                             Export Data
-                            <ChevronDown size={13} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
+                            
                         </button>
 
-                        {isExportOpen && (
-                            <>
-                                <div className="fixed inset-0 z-10" onClick={() => setIsExportOpen(false)} />
-                                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden">
-                                    <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Select Format</p>
-                                    <button
-                                        onClick={handleExportXLSX}
-                                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
-                                    >
-                                        <div className="p-1.5 bg-green-50 dark:bg-green-900/20 rounded-lg flex-shrink-0">
-                                            <FileSpreadsheet size={16} className="text-green-600" />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export Excel</p>
-                                            <p className="text-[11px] text-gray-400 mt-0.5">Excel Spreadsheet (.xlsx)</p>
-                                        </div>
-                                    </button>
-                                    <div className="mx-4 border-t border-gray-100 dark:border-gray-700" />
-                                    <button
-                                        onClick={handleExportPDF}
-                                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
-                                    >
-                                        <div className="p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex-shrink-0">
-                                            <FileText size={16} className="text-blue-600" />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export PDF</p>
-                                            <p className="text-[11px] text-gray-400 mt-0.5">Printable Report (.pdf)</p>
-                                        </div>
-                                    </button>
-                                    <div className="pb-2" />
-                                </div>
-                            </>
-                        )}
+                        
                     </div>
                 </div>
             </div>

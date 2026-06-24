@@ -6,6 +6,7 @@ import NotificationsModal from '../../shared/component/NotificationsModal';
 import { api } from '@/lib/api';
 import { useUniversalSearch } from '@/lib/useGlobalSearch';
 import logo from '@/assets/sarura_logo_nav.png';
+import { useNotifications } from '@/context/NotificationContext';
 
 // --- Type badge colours ---
 const TYPE_COLOURS: Record<string, string> = {
@@ -17,10 +18,11 @@ const Header = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-    const [notifications, setNotifications] = useState<any[]>([]);
     const [pendingRooms, setPendingRooms] = useState(0);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
+
+    const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
 
     // Real user from localStorage
     const userStr = localStorage.getItem('user');
@@ -28,15 +30,6 @@ const Header = () => {
 
     // Live search
     const { results: searchResults, loading: searchLoading } = useUniversalSearch(searchQuery, user.role || 'production_manager');
-
-    const fetchNotifications = async () => {
-        try {
-            const res = await api.get('/notifications');
-            setNotifications(res.data?.data || res.data || []);
-        } catch (err) {
-            console.error('Failed to fetch notifications:', err);
-        }
-    };
 
     const fetchPendingRooms = async () => {
         try {
@@ -46,31 +39,20 @@ const Header = () => {
     };
 
     const handleMarkAsRead = async (id: string) => {
-        try {
-            await api.patch(`/notifications/${id}/read`, {});
-            fetchNotifications();
-        } catch (err) { console.error(err); }
+        await markAsRead(id);
     };
 
     const handleMarkAllAsRead = async () => {
-        try {
-            await api.patch('/notifications/read-all', {});
-            fetchNotifications();
-        } catch (err) { console.error(err); }
+        await markAllAsRead();
     };
 
     const handleClearAll = async () => {
-        try {
-            await api.delete('/notifications');
-            fetchNotifications();
-        } catch (err) { console.error(err); }
+        await clearAll();
     };
 
     useEffect(() => {
-        fetchNotifications();
         fetchPendingRooms();
         const interval = setInterval(() => {
-            fetchNotifications();
             fetchPendingRooms();
         }, 30000); // Poll every 30s
         return () => clearInterval(interval);
@@ -95,8 +77,6 @@ const Header = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-
-    const unreadCount = notifications.filter(n => !n.isRead).length;
 
     return (
         <header className="fixed top-[10px] left-[10px] right-[10px] h-16 bg-white/80 dark:bg-gray-800/90 backdrop-blur-md border-theme z-40 px-6 flex items-center justify-between transition-colors duration-300 rounded-2xl shadow-floating">

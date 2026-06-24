@@ -293,25 +293,12 @@ const UserManagement = () => {
                             className="text-sm text-gray-700 dark:text-white bg-transparent border-none outline-none cursor-pointer"
                         />
                     </div>
-                    <button onClick={() => setIsExportOpen(!isExportOpen)}
+                    {/* <button onClick={handleExportPDF}
                         className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-all shadow-sm relative">
                         <Download size={16} /> Export Data
-                        <ChevronDown size={14} className={`transition-transform ${isExportOpen ? 'rotate-180' : ''}`} />
                         
-                        {isExportOpen && (
-                            <>
-                                <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setIsExportOpen(false); }} />
-                                <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                                    <button onClick={(e) => { e.stopPropagation(); handleExportXLSX(); }}
-                                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left border-b border-gray-50 dark:border-gray-700/50">
-                                        <div className="w-8 h-8 rounded-lg bg-green-50 dark:bg-green-900/20 flex items-center justify-center shrink-0">
-                                            <FileSpreadsheet size={15} className="text-green-600" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-gray-800 dark:text-gray-200">Export Excel</p>
-                                            <p className="text-[10px] text-gray-400">Microsoft Excel Format</p>
-                                        </div>
-                                    </button>
+                        
+                        
                                     <button onClick={(e) => { e.stopPropagation(); handleExportPDF(); }}
                                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left">
                                         <div className="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-900/20 flex items-center justify-center shrink-0">

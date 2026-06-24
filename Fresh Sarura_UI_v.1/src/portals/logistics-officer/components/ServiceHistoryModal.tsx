@@ -176,29 +176,14 @@ const ServiceHistoryModal = ({ isOpen, onClose, vehicle, logs, loading, onLogNew
                     <div className="flex items-center gap-3">
                         {/* Export Dropdown */}
                         <div className="relative">
-                            <button
-                                onClick={() => setIsExportOpen(!isExportOpen)}
+                            {/* <button
+                                onClick={onClose}
                                 className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-sm relative"
                             >
                                 <Download size={14} /> Export
-                                <ChevronDown size={12} className={`transition-transform ${isExportOpen ? 'rotate-180' : ''}`} />
                                 
-                                {isExportOpen && (
-                                    <>
-                                        <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setIsExportOpen(false); }} />
-                                        <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleExportXLSX(); }}
-                                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left border-b border-gray-50 dark:border-gray-700/50"
-                                            >
-                                                <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center shrink-0">
-                                                    <FileSpreadsheet size={15} className="text-emerald-600" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs font-bold text-gray-800 dark:text-gray-200">Export Excel</p>
-                                                    <p className="text-[10px] text-gray-400">Service Logs Data</p>
-                                                </div>
-                                            </button>
+                                
+                                
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleExportPDF(); }}
                                                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left"

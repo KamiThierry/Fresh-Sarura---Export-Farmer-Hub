@@ -131,7 +131,7 @@ const Dashboard = () => {
     };
 
     return (
-        <div className="space-y-6 animate-fade-in pb-20 md:pb-0">
+        <div className="p-6 space-y-6 animate-fade-in pb-20">
             {/* Welcome Banner */}
             <div className="relative overflow-hidden rounded-2xl bg-[#5cb85c] p-8 text-white shadow-lg">
                 <div className="relative z-10 flex items-center justify-between">

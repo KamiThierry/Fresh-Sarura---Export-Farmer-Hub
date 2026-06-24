@@ -3,9 +3,9 @@ import { Search, Bell, Loader2, ChevronDown } from 'lucide-react';
 import logo from '@/assets/sarura_logo_nav.png';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../../production-manager/components/ThemeToggle';
-import { api } from '../../../lib/api';
 import NotificationsModal from '../../shared/component/NotificationsModal';
 import { useUniversalSearch } from '@/lib/useGlobalSearch';
+import { useNotifications } from '@/context/NotificationContext';
 
 const TYPE_COLOURS: Record<string, string> = {
     'Batch': 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400',
@@ -17,9 +17,10 @@ const Header = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-    const [notifications, setNotifications] = useState<any[]>([]);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
+
+    const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
 
     // Real user from localStorage
     const userStr = localStorage.getItem('user');
@@ -31,49 +32,16 @@ const Header = () => {
         return role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     };
 
-    const fetchNotifications = async () => {
-        try {
-            const res = await api.get('/notifications');
-            setNotifications(res.data?.data || res.data || []);
-        } catch (err) {
-            console.error('Failed to fetch notifications:', err);
-        }
-    };
-
-    useEffect(() => {
-        fetchNotifications();
-        // Refresh notifications every minute
-        const interval = setInterval(fetchNotifications, 60000);
-        return () => clearInterval(interval);
-    }, []);
-
-    const unreadCount = notifications.filter(n => !n.isRead).length;
-
     const handleMarkAsRead = async (id: string) => {
-        try {
-            await api.patch(`/notifications/${id}/read`, {});
-            fetchNotifications();
-        } catch (err) {
-            console.error('Failed to mark notification as read:', err);
-        }
+        await markAsRead(id);
     };
 
     const handleMarkAllAsRead = async () => {
-        try {
-            await api.patch('/notifications/read-all', {});
-            fetchNotifications();
-        } catch (err) {
-            console.error('Failed to mark all as read:', err);
-        }
+        await markAllAsRead();
     };
 
     const handleClearAll = async () => {
-        try {
-            await api.delete('/notifications');
-            fetchNotifications();
-        } catch (err) {
-            console.error('Failed to clear notifications:', err);
-        }
+        await clearAll();
     };
 
     useEffect(() => {
@@ -85,6 +53,7 @@ const Header = () => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
 
     return (
         <>

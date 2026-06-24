@@ -328,62 +328,30 @@ const FarmerManagement = () => {
   };
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="p-6 space-y-6 pb-20">
 
       {/* ── Header (always visible) ── */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Farmer Network</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage suppliers, cooperatives, and compliance data</p>
-        </div>
-        {!selectedFarmer && (
-          <div className="flex gap-3">
-            {/* Export dropdown */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap justify-between items-start gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Farmer Network</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage suppliers, cooperatives, and compliance data</p>
+          </div>
+          {!selectedFarmer && (
+            <div className="flex gap-3 items-center flex-wrap ml-auto justify-end">
+              {/* Export dropdown */}
             <div className="relative">
               <button
-                onClick={() => setIsExportOpen(prev => !prev)}
+                onClick={handleExportPDF}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm font-medium"
               >
                 <Download size={17} />
                 Export Data
-                <ChevronDown size={15} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
+                
               </button>
 
               {/* Dropdown panel */}
-              {isExportOpen && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setIsExportOpen(false)} />
-                  <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-20 overflow-hidden">
-                    <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Export Options</p>
-                    <button
-                      onClick={handleExportXLSX}
-                      className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
-                    >
-                      <div className="p-1.5 bg-green-50 dark:bg-green-900/20 rounded-lg flex-shrink-0">
-                        <FileSpreadsheet size={16} className="text-green-600 dark:text-green-400" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export Excel</p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">Spreadsheet (.xlsx)</p>
-                      </div>
-                    </button>
-                    <div className="mx-4 border-t border-gray-100 dark:border-gray-700" />
-                    <button
-                      onClick={handleExportPDF}
-                      className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
-                    >
-                      <div className="p-1.5 bg-red-50 dark:bg-red-900/20 rounded-lg flex-shrink-0">
-                        <FileText size={16} className="text-red-500 dark:text-red-400" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">Export PDF</p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">Printable report (.pdf)</p>
-                      </div>
-                    </button>
-                    <div className="pb-2" />
-                  </div>
-                </>
-              )}
+              
             </div>
             <button
               onClick={() => setIsRegistrationOpen(true)}
@@ -394,6 +362,7 @@ const FarmerManagement = () => {
             </button>
           </div>
         )}
+        </div>
       </div>
 
       {/* ── Master view: Stats + Map + Table ── */}

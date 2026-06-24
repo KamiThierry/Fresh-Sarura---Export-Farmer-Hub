@@ -323,15 +323,16 @@ const Traceability = () => {
     };
 
     return (
-        <div className="max-w-6xl mx-auto pb-20 space-y-8">
+        <div className="p-6 max-w-6xl mx-auto pb-20 space-y-8">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-8">
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap justify-between items-start gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Traceability & Compliance</h1>
                     <p className="text-gray-500 dark:text-gray-400">Track product journeys and manage compliance safeguards.</p>
                 </div>
 
-                <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-xl flex items-center">
+                <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-xl flex flex-wrap items-center ml-auto justify-end">
                     <button
                         onClick={() => setActiveTab('tracer')}
                         className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'tracer'
@@ -352,6 +353,7 @@ const Traceability = () => {
                         Compliance Manager
                     </button>
                     */}
+                </div>
                 </div>
             </div>
 
